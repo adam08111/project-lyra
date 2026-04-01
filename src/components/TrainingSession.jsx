@@ -1,0 +1,557 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { COLORS } from "../constants.js";
+import { sharedStyles as s } from "../styles.js";
+import { callAI } from "../api.js";
+import { getRouteConfig } from "../ai-router.js";
+import { buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingHintPrompt } from "../prompts.js";
+import { anonymiseSkillsForAI } from "../utils.js";
+
+const mono = "'Courier Prime', monospace";
+
+const STAR_LABELS = { 3: "Nailed it!", 2: "Good start!", 1: "Keep practising!" };
+const STAR_COLORS = { 3: COLORS.green, 2: COLORS.amber, 1: COLORS.red };
+
+export default function TrainingSession({ skill, onClose, trackCall }) {
+  // Internal state
+  const [screen, setScreen] = useState("overview");
+  const [activeTechIdx, setActiveTechIdx] = useState(null);
+  const [exercises, setExercises] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [studentAttempt, setStudentAttempt] = useState("");
+  const [studentExplanation, setStudentExplanation] = useState("");
+  const [evaluation, setEvaluation] = useState(null);
+  const [evaluating, setEvaluating] = useState(false);
+  const [hint, setHint] = useState(null);
+  const [hintLevel, setHintLevel] = useState(0);
+  const [hintLoading, setHintLoading] = useState(false);
+  const [progress, setProgress] = useState({});
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const textareaRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  // Extract techniques from skill
+  const techniques = skill?.analysedTechniques || skill?.researchedTechniques
+    || (skill?.techniques || []).map(t => typeof t === "string" ? { technique: t, description: "", example: "" } : t);
+
+  const masteredCount = Object.values(progress).filter(p => p.stars >= 3).length;
+
+  // Load progress from localStorage
+  useEffect(() => {
+    if (!skill?.id) return;
+    try {
+      const raw = localStorage.getItem("lyra-training-progress");
+      if (raw) {
+        const all = JSON.parse(raw);
+        setProgress(all[skill.id] || {});
+      }
+    } catch (e) { /* first time */ }
+    setProgressLoaded(true);
+  }, [skill?.id]);
+
+  // Save progress to localStorage
+  useEffect(() => {
+    if (!progressLoaded || !skill?.id) return;
+    try {
+      const all = JSON.parse(localStorage.getItem("lyra-training-progress") || "{}");
+      all[skill.id] = progress;
+      localStorage.setItem("lyra-training-progress", JSON.stringify(all));
+    } catch (e) { /* silent */ }
+  }, [progress, progressLoaded, skill?.id]);
+
+  // Focus textarea when exercise screen opens
+  useEffect(() => {
+    if (screen === "exercise") {
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    }
+  }, [screen, activeTechIdx]);
+
+  // Generate exercises for all techniques
+  const generateExercises = useCallback(async () => {
+    if (!skill || generating || techniques.length === 0) return;
+    setGenerating(true);
+    try {
+      const { anonymised } = anonymiseSkillsForAI([skill]);
+      const anonSkill = anonymised[0];
+      const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
+        || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
+
+      const route = getRouteConfig("training_exercise");
+      trackCall();
+      const result = await callAI(
+        buildTrainingExercisesPrompt(anonTechs),
+        "Generate the exercise sentences now.",
+        false, 1000, route.thinkingBudget, undefined, undefined, route.model
+      );
+      const cleaned = result.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      const exerciseArr = new Array(techniques.length).fill(null);
+      for (const item of parsed) {
+        if (item.index >= 0 && item.index < techniques.length) {
+          exerciseArr[item.index] = item.sentence;
+        }
+      }
+      setExercises(exerciseArr);
+    } catch (e) {
+      console.error("Exercise generation failed:", e);
+      // Fallback: simple generic sentences
+      setExercises(techniques.map(() => "The student walked to the library and sat down at a table."));
+    }
+    setGenerating(false);
+  }, [skill, generating, techniques, trackCall]);
+
+  // Auto-generate exercises on first open
+  useEffect(() => {
+    if (skill && !exercises && !generating) {
+      generateExercises();
+    }
+  }, [skill]);
+
+  // Evaluate student's attempt
+  const evaluateAttempt = useCallback(async () => {
+    if (!studentAttempt.trim() || evaluating || activeTechIdx === null) return;
+    setEvaluating(true);
+    try {
+      const { anonymised } = anonymiseSkillsForAI([skill]);
+      const anonSkill = anonymised[0];
+      const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
+        || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
+      const anonTech = anonTechs[activeTechIdx];
+      const exercise = exercises?.[activeTechIdx] || "";
+
+      const route = getRouteConfig("training_eval");
+      trackCall();
+      const result = await callAI(
+        buildTrainingEvalPrompt(anonTech, exercise, studentAttempt.trim(), studentExplanation || undefined),
+        "Evaluate this attempt now.",
+        false, 600, route.thinkingBudget, undefined, undefined, route.model
+      );
+      const cleaned = result.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      setEvaluation(parsed);
+
+      // Update progress
+      const techKey = String(activeTechIdx);
+      setProgress(prev => {
+        const existing = prev[techKey] || { stars: 0, attempts: 0, bestAttempt: "" };
+        const newStars = Math.max(existing.stars, parsed.stars || 0);
+        return {
+          ...prev,
+          [techKey]: {
+            stars: newStars,
+            attempts: existing.attempts + 1,
+            bestAttempt: (parsed.stars || 0) > existing.stars ? studentAttempt.trim() : existing.bestAttempt,
+          },
+        };
+      });
+
+      setScreen("feedback");
+    } catch (e) {
+      console.error("Evaluation failed:", e);
+      setEvaluation({ stars: 0, feedback: "Couldn't evaluate your attempt. Please try again!", strengths: "", improvement: "" });
+      setScreen("feedback");
+    }
+    setEvaluating(false);
+  }, [studentAttempt, evaluating, activeTechIdx, exercises, skill, trackCall]);
+
+  // Get a hint when student is stuck
+  const getHint = useCallback(async () => {
+    if (hintLoading || activeTechIdx === null) return;
+    const nextLevel = hintLevel + 1;
+    if (nextLevel > 2) return; // max 2 hints
+    setHintLoading(true);
+    try {
+      const { anonymised } = anonymiseSkillsForAI([skill]);
+      const anonSkill = anonymised[0];
+      const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
+        || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
+      const anonTech = anonTechs[activeTechIdx];
+      const exercise = exercises?.[activeTechIdx] || "";
+
+      const route = getRouteConfig("training_hint");
+      trackCall();
+      const result = await callAI(
+        buildTrainingHintPrompt(anonTech, exercise, nextLevel),
+        "Give the hint now.",
+        false, 400, route.thinkingBudget, undefined, undefined, route.model
+      );
+      const cleaned = result.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      setHint(parsed);
+      setHintLevel(nextLevel);
+    } catch (e) {
+      console.error("Hint generation failed:", e);
+      setHint({ approach: "Try re-reading the technique description and example above. Think about which words in the sentence you could change or add to.", question: "What would make this sentence more interesting?" });
+      setHintLevel(nextLevel);
+    }
+    setHintLoading(false);
+  }, [hintLoading, hintLevel, activeTechIdx, exercises, skill, trackCall]);
+
+  // Navigate to next unmastered technique
+  const goNext = useCallback(() => {
+    let next = null;
+    // Try to find next unmastered technique after current
+    for (let i = (activeTechIdx || 0) + 1; i < techniques.length; i++) {
+      if ((progress[String(i)]?.stars || 0) < 3) { next = i; break; }
+    }
+    // Wrap around from beginning
+    if (next === null) {
+      for (let i = 0; i < techniques.length; i++) {
+        if ((progress[String(i)]?.stars || 0) < 3) { next = i; break; }
+      }
+    }
+    // All mastered — go back to overview
+    if (next === null) { setScreen("overview"); return; }
+    setActiveTechIdx(next);
+    setStudentAttempt("");
+    setStudentExplanation("");
+    setEvaluation(null);
+    setHint(null);
+    setHintLevel(0);
+    setScreen("exercise");
+  }, [activeTechIdx, techniques, progress]);
+
+  // Start practising a technique
+  const startTechnique = (idx) => {
+    setActiveTechIdx(idx);
+    setStudentAttempt("");
+    setStudentExplanation("");
+    setEvaluation(null);
+    setHint(null);
+    setHintLevel(0);
+    setScreen("exercise");
+  };
+
+  const renderStars = (count, size = 16) => {
+    const filled = Math.min(Math.max(count || 0, 0), 3);
+    return (
+      <span style={{ letterSpacing: 2, fontSize: size }}>
+        {[0, 1, 2].map(i => (
+          <span key={i} style={{ color: i < filled ? "#F5A623" : COLORS.border }}>
+            {i < filled ? "\u2605" : "\u2606"}
+          </span>
+        ))}
+      </span>
+    );
+  };
+
+  if (!skill) return null;
+
+  // === OVERVIEW SCREEN ===
+  if (screen === "overview") {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 90, background: COLORS.bg1, display: "flex", flexDirection: "column", maxWidth: 430, margin: "0 auto", fontFamily: mono, animation: "fadeIn 0.25s ease" }}>
+        {/* Header */}
+        <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}>{"\u2190"}</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.heading }}>Practice Session</div>
+            <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 2 }}>{skill.authorName}</div>
+          </div>
+        </div>
+
+        {/* Progress summary */}
+        <div style={{ padding: "14px 18px", background: COLORS.card, borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: COLORS.muted }}>{masteredCount} of {techniques.length} mastered</span>
+            {masteredCount === techniques.length && techniques.length > 0 && (
+              <span style={{ fontSize: 10, fontWeight: 700, color: COLORS.green, textTransform: "uppercase", letterSpacing: 1 }}>All mastered!</span>
+            )}
+          </div>
+          <div style={{ height: 6, borderRadius: 3, background: COLORS.bg3, overflow: "hidden" }}>
+            <div style={{ height: "100%", borderRadius: 3, background: masteredCount === techniques.length ? COLORS.green : COLORS.blue, width: `${techniques.length > 0 ? (masteredCount / techniques.length) * 100 : 0}%`, transition: "width 0.4s ease" }} />
+          </div>
+        </div>
+
+        {/* Loading state */}
+        {generating && (
+          <div style={{ padding: "24px 18px", textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: COLORS.muted, marginBottom: 8 }}>Preparing exercises...</div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 4 }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ width: 6, height: 6, borderRadius: 3, background: COLORS.accent1, animation: `bounce 0.6s ${i * 0.15}s infinite` }} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Technique list */}
+        <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "12px 18px" }}>
+          {techniques.map((t, i) => {
+            const p = progress[String(i)];
+            const stars = p?.stars || 0;
+            const isMastered = stars >= 3;
+            const exerciseReady = exercises && exercises[i];
+            return (
+              <button
+                key={i}
+                onClick={() => exerciseReady && startTechnique(i)}
+                disabled={!exerciseReady}
+                style={{
+                  width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 14px", marginBottom: 8, borderRadius: 10,
+                  border: `1.5px solid ${isMastered ? COLORS.green : COLORS.border}`,
+                  background: isMastered ? COLORS.green + "0A" : COLORS.card,
+                  cursor: exerciseReady ? "pointer" : "default",
+                  opacity: exerciseReady ? 1 : 0.5,
+                  fontFamily: mono, transition: "all 0.2s",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3 }}>
+                    {t.technique}
+                  </div>
+                  {p?.attempts > 0 && (
+                    <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 3 }}>{p.attempts} attempt{p.attempts !== 1 ? "s" : ""}</div>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {renderStars(stars, 14)}
+                  {isMastered && (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: COLORS.green, textTransform: "uppercase", letterSpacing: 0.5, padding: "2px 6px", background: COLORS.green + "18", borderRadius: 6 }}>
+                      Mastered
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // === EXERCISE SCREEN ===
+  const activeTech = activeTechIdx !== null ? techniques[activeTechIdx] : null;
+  const activeExercise = exercises && activeTechIdx !== null ? exercises[activeTechIdx] : null;
+
+  if (screen === "exercise" && activeTech) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 90, background: COLORS.bg1, display: "flex", flexDirection: "column", maxWidth: 430, margin: "0 auto", fontFamily: mono, animation: "fadeIn 0.2s ease" }}>
+        {/* Header */}
+        <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
+          <button onClick={() => setScreen("overview")} style={{ background: "none", border: "none", fontSize: 20, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}>{"\u2190"}</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading }}>Technique {activeTechIdx + 1} of {techniques.length}</div>
+            <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 1 }}>{skill.authorName}</div>
+          </div>
+          {renderStars(progress[String(activeTechIdx)]?.stars || 0, 14)}
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
+          {/* Technique card */}
+          <div style={{ background: COLORS.card, border: `1.5px solid ${COLORS.blue}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Technique</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3, marginBottom: 8 }}>{activeTech.technique}</div>
+            {activeTech.description && (
+              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, marginBottom: 6 }}>{activeTech.description}</div>
+            )}
+            {activeTech.structure && (
+              <div style={{ background: COLORS.bg2, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px", marginTop: 8 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Pattern</div>
+                <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5 }}>{activeTech.structure}</div>
+              </div>
+            )}
+            {activeTech.example && (
+              <div style={{ fontSize: 11, color: COLORS.muted, fontStyle: "italic", lineHeight: 1.5, borderLeft: `2px solid ${COLORS.accent1}`, paddingLeft: 8, marginTop: 8 }}>
+                {activeTech.example}
+              </div>
+            )}
+          </div>
+
+          {/* Exercise prompt */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.heading, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Rewrite this sentence</div>
+            <div style={{ background: "#FFF8F0", border: `1.5px solid ${COLORS.amber}`, borderRadius: 10, padding: "12px 14px", fontSize: 13, color: COLORS.heading, lineHeight: 1.6, fontStyle: "italic" }}>
+              {"\u201c"}{activeExercise || "Loading..."}{"\u201d"}
+            </div>
+          </div>
+
+          {/* Student attempt textarea */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.heading, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Your rewrite</div>
+            <textarea
+              ref={textareaRef}
+              value={studentAttempt}
+              onChange={e => setStudentAttempt(e.target.value)}
+              placeholder={`Apply "${activeTech.technique}" to rewrite the sentence above...`}
+              style={{
+                width: "100%", minHeight: 100, padding: "12px 14px", borderRadius: 10,
+                border: `1.5px solid ${COLORS.border}`, background: COLORS.card,
+                fontFamily: mono, fontSize: 13, color: COLORS.text, lineHeight: 1.6,
+                resize: "vertical", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* Student explanation */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 6, fontWeight: 700 }}>
+              What effect were you going for? (one sentence)
+            </div>
+            <textarea
+              value={studentExplanation}
+              onChange={e => setStudentExplanation(e.target.value)}
+              placeholder="e.g. I wanted the reader to feel a sudden shock after the long buildup"
+              style={{
+                width: "100%", minHeight: 50, padding: 10, borderRadius: 10,
+                border: `1.5px solid ${COLORS.border}`, background: COLORS.bg2,
+                fontFamily: mono, fontSize: 12,
+                color: COLORS.text, resize: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* Hint display */}
+          {hint && (
+            <div style={{ background: COLORS.blue + "0A", border: `1.5px solid ${COLORS.blue}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 12, animation: "fadeIn 0.25s ease" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+                {hintLevel >= 2 ? "Stronger hint" : "Hint"}
+              </div>
+              {hint.approach && (
+                <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, marginBottom: hint.vocabulary || hint.question ? 8 : 0 }}>{hint.approach}</div>
+              )}
+              {hint.vocabulary?.length > 0 && (
+                <div style={{ marginBottom: hint.question ? 8 : 0 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.heading, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Words to try</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {hint.vocabulary.map((w, j) => (
+                      <span key={j} style={{ fontSize: 11, padding: "3px 9px", borderRadius: 10, background: "#F0F8FF", color: COLORS.blue, fontWeight: 600, fontFamily: mono }}>{w}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {hint.question && (
+                <div style={{
+                  fontSize: 12, color: COLORS.heading, lineHeight: 1.5,
+                  padding: "8px 12px", background: COLORS.bg2, borderRadius: 8,
+                  borderLeft: `2px solid ${COLORS.amber}`, marginTop: 8,
+                  fontStyle: "italic",
+                }}>
+                  {"\uD83D\uDCAD"} {hint.question}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {hintLevel < 2 && (
+              <button
+                onClick={getHint}
+                disabled={hintLoading}
+                style={{
+                  ...s.chip, fontSize: 12, fontWeight: 600,
+                  border: `1.5px solid ${COLORS.blue}`, background: "transparent",
+                  color: COLORS.blue, opacity: hintLoading ? 0.5 : 1,
+                  flex: hintLevel === 0 ? "none" : "none",
+                }}
+              >
+                {hintLoading ? "Thinking..." : hintLevel === 0 ? "I'm stuck" : "More help"}
+              </button>
+            )}
+            <button
+              onClick={evaluateAttempt}
+              disabled={!studentAttempt.trim() || evaluating}
+              style={{
+                ...s.btn, flex: 1, fontSize: 14, padding: "12px 24px",
+                opacity: (!studentAttempt.trim() || evaluating) ? 0.5 : 1,
+                background: COLORS.heading,
+              }}
+            >
+              {evaluating ? "Checking..." : "Check my rewrite \u2192"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // === FEEDBACK SCREEN ===
+  if (screen === "feedback" && evaluation) {
+    const stars = evaluation.stars || 0;
+    const isMastered = stars >= 3;
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 90, background: COLORS.bg1, display: "flex", flexDirection: "column", maxWidth: 430, margin: "0 auto", fontFamily: mono, animation: "fadeIn 0.2s ease" }}>
+        {/* Header */}
+        <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
+          <button onClick={() => setScreen("overview")} style={{ background: "none", border: "none", fontSize: 20, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}>{"\u2190"}</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading }}>{activeTech?.technique}</div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
+          {/* Stars + label */}
+          <div style={{ textAlign: "center", padding: "20px 0 16px", animation: "fadeUp 0.3s ease" }}>
+            <div style={{ marginBottom: 8 }}>{renderStars(stars, 32)}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: STAR_COLORS[stars] || COLORS.muted }}>
+              {STAR_LABELS[stars] || "Try again!"}
+            </div>
+            {isMastered && (
+              <div style={{ fontSize: 11, color: COLORS.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginTop: 8, padding: "4px 12px", background: COLORS.green + "15", borderRadius: 8, display: "inline-block" }}>
+                Technique mastered!
+              </div>
+            )}
+          </div>
+
+          {/* Student's attempt */}
+          <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Your rewrite</div>
+            <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.6, fontStyle: "italic" }}>{studentAttempt}</div>
+          </div>
+
+          {/* Feedback */}
+          {evaluation.feedback && (
+            <div style={{ ...s.card, marginBottom: 10, padding: "12px 14px" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Feedback</div>
+              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{evaluation.feedback}</div>
+            </div>
+          )}
+
+          {/* Strengths */}
+          {evaluation.strengths && (
+            <div style={{ background: COLORS.green + "0D", border: `1px solid ${COLORS.green}30`, borderRadius: 10, padding: "10px 14px", marginBottom: 10 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.green, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>What worked</div>
+              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6 }}>{evaluation.strengths}</div>
+            </div>
+          )}
+
+          {/* Improvement */}
+          {evaluation.improvement && stars < 3 && (
+            <div style={{ background: COLORS.amber + "0D", border: `1px solid ${COLORS.amber}30`, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.amber, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>To improve</div>
+              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6 }}>{evaluation.improvement}</div>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <button
+              onClick={() => { setStudentAttempt(""); setStudentExplanation(""); setEvaluation(null); setHint(null); setHintLevel(0); setScreen("exercise"); }}
+              style={{
+                ...s.chip, flex: 1, fontSize: 12, fontWeight: 600,
+                textAlign: "center", justifyContent: "center",
+                border: `1.5px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading,
+              }}
+            >
+              Try again
+            </button>
+            <button
+              onClick={goNext}
+              style={{
+                ...s.chip, flex: 1, fontSize: 12, fontWeight: 700,
+                textAlign: "center", justifyContent: "center",
+                background: COLORS.heading, color: "#fff", borderColor: COLORS.heading,
+              }}
+            >
+              Next technique {"\u2192"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback — shouldn't happen
+  return null;
+}
