@@ -245,7 +245,6 @@ CRITICAL ORDERING RULE: Work through the original text from the FIRST word to th
 Cover ALL 9 sections below. Sections 1-7 follow this EXACT structure:
 
 KEY IDEA: [One sentence that captures the main point of this section]
-DIFFICULTY: [One of: "Good for exams" / "Intermediate — try in essays first" / "Advanced — try in creative writing first" / "Expert — master the basics first"]
 
 [2-3 sentences explaining this aspect of the writing style in simple words. Explain WHAT the writer does, then HOW they do it, then WHY it makes the writing better. Always connect the technique to how it makes the reader feel.]
 
@@ -375,7 +374,6 @@ RULES:
 - Explain WHAT the writer does, HOW they do it, and WHY it makes the reader feel something
 - STRUCTURE must be ADAPTIVE — choose Type 1 (fill-in-blank), Type 2 (rewrite prompt), or Type 3 (hybrid) based on what fits the technique best. If the technique has a repeatable grammatical pattern → Type 1. If the technique is about tone, attitude, or voice → Type 2. If it's a persuasion technique → Type 3.
 - WRITER'S WORDS must show simple everyday word → the writer's fancier version, separated by |
-- DIFFICULTY: every section (1-7) must include a DIFFICULTY tag after KEY IDEA
 - WATCH OUT: every section (1-7) must include a WATCH OUT line warning about overuse or common mistakes
 - WHEN TO USE THIS STYLE: KEY IDEA + "PERFECT FOR:" (4 bullet points with real-life examples) + "NOT SUITABLE FOR:" (2-3 situations where this style would feel wrong). No FROM THE TEXT, BREAKDOWN, STRUCTURE or WRITER'S WORDS.
 - SIGNATURE STYLE: KEY IDEA + bullet points. Each bullet MUST include a micro-example from the text, not just a technique name. No FROM THE TEXT, BREAKDOWN, STRUCTURE or WRITER'S WORDS.
@@ -550,3 +548,25 @@ RULES:
 - Keep TOTAL response under 250 words`;
 }
 
+export const translatePrompt = `You are a translator helping Hong Kong English learners (around 14 years old) understand an English passage. Translate it SENTENCE BY SENTENCE so students can match each English sentence to its meaning.
+
+Output format — strictly follow this:
+- One English sentence on its own line, prefixed with "EN: "
+- The Traditional Chinese translation on the next line, prefixed with "ZH: "
+- One blank line between each EN/ZH pair
+- Keep paragraph order from the original
+
+Example:
+EN: The city breathes differently at night.
+ZH: 城市在夜晚的呼吸方式不一樣。
+
+EN: Where daylight reveals only concrete and commerce, darkness peels back a second skin.
+ZH: 白天時，你只看到混凝土和商業活動；但到了夜晚，黑暗才揭開了城市的第二層皮膚。
+
+Rules:
+- Split on sentence boundaries (. ! ? ;) — but keep abbreviations like "Mr." or "U.S." together
+- Use natural Hong Kong / Taiwanese 繁體中文, NOT mainland Simplified Chinese terms
+- Translate idioms and metaphors by their MEANING, not literally — students need to understand what the writer is saying
+- Keep proper names in English in parentheses after the Chinese, e.g. 梅麗·史翠普 (Meryl Streep)
+- IMPORTANT: If a line starts with a structural label like "KEY IDEA:", "DIFFICULTY:", "FROM THE TEXT:", "BREAKDOWN:", "PLAIN MEANING:", "GRAMMAR:", "FUNCTION:", "USE IT:", "WHY IT WORKS:", "TRY THIS PATTERN:", "WRITER'S WORDS:" — keep the label in the English output AND translate the entire line as its OWN separate pair. Never merge a labelled line with the next line.
+- Output ONLY the EN/ZH pairs — no preamble, no commentary, no "Here is the translation"`;

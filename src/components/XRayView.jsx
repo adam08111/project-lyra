@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { COLORS } from "../constants.js";
 import { FeatherIcon } from "./Icons.jsx";
+import { callAI } from "../api.js";
+import { getRouteConfig } from "../ai-router.js";
+import { translatePrompt } from "../prompts.js";
 
 // ── Shared font ──
 export const mono = "'Courier Prime', 'Courier New', monospace";
@@ -44,6 +47,8 @@ export function parseSectionContent(content) {
 
   for (const line of lines) {
     const trimmed = line.trim();
+    // Skip DIFFICULTY lines entirely — students don't need this label
+    if (trimmed.startsWith("DIFFICULTY:")) continue;
     if (trimmed.startsWith("KEY IDEA:")) {
       parts.keyIdea = trimmed.replace("KEY IDEA:", "").trim();
       current = "body";
@@ -157,22 +162,335 @@ export function AnnotatedQuote({ text }) {
   );
 }
 
-export function SectionCard({ section, onSave }) {
+// Parse "EN: ... \n ZH: ..." pair blocks from translation output
+function parseTranslationPairs(text) {
+  if (!text) return [];
+  // Drop pairs that translate hidden labels students don't need (e.g. DIFFICULTY)
+  const isHiddenPair = (en, zh) => {
+    if (!en && !zh) return true;
+    if (en && /^DIFFICULTY\b/i.test(en.trim())) return true;
+    if (zh && /^難度[:：]/.test(zh.trim())) return true;
+    return false;
+  };
+  return text
+    .split(/\n\s*\n/)
+    .map(p => p.trim())
+    .filter(Boolean)
+    .map(pair => {
+      const enMatch = pair.match(/^EN:\s*(.+?)(?:\n|$)/s);
+      const zhMatch = pair.match(/ZH:\s*(.+)$/s);
+      return {
+        en: enMatch ? enMatch[1].trim() : "",
+        zh: zhMatch ? zhMatch[1].trim() : "",
+      };
+    })
+    .filter(p => (p.en || p.zh) && !isHiddenPair(p.en, p.zh));
+}
+
+// Group pairs by which sub-section their EN sentence came from.
+// Falls back to "body" for unmatched pairs.
+function groupPairsBySource(pairs, sources) {
+  // English-side section labels (preferred when AI keeps them verbatim)
+  const enLabelMap = [
+    { regex: /^FROM\s+THE\s+TEXT\b/i, bucket: "example" },
+    { regex: /^(BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT)\b/i, bucket: "breakdown" },
+    { regex: /^WHY\s+IT\s+WORKS\b/i, bucket: "whyItWorks" },
+    { regex: /^TRY\s+THIS\s+PATTERN\b/i, bucket: "structure" },
+    { regex: /^WRITER['’]?S\s+WORDS\b/i, bucket: "vocabUpgrade" },
+    { regex: /^KEY\s+IDEA\b/i, bucket: "keyIdea" },
+    { regex: /^DIFFICULTY\b/i, bucket: "body" },
+  ];
+
+  // Chinese-side labels (fallback when AI translates labels into Chinese)
+  const zhLabelMap = [
+    { regex: /^(文中引述|文中例子|文中範例|範例|引述)/, bucket: "example" },
+    { regex: /^(解析|淺白解釋|淺白意義|簡單來說|文法|文法模式|語法|功能|作用|試著使用|嘗試一下|請試試|練習)/, bucket: "breakdown" },
+    { regex: /^(為什麼有效|為何有效|為何重要|此寫法的效果)/, bucket: "whyItWorks" },
+    { regex: /^(嘗試這個模式|試試這個模式|試試此模式|套用範本)/, bucket: "structure" },
+    { regex: /^(作者用詞|作者的用語|作者選詞|作家用詞)/, bucket: "vocabUpgrade" },
+    { regex: /^(主要想法|關鍵想法|重點想法|核心概念|核心想法|關鍵概念)/, bucket: "keyIdea" },
+    { regex: /^(難度)/, bucket: "body" },
+  ];
+
+  const groups = {};
+  const fallback = "body";
+  for (const pair of pairs) {
+    let bucket = null;
+
+    // 1. Check English-side label
+    if (pair.en) {
+      for (const { regex, bucket: b } of enLabelMap) {
+        if (regex.test(pair.en.trim())) {
+          bucket = b;
+          break;
+        }
+      }
+    }
+
+    // 2. Check Chinese-side label (when AI translated the label into Chinese)
+    if (!bucket && pair.zh) {
+      for (const { regex, bucket: b } of zhLabelMap) {
+        if (regex.test(pair.zh.trim())) {
+          bucket = b;
+          break;
+        }
+      }
+    }
+
+    // 3. Fall back to substring matching against source content
+    if (!bucket && pair.en) {
+      // Strip leading quotes/punctuation so probes like '"For them..."' match parts.example
+      const cleaned = pair.en.replace(/^[\s"'“”‘’\[\(]+/, "");
+      const probe = cleaned.split(/\s+/).slice(0, 5).join(" ").toLowerCase();
+      for (const [name, source] of Object.entries(sources)) {
+        if (source && probe.length > 5 && source.toLowerCase().includes(probe)) {
+          bucket = name;
+          break;
+        }
+      }
+    }
+
+    if (!bucket) bucket = fallback;
+    if (!groups[bucket]) groups[bucket] = [];
+    groups[bucket].push(pair);
+  }
+
+  // Fallback: if keyIdea bucket is still empty but we have a keyIdea source,
+  // find any pair whose EN contains a chunk of the keyIdea text and route it there.
+  // This rescues cases where the AI omits the "KEY IDEA:" label in output.
+  if (!groups.keyIdea && sources.keyIdea) {
+    // Try multiple probe lengths and offsets
+    const tokens = sources.keyIdea.split(/\s+/).filter(Boolean);
+    const probes = [
+      tokens.slice(0, 4).join(" ").toLowerCase(),
+      tokens.slice(0, 3).join(" ").toLowerCase(),
+      tokens.slice(0, 2).join(" ").toLowerCase(),
+    ].filter(p => p.length > 5);
+
+    outer: for (const probe of probes) {
+      for (const [, list] of Object.entries(groups)) {
+        const idx = list.findIndex(p => p.en && p.en.toLowerCase().includes(probe));
+        if (idx >= 0) {
+          groups.keyIdea = [list[idx]];
+          list.splice(idx, 1);
+          break outer;
+        }
+      }
+    }
+  }
+
+  // Last resort: if STILL empty and there are pairs, take the first one as keyIdea.
+  // The AI translates in source order, so the first pair is almost always the heading.
+  if (!groups.keyIdea && sources.keyIdea && pairs.length > 0) {
+    for (const [, list] of Object.entries(groups)) {
+      if (list.length > 0) {
+        groups.keyIdea = [list[0]];
+        list.splice(0, 1);
+        break;
+      }
+    }
+  }
+
+  return groups;
+}
+
+export function SectionCard({ section, onSave, trackCall, index }) {
   const parts = parseSectionContent(section.content);
   const hasStructure = parts.keyIdea || parts.example;
   const [savedLabel, setSavedLabel] = useState(null);
+  const [translation, setTranslation] = useState(""); // cached result
+  const [showTranslation, setShowTranslation] = useState(false); // visibility toggle
+  const [translating, setTranslating] = useState(false);
+
+  const handleTranslate = async () => {
+    if (translating) return;
+    // Toggle: if already showing, hide. If hidden but cached, show. Otherwise fetch.
+    if (showTranslation) {
+      setShowTranslation(false);
+      return;
+    }
+    if (translation) {
+      setShowTranslation(true);
+      return;
+    }
+    setTranslating(true);
+    try {
+      const route = getRouteConfig("translate");
+      if (trackCall) trackCall();
+      const result = await callAI(translatePrompt, section.content, false, 4000, route.thinkingBudget, undefined, undefined, route.model);
+      setTranslation(result || "");
+      setShowTranslation(true);
+    } catch (e) {
+      setTranslation("翻譯失敗，請再試一次。");
+      setShowTranslation(true);
+    }
+    setTranslating(false);
+  };
+
+  // Distribute translation pairs across sub-sections by matching EN sentences to source
+  const grouped = (showTranslation && translation)
+    ? groupPairsBySource(parseTranslationPairs(translation), {
+        keyIdea: parts.keyIdea,
+        body: parts.body,
+        example: parts.example,
+        breakdown: parts.breakdown,
+        whyItWorks: parts.whyItWorks,
+        structure: parts.structure,
+      })
+    : {};
+
+  // Render helper: show ONLY the Chinese translation right beneath each sub-section.
+  // The English is already visible above in the sub-section itself, so we don't repeat it here.
+  // Also strip redundant section-label prefixes (解析、文中例子 etc.) since the parent
+  // sub-section already labels itself in English.
+  const stripRedundantPrefix = (zh) =>
+    zh.replace(/^(解析|文中例子|文中範例|為什麼有效|嘗試這個模式|作者用詞|難度|主要想法|關鍵想法|重點想法|關鍵概念|核心概念|核心想法)[:：]\s*/, "").trim();
+  const renderPairs = (key) => {
+    const pairs = grouped[key];
+    if (!pairs || pairs.length === 0) return null;
+    const zhLines = pairs.map(p => stripRedundantPrefix(p.zh || "")).filter(Boolean);
+    if (zhLines.length === 0) return null;
+    // The keyIdea bucket gets the same bold + numbered treatment as the English heading above it
+    const isKeyIdea = key === "keyIdea";
+    return (
+      <div style={{ marginTop: isKeyIdea ? 4 : 8, marginBottom: isKeyIdea ? 14 : 12, paddingTop: 6 }}>
+        {zhLines.map((zh, i) => (
+          <div key={i} style={{
+            fontSize: isKeyIdea ? 13 : 12,
+            fontWeight: isKeyIdea ? 700 : 400,
+            color: COLORS.heading,
+            lineHeight: isKeyIdea ? 1.6 : 1.8,
+            marginBottom: 4,
+            fontFamily: mono,
+          }}>
+            {isKeyIdea && index ? `${index}. ` : ""}{zh}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Combined renderer: keyIdea Chinese (bold + numbered) THEN body Chinese (plain), one block.
+  // The keyIdea translation appears at the start of the body translation block — after the
+  // English heading + English body, students see the full Chinese summary in one place.
+  const renderKeyIdeaAndBody = () => {
+    const keyIdeaLines = (grouped.keyIdea || [])
+      .map(p => stripRedundantPrefix(p.zh || ""))
+      .filter(Boolean);
+    const bodyLines = (grouped.body || [])
+      .map(p => stripRedundantPrefix(p.zh || ""))
+      .filter(Boolean);
+    if (keyIdeaLines.length === 0 && bodyLines.length === 0) return null;
+    return (
+      <div style={{ marginTop: 8, marginBottom: 12, paddingTop: 6 }}>
+        {keyIdeaLines.map((zh, i) => (
+          <div key={`k${i}`} style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: COLORS.heading,
+            lineHeight: 1.6,
+            marginBottom: 8,
+            fontFamily: mono,
+          }}>
+            {index ? `${index}. ` : ""}{zh}
+          </div>
+        ))}
+        {bodyLines.map((zh, i) => (
+          <div key={`b${i}`} style={{
+            fontSize: 12,
+            fontWeight: 400,
+            color: COLORS.heading,
+            lineHeight: 1.8,
+            marginBottom: 4,
+            fontFamily: mono,
+          }}>
+            {zh}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Structured renderer for the SENTENCE BREAKDOWN translation — mirrors the English
+  // breakdown card layout (bold labels, "Why use it" in shaded box, "Try it yourself"
+  // in dashed box).
+  const renderBreakdownTranslation = () => {
+    const pairs = grouped.breakdown || [];
+    if (pairs.length === 0) return null;
+    const allZh = pairs.map(p => p.zh || "").filter(Boolean).join("\n");
+    if (!allZh.trim()) return null;
+
+    // Strip top-level "解析:" / "BREAKDOWN:" prefix if present
+    const body = allZh.replace(/^\s*(解析|BREAKDOWN)[:：]\s*/i, "");
+
+    // Pull each sub-part by Chinese label
+    const grab = (startWords, endWords) => {
+      const startPattern = startWords.join("|");
+      const endPattern = endWords.length ? `(?=\\s*(?:${endWords.join("|")})\\s*[:：])` : "$";
+      const re = new RegExp(`(?:${startPattern})\\s*[:：]\\s*([\\s\\S]+?)${endPattern}`, "i");
+      const m = body.match(re);
+      return m?.[1]?.trim().replace(/\s*[|｜]\s*$/, "");
+    };
+    const plain = grab(["淺白解釋", "淺白意義", "簡單來說", "簡單英文"],
+                       ["文法", "語法", "文法模式", "功能", "作用", "試著使用", "請試試", "練習", "嘗試一下"]);
+    const gram = grab(["文法", "語法", "文法模式"],
+                      ["功能", "作用", "試著使用", "請試試", "練習", "嘗試一下"]);
+    const func = grab(["功能", "作用"],
+                      ["試著使用", "請試試", "練習", "嘗試一下"]);
+    const useIt = grab(["試著使用", "請試試", "練習", "嘗試一下"], []);
+
+    if (!plain && !gram && !func && !useIt) {
+      // Couldn't structurally parse — render raw lines as fallback
+      return renderPairs("breakdown");
+    }
+
+    return (
+      <div style={{ background: "#EDE8E0", borderRadius: 10, padding: "10px 14px", marginTop: 8, marginBottom: 12, fontFamily: mono }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>解析 · Breakdown</div>
+        {plain && (
+          <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>淺白解釋：</span>{plain}
+          </div>
+        )}
+        {gram && (
+          <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>文法：</span>{gram}
+          </div>
+        )}
+        {func && (
+          <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>功能：</span>{func}
+          </div>
+        )}
+        {useIt && (
+          <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
+            <span style={{ fontWeight: 700, color: COLORS.accent1 }}>試著使用：</span>{useIt}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div style={{ background: COLORS.card, borderTop: `1px solid ${COLORS.border}`, borderRight: `1px solid ${COLORS.border}`, borderBottom: `1px solid ${COLORS.border}`, borderLeft: `3px solid ${COLORS.accent1}`, borderRadius: 14, marginBottom: 12, padding: 16, fontFamily: mono }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.accent1, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1.5, fontFamily: mono }}>
-        {section.title}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1.5, fontFamily: mono }}>
+          {section.title}
+        </div>
+        <button
+          onClick={handleTranslate}
+          disabled={translating}
+          style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: translating ? COLORS.bg2 : COLORS.card, color: COLORS.heading, cursor: translating ? "default" : "pointer", letterSpacing: 0, fontWeight: 600, flexShrink: 0 }}
+        >
+          {translating ? "翻譯中..." : showTranslation ? "隱藏翻譯" : "翻譯成中文"}
+        </button>
       </div>
 
       {hasStructure ? (
         <>
           {parts.keyIdea && (
             <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, lineHeight: 1.6, marginBottom: 10, fontFamily: mono }}>
-              {parts.keyIdea}
+              {index ? `${index}. ` : ""}{parts.keyIdea}
             </div>
           )}
           {parts.body && (
@@ -180,6 +498,7 @@ export function SectionCard({ section, onSave }) {
               {parts.body}
             </div>
           )}
+          {renderKeyIdeaAndBody()}
           {parts.example && (
             <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 14px", marginBottom: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>From the text</div>
@@ -188,6 +507,7 @@ export function SectionCard({ section, onSave }) {
               </div>
             </div>
           )}
+          {renderPairs("example")}
           {parts.breakdown && (() => {
             const raw = parts.breakdown;
             const plainMatch = raw.match(/PLAIN MEANING:\s*(.*?)(?=\s*\|\s*GRAMMAR:|$)/i);
@@ -239,11 +559,13 @@ export function SectionCard({ section, onSave }) {
               </div>
             ) : null;
           })()}
+          {renderBreakdownTranslation()}
           {parts.whyItWorks && (
             <div style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.7, marginTop: 6, fontFamily: mono }}>
               <span style={{ fontWeight: 700 }}>Why it works: </span>{parts.whyItWorks}
             </div>
           )}
+          {renderPairs("whyItWorks")}
           {parts.structure && (
             <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 10, padding: "10px 14px", marginTop: 10 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Try this pattern</div>
@@ -252,6 +574,7 @@ export function SectionCard({ section, onSave }) {
               </div>
             </div>
           )}
+          {renderPairs("structure")}
           {parts.vocabUpgrade && (
             <div style={{ marginTop: 10, padding: "10px 14px", background: "#F5F0EB", borderRadius: 10, border: `1px solid ${COLORS.border}` }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.green || "#5a8a5e", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Writer's words</div>
@@ -275,9 +598,32 @@ export function SectionCard({ section, onSave }) {
           )}
         </>
       ) : (
-        <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.8, whiteSpace: "pre-wrap", fontFamily: mono }}>
-          {section.content}
-        </div>
+        <>
+          <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.8, whiteSpace: "pre-wrap", fontFamily: mono }}>
+            {section.content}
+          </div>
+          {showTranslation && translation && (
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${COLORS.border}` }}>
+              {translation
+                .split(/\n\s*\n/)
+                .map(pair => pair.trim())
+                .filter(Boolean)
+                .map((pair, i) => {
+                  const enMatch = pair.match(/^EN:\s*(.+?)(?:\n|$)/s);
+                  const zhMatch = pair.match(/ZH:\s*(.+)$/s);
+                  const en = enMatch ? enMatch[1].trim() : "";
+                  const zh = zhMatch ? zhMatch[1].trim() : "";
+                  if (!en && !zh) return null;
+                  return (
+                    <div key={i} style={{ marginBottom: 8 }}>
+                      {en && <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.6, fontStyle: "italic" }}>{en}</div>}
+                      {zh && <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, marginTop: 2 }}>{zh}</div>}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -337,7 +683,35 @@ export function saveStyleSkill(authorName, profileSections) {
 // Presentational component displaying X-Ray analysis results.
 // No API calls — pure rendering of profileSections.
 
-export default function XRayView({ profileSections, authorName, referenceText, skillSaved, onSave, analyzing, onPractice }) {
+export default function XRayView({ profileSections, authorName, referenceText, skillSaved, onSave, analyzing, onPractice, trackCall }) {
+  const [translation, setTranslation] = useState("");
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [translating, setTranslating] = useState(false);
+
+  const handleTranslate = async () => {
+    if (!referenceText || translating) return;
+    if (showTranslation) {
+      setShowTranslation(false);
+      return;
+    }
+    if (translation) {
+      setShowTranslation(true);
+      return;
+    }
+    setTranslating(true);
+    try {
+      const route = getRouteConfig("translate");
+      if (trackCall) trackCall();
+      const result = await callAI(translatePrompt, referenceText, false, 4000, route.thinkingBudget, undefined, undefined, route.model);
+      setTranslation(result || "");
+      setShowTranslation(true);
+    } catch (e) {
+      setTranslation("翻譯失敗，請再試一次。");
+      setShowTranslation(true);
+    }
+    setTranslating(false);
+  };
+
   if (analyzing) {
     return (
       <div style={{ textAlign: "center", padding: "60px 24px" }}>
@@ -386,18 +760,48 @@ export default function XRayView({ profileSections, authorName, referenceText, s
       {/* Original text reference */}
       {referenceText && (
         <details style={{ ...sharedCard, marginBottom: 12, padding: 0, cursor: "pointer" }}>
-          <summary style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 8, transition: "transform 0.2s" }}>&#9654;</span> Original text
+          <summary style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, listStyle: "none", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 8, transition: "transform 0.2s" }}>&#9654;</span> Original text
+            </span>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTranslate(); }}
+              disabled={translating}
+              style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: translating ? COLORS.bg2 : COLORS.card, color: COLORS.heading, cursor: translating ? "default" : "pointer", textTransform: "none", letterSpacing: 0, fontWeight: 600 }}
+            >
+              {translating ? "翻譯中..." : showTranslation ? "隱藏翻譯 · Hide" : "翻譯成中文 · Translate to traditional chinese"}
+            </button>
           </summary>
           <div style={{ padding: "0 14px 12px", fontSize: 12, color: COLORS.text, lineHeight: 1.8, fontFamily: mono, fontStyle: "italic", borderTop: `1px solid ${COLORS.border}`, marginTop: 0, paddingTop: 10 }}>
             {referenceText}
           </div>
+          {showTranslation && translation && (
+            <div style={{ padding: "10px 14px 12px", borderTop: `1px solid ${COLORS.border}`, fontFamily: mono }}>
+              {translation
+                .split(/\n\s*\n/)
+                .map(pair => pair.trim())
+                .filter(Boolean)
+                .map((pair, i) => {
+                  const enMatch = pair.match(/^EN:\s*(.+?)(?:\n|$)/s);
+                  const zhMatch = pair.match(/ZH:\s*(.+)$/s);
+                  const en = enMatch ? enMatch[1].trim() : "";
+                  const zh = zhMatch ? zhMatch[1].trim() : "";
+                  if (!en && !zh) return null;
+                  return (
+                    <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px dashed ${COLORS.border}` }}>
+                      {en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, fontStyle: "italic" }}>{en}</div>}
+                      {zh && <div style={{ fontSize: 13, color: COLORS.heading, lineHeight: 1.7, marginTop: 4 }}>{zh}</div>}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </details>
       )}
 
       {/* Section cards (exclude WHEN TO USE) */}
-      {profileSections.filter(s => s.title !== "WHEN TO USE THIS STYLE").map((section, i) => (
-        <SectionCard key={i} section={section} onSave={onSave} />
+      {profileSections.filter(s => s.title !== "WHEN TO USE THIS STYLE" && s.title !== "SIGNATURE STYLE").map((section, i) => (
+        <SectionCard key={i} index={i + 1} section={section} onSave={onSave} trackCall={trackCall} />
       ))}
 
       {/* Practice button */}

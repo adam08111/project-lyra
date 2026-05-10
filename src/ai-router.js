@@ -1,7 +1,7 @@
 /**
  * AI Router — Three-tier model strategy.
  *
- * PRO (gemini-3.1-pro-preview):
+ * PRO (gemini-3-flash-preview):
  *   The brain. Used for tasks where pedagogical quality, voice detection,
  *   craft evaluation, and Socratic coaching matter. These are the calls
  *   where the LYRA_BRAIN prompt is prepended.
@@ -23,7 +23,7 @@
  */
 
 const MODELS = {
-  pro: "gemini-3.1-pro-preview",
+  pro: "gemini-3-flash-preview",
   flash: "gemini-flash-latest",
   lite: "gemini-3.1-flash-lite-preview",
 };
@@ -37,7 +37,7 @@ const ROUTE_CONFIG = {
   // X-Ray analysis of reference text (the core learning moment)
   style_analysis: {
     model: MODELS.pro,
-    thinkingBudget: 4096,
+    thinkingBudget: 2048,
     brain: true, // flag: prepend LYRA_BRAIN
   },
 
@@ -149,6 +149,13 @@ const ROUTE_CONFIG = {
 
   // Grammar mini-lesson generation
   grammar_lesson: {
+    model: MODELS.lite,
+    thinkingBudget: 0,
+    brain: false,
+  },
+
+  // Source text translation (English → Traditional Chinese)
+  translate: {
     model: MODELS.lite,
     thinkingBudget: 0,
     brain: false,

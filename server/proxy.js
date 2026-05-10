@@ -6,6 +6,7 @@ import https from "https";
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { StringDecoder } from "string_decoder";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -26,7 +27,6 @@ if (!GEMINI_KEY) {
 
 const DEFAULT_MODEL = "gemini-flash-latest";
 const ALLOWED_MODELS = new Set([
-  "gemini-3.1-pro-preview",
   "gemini-flash-latest",
   "gemini-3.1-flash-lite-preview",
   "gemini-3-flash-preview",
@@ -102,9 +102,12 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    let body = "";
-    req.on("data", (chunk) => (body += chunk));
+    // Collect raw bytes; decode once at end so multi-byte UTF-8 (Chinese, em-dashes, emoji)
+    // never gets split across packet boundaries.
+    const bodyChunks = [];
+    req.on("data", (chunk) => bodyChunks.push(chunk));
     req.on("end", () => {
+      const body = Buffer.concat(bodyChunks).toString("utf8");
       recordRequest();
 
       let parsed;
@@ -159,9 +162,10 @@ const server = http.createServer((req, res) => {
 
           const proxyReq = https.request(opts, (proxyRes) => {
             if (proxyRes.statusCode >= 400) {
-              let errBody = "";
-              proxyRes.on("data", c => errBody += c);
+              const errChunks = [];
+              proxyRes.on("data", c => errChunks.push(c));
               proxyRes.on("end", () => {
+                const errBody = Buffer.concat(errChunks).toString("utf8");
                 console.error(`[Gemini ${proxyRes.statusCode}]`, errBody.slice(0, 500));
                 if (attempt < 2) {
                   console.log(`[Retry] attempt ${attempt + 1}...`);
@@ -176,8 +180,11 @@ const server = http.createServer((req, res) => {
             }
 
             let buffer = "";
+            const utf8Decoder = new StringDecoder("utf8");
             proxyRes.on("data", (chunk) => {
-              buffer += chunk.toString();
+              // Use StringDecoder so multi-byte UTF-8 chars (Chinese, em-dashes, emoji)
+              // aren't corrupted when split across chunk boundaries
+              buffer += utf8Decoder.write(chunk);
               // Process complete SSE messages
               const lines = buffer.split("\n");
               buffer = lines.pop(); // keep incomplete line
@@ -206,6 +213,9 @@ const server = http.createServer((req, res) => {
             });
 
             proxyRes.on("end", () => {
+              // Flush any remaining bytes from the decoder
+              const tail = utf8Decoder.end();
+              if (tail) buffer += tail;
               res.write("data: [DONE]\n\n");
               res.end();
             });
@@ -251,9 +261,12 @@ const server = http.createServer((req, res) => {
             headers: { "Content-Type": "application/json", "Content-Length": postData.length },
           };
           const proxyReq = https.request(opts, (proxyRes) => {
-            let responseBody = "";
-            proxyRes.on("data", (chunk) => (responseBody += chunk));
+            // Accumulate raw bytes; decode once at end so multi-byte UTF-8 chars
+            // (Chinese, em-dashes, emoji) aren't split across packet boundaries.
+            const respChunks = [];
+            proxyRes.on("data", (chunk) => respChunks.push(chunk));
             proxyRes.on("end", () => {
+              const responseBody = Buffer.concat(respChunks).toString("utf8");
               if (proxyRes.statusCode >= 400) {
                 console.error(`[Gemini ${proxyRes.statusCode}]`, responseBody.slice(0, 500));
                 if (attempt < 2) { console.log(`[Retry] attempt ${attempt + 1}...`); callOnce(attempt + 1); }

@@ -142,14 +142,24 @@ export default function SourceSetup({
 
       const analysisRoute = getRouteConfig("style_analysis");
       trackCall();
+      // Throttle parsing to every ~400ms — avoids O(n²) re-parsing on every token
+      let lastParseAt = 0;
+      let advancedToStep2 = false;
       const result = await callAI(styleProfilerPrompt, userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
-        // Live-update as tokens stream in
+        const now = Date.now();
+        if (now - lastParseAt < 400) return;
+        lastParseAt = now;
         const author = extractAuthor(partial);
         if (author !== "Unknown Author") setAuthorName(author);
         const sections = parseProfileSections(partial);
         if (sections.length > 0) {
           setProfileSections(sections);
           setAnalyzing(false);
+          // Advance to step 2 as soon as first section appears so user sees streaming content
+          if (!advancedToStep2) {
+            advancedToStep2 = true;
+            setStep(2);
+          }
         }
       }, undefined, analysisRoute.model);
 
@@ -322,6 +332,7 @@ export default function SourceSetup({
               skillSaved={skillSaved}
               onSave={() => {}}
               analyzing={analyzing}
+              trackCall={trackCall}
             />
 
             {profileSections.length > 0 && (
