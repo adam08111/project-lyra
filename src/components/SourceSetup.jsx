@@ -140,7 +140,7 @@ export default function SourceSetup({
       } catch (e) { /* silent */ }
       const userMsg = sourceText + existingSkillsCtx;
 
-      const analysisRoute = getRouteConfig("source_xray");
+      const analysisRoute = getRouteConfig("style_analysis");
       trackCall();
       const result = await callAI(styleProfilerPrompt, userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
         // Live-update as tokens stream in

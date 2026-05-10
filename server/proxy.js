@@ -26,6 +26,7 @@ if (!GEMINI_KEY) {
 
 const DEFAULT_MODEL = "gemini-flash-latest";
 const ALLOWED_MODELS = new Set([
+  "gemini-3.1-pro-preview",
   "gemini-flash-latest",
   "gemini-3.1-flash-lite-preview",
   "gemini-3-flash-preview",
