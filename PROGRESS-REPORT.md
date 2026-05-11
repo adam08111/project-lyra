@@ -580,10 +580,35 @@ Multiple iterations on the X-Ray section-card translation UI in `XRayView.jsx`:
 - **Saved-concept translation** — each saved concept card in Style Lab gets a 翻譯成中文 button in its header; expanded view shows English label prefix + Chinese inline under each sub-section (grammar, function, useIt template + example, source quote).
 - **Source quote display** — `renderExampleTranslation` puts the Chinese translation in a beige card matching the English FROM THE TEXT card, with AnnotatedQuote rendering preserved annotation markers.
 
-Known issues that remain (12 May 2026):
-- Translation parser occasionally still surfaces inline `ZH:` markers when the AI mixes both EN and ZH content on the same line without proper delimiters. Multiple parser revisions attempted but the underlying cause is the AI ignoring the prompt's strict format rule on some requests. A more deterministic structured-output format may be needed.
+### 12.10 X-Ray Translation: JSON Structured Output (11 May 2026)
 
-### 12.10 Other Changes
+The known `ZH:` leak issue (above) is fixed by switching the translator to
+Gemini's structured-output mode (`responseMimeType: "application/json"` +
+`responseSchema`). The model now physically cannot emit `ZH:`/`EN:` markers
+mid-line — the response is constrained to a JSON array of `{en, zh}` objects.
+
+- `src/prompts.js` — `translatePrompt` rewritten to request a JSON array;
+  new `TRANSLATE_SCHEMA` exported (lowercase OpenAPI-3 types).
+- `server/proxy.js` — accepts optional `responseSchema` / `responseMimeType`
+  in the request body and forwards to Gemini's `generationConfig`. Skipped
+  when `useSearch` is set (Gemini rejects schema + grounding together).
+- `src/api.js` — `callAI` gained a 10th positional arg `responseSchema`.
+- `src/components/XRayView.jsx` — `parseTranslationPairs` now tries
+  `JSON.parse` first (stripping ```json fences and surrounding prose),
+  falls back to the legacy EN/ZH regex parsers for safety. Exported for
+  unit testing. Inline source-text rendering now uses the same parser
+  instead of its own duplicated regex.
+- `src/components/StyleLab.jsx` — `parseConceptTranslation` consumes the
+  shared `parseTranslationPairs` so concept-card translation gets the same
+  JSON-first robustness.
+- `groupPairsBySource` — tightened the last-resort `keyIdea` fallback to
+  only steal from the unlabeled `body` bucket, never from explicit buckets
+  like `watchOut`/`whyItWorks` (regression caught by new test).
+- `tests/translation.test.js` — 16 new cases covering JSON output, code-fence
+  stripping, prose preamble tolerance, DIFFICULTY hiding, annotation
+  preservation, legacy text fallback, WATCH OUT routing, and schema shape.
+
+### 12.11 Other Changes
 
 - **DIFFICULTY removed** from prompt template and parser — no longer shown in cards.
 - **SIGNATURE STYLE hidden** from card display (still in prompt for future use).

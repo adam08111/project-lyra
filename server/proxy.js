@@ -119,16 +119,24 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      const { system, message, maxTokens = 1000, thinkingBudget, useSearch } = parsed;
+      const { system, message, maxTokens = 1000, thinkingBudget, useSearch, responseSchema, responseMimeType } = parsed;
       // Accept model from request body, validate against whitelist
       const MODEL = (parsed.model && ALLOWED_MODELS.has(parsed.model)) ? parsed.model : DEFAULT_MODEL;
-      console.log(`[Request] model=${MODEL} maxTokens=${maxTokens}${thinkingBudget ? ` thinkBudget=${thinkingBudget}` : ""}${useSearch ? " +search" : ""} system_len=${(system || "").length} msg_len=${(message || "").length}`);
+      console.log(`[Request] model=${MODEL} maxTokens=${maxTokens}${thinkingBudget ? ` thinkBudget=${thinkingBudget}` : ""}${useSearch ? " +search" : ""}${responseSchema ? " +schema" : ""} system_len=${(system || "").length} msg_len=${(message || "").length}`);
 
       // Build Gemini request body
       const genConfig = { maxOutputTokens: maxTokens };
       if (thinkingBudget && !useSearch) {
         // Disable thinking for search requests — thinking causes model to skip Google Search
         genConfig.thinkingConfig = { thinkingBudget };
+      }
+      // Structured output: forces the model to emit JSON matching the given schema.
+      // Cannot be combined with google_search grounding (Gemini rejects the pair).
+      if (responseSchema && !useSearch) {
+        genConfig.responseMimeType = responseMimeType || "application/json";
+        genConfig.responseSchema = responseSchema;
+      } else if (responseMimeType && !useSearch) {
+        genConfig.responseMimeType = responseMimeType;
       }
       const geminiReq = {
         system_instruction: { parts: [{ text: system || "" }] },

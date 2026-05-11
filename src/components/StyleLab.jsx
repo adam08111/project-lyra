@@ -3,13 +3,13 @@ import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { styleProfilerPrompt, styleCoachPrompt, translatePrompt } from "../prompts.js";
+import { styleProfilerPrompt, styleCoachPrompt, translatePrompt, TRANSLATE_SCHEMA } from "../prompts.js";
 import { FeatherIcon } from "./Icons.jsx";
 import { useTypewriter } from "../hooks.js";
 import XRayView, {
   parseProfileSections, parseSectionContent, parseAnnotations,
   labelColorIndex, ANNOTATION_COLORS, AnnotatedQuote, SectionCard,
-  extractAuthor, saveStyleSkill, mono
+  extractAuthor, saveStyleSkill, mono, parseTranslationPairs,
 } from "./XRayView.jsx";
 
 function CoachMessage({ text, profileSections }) {
@@ -180,61 +180,64 @@ function buildConceptTranslateInput(c) {
   return parts.join("\n\n");
 }
 
+// Chinese-side label patterns used to (a) route an unlabeled pair and
+// (b) strip a redundant Chinese label prefix from the translation text.
+const ZH_CONCEPT_LABELS = {
+  grammar:  /^(文法|語法|文法模式|語法模式|文法結構|語法結構|句法|句子結構)[:：]/,
+  function: /^(功能|作用|目的|用途|效用|效果)[:：]/,
+  useIt:    /^(試著使用|試試看|試試|嘗試一下|請試試|練習|自己試試|動手試試|試著套用|嘗試套用|套用練習|套用模板|套用方法|來試試|你也試試|你來試試)[:：]/,
+  example:  /^(文中引述|文中例子|文中範例|原文引述|原文範例|引文|引述|範例|原文)[:：]/,
+};
+
+function stripZhConceptPrefix(zh) {
+  // Strip any leading Chinese-label prefix (e.g. "文法：", "功能："). Loop so
+  // nested prefixes like "解析：文法：xxx" collapse fully.
+  let out = zh || "";
+  for (let i = 0; i < 3; i++) {
+    let next = out;
+    for (const re of Object.values(ZH_CONCEPT_LABELS)) next = next.replace(re, "");
+    next = next.trim();
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
 function parseConceptTranslation(result) {
   if (!result) return {};
-  // Collect EN/ZH pairs first
-  const pairs = result
-    .split(/\n\s*\n/)
-    .map(b => b.trim())
-    .filter(Boolean)
-    .map(b => {
-      const enMatch = b.match(/^EN:\s*(.+?)(?:\n|$)/s);
-      const zhMatch = b.match(/ZH:\s*(.+)$/s);
-      return { en: enMatch?.[1]?.trim() || "", zh: zhMatch?.[1]?.trim() || "" };
-    });
-
-  // Expanded Chinese label dictionary (matches what XRayView accepts)
-  const zhLabels = {
-    grammar:  /^(文法|語法|文法模式|語法模式|文法結構|語法結構|句法|句子結構)[:：]/,
-    function: /^(功能|作用|目的|用途|效用|效果)[:：]/,
-    useIt:    /^(試著使用|試試看|試試|嘗試一下|請試試|練習|自己試試|動手試試|試著套用|嘗試套用|套用練習|套用模板|套用方法|來試試|你也試試|你來試試)[:：]/,
-    example:  /^(文中引述|文中例子|文中範例|原文引述|原文範例|引文|引述|範例|原文)[:：]/,
-  };
-  const stripPrefix = (zh) =>
-    zh.replace(/^(文法|語法|文法模式|語法模式|文法結構|句法|功能|作用|目的|用途|效用|試著使用|試試看|試試|嘗試一下|練習|套用練習|套用模板|文中引述|文中例子|文中範例|原文引述|引文|引述|範例|原文)[:：]\s*/, "").trim();
+  // parseTranslationPairs handles both the JSON output (preferred) and the
+  // legacy EN/ZH text fallback, so this routing logic doesn't care which
+  // shape the model returned.
+  const pairs = parseTranslationPairs(result);
 
   const slots = { grammar: "", function: "", useIt: "", example: "" };
 
-  // Pass 1: route by explicit label (English-side preferred, Chinese-side fallback)
+  // Pass 1: route by explicit label (English side preferred, Chinese side fallback)
   for (const p of pairs) {
     let key = null;
     if (/^GRAMMAR\b/i.test(p.en)) key = "grammar";
     else if (/^FUNCTION\b/i.test(p.en)) key = "function";
     else if (/^USE\s+IT\b/i.test(p.en)) key = "useIt";
     else if (/^FROM\s+THE\s+TEXT\b/i.test(p.en)) key = "example";
-    else if (zhLabels.grammar.test(p.zh)) key = "grammar";
-    else if (zhLabels.function.test(p.zh)) key = "function";
-    else if (zhLabels.useIt.test(p.zh)) key = "useIt";
-    else if (zhLabels.example.test(p.zh)) key = "example";
-    if (key && !slots[key]) {
-      slots[key] = stripPrefix(p.zh);
-    }
+    else if (ZH_CONCEPT_LABELS.grammar.test(p.zh)) key = "grammar";
+    else if (ZH_CONCEPT_LABELS.function.test(p.zh)) key = "function";
+    else if (ZH_CONCEPT_LABELS.useIt.test(p.zh)) key = "useIt";
+    else if (ZH_CONCEPT_LABELS.example.test(p.zh)) key = "example";
+    if (key && !slots[key]) slots[key] = stripZhConceptPrefix(p.zh);
   }
 
-  // Pass 2: positional fallback — fill empty slots in source order
-  // (input was built as GRAMMAR → FUNCTION → USE IT → FROM THE TEXT, so pairs follow that order)
+  // Pass 2: positional fallback — buildConceptTranslateInput emits sections in
+  // the order GRAMMAR → FUNCTION → USE IT → FROM THE TEXT, and the model
+  // preserves order, so unrouted pairs fill remaining slots in that order.
   const order = ["grammar", "function", "useIt", "example"];
-  const unrouted = pairs.filter(p => {
-    const allRegexes = Object.values(zhLabels);
-    const enRouted = /^(GRAMMAR|FUNCTION|USE\s+IT|FROM\s+THE\s+TEXT)\b/i.test(p.en);
-    const zhRouted = allRegexes.some(re => re.test(p.zh));
-    return !enRouted && !zhRouted && p.zh;
-  });
-  let unroutedIdx = 0;
+  const labelRe = /^(GRAMMAR|FUNCTION|USE\s+IT|FROM\s+THE\s+TEXT)\b/i;
+  const allZhRegexes = Object.values(ZH_CONCEPT_LABELS);
+  const unrouted = pairs.filter(p => p.zh && !labelRe.test(p.en) && !allZhRegexes.some(re => re.test(p.zh)));
+  let idx = 0;
   for (const slot of order) {
-    if (!slots[slot] && unrouted[unroutedIdx]) {
-      slots[slot] = stripPrefix(unrouted[unroutedIdx].zh);
-      unroutedIdx++;
+    if (!slots[slot] && unrouted[idx]) {
+      slots[slot] = stripZhConceptPrefix(unrouted[idx].zh);
+      idx++;
     }
   }
 
@@ -256,7 +259,7 @@ function SavedConceptCard({ concept, isExpanded, onToggle, onRemove }) {
     setTranslating(true);
     try {
       const route = getRouteConfig("translate");
-      const result = await callAI(translatePrompt, input, false, 2000, route.thinkingBudget, undefined, undefined, route.model);
+      const result = await callAI(translatePrompt, input, false, 2000, route.thinkingBudget, undefined, undefined, route.model, TRANSLATE_SCHEMA);
       setTranslation(parseConceptTranslation(result || ""));
       setShowTranslation(true);
     } catch (err) {
