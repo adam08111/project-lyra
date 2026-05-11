@@ -40,6 +40,7 @@ export default function Lyra() {
   const [chatLoading, setChatLoading] = useState(false);
   const [typingMsg, setTypingMsg] = useState(null);
   const chatAbortRef = useRef(null);
+  const finalizedTypingIds = useRef(new Set());
 
   // Editor
   const [title, setTitle] = useState("Untitled");
@@ -361,7 +362,8 @@ Rules:
   // Finalize typewriter when switching away from chat tab
   // Prevents the animation restarting from scratch when switching back
   useEffect(() => {
-    if (tab !== "chat" && typingMsg) {
+    if (tab !== "chat" && typingMsg && !finalizedTypingIds.current.has(typingMsg.id)) {
+      finalizedTypingIds.current.add(typingMsg.id);
       setMessages(prev => [...prev, { role: "ai", text: typingMsg.text }]);
       setTypingMsg(null);
     }
@@ -392,8 +394,13 @@ Rules:
         }
 
         const sugRoute = getRouteConfig("structural_suggest");
+        const sourceCtxObj = sourceAnalysis && appliedSkill ? {
+          authorName: appliedSkill.authorName || "Unknown",
+          targetVoice: targetVoice || appliedSkill.signatureStyle || "",
+          techniqueCount: extractedSkills?.length || appliedSkill.analysedTechniques?.length || 0,
+        } : null;
         trackCall();
-        const result = await callAI(buildStructuralPrompt(topic, typeLabel, activeSkillCtx, examRules), lastPara, false, 1000, sugRoute.thinkingBudget, undefined, undefined, sugRoute.model);
+        const result = await callAI(buildStructuralPrompt(topic, typeLabel, activeSkillCtx, examRules, sourceCtxObj), lastPara, false, 1000, sugRoute.thinkingBudget, undefined, undefined, sugRoute.model);
         const parsed = JSON.parse(result.replace(/```json|```/g, "").trim());
         if (parsed.suggestions?.length) {
           setSuggestions(parsed.suggestions);
@@ -508,8 +515,10 @@ Rules:
       chatAbortRef.current = null;
     }
     setChatLoading(false);
-    // If there's a typing message in progress, finish it immediately
-    if (typingMsg) {
+    // ID-based dedup: a typewriter that finishes in the same tick races with
+    // this handler. Whichever runs first claims the id; the other no-ops.
+    if (typingMsg && !finalizedTypingIds.current.has(typingMsg.id)) {
+      finalizedTypingIds.current.add(typingMsg.id);
       setMessages(prev => [...prev, { role: "ai", text: typingMsg.text }]);
       setTypingMsg(null);
     }
@@ -590,6 +599,8 @@ Rules:
   }, [topic, typeLabel]);
 
   const handleTypewriterDone = useCallback((msg) => {
+    if (finalizedTypingIds.current.has(msg.id)) return;
+    finalizedTypingIds.current.add(msg.id);
     setMessages(prev => [...prev, { role: "ai", text: msg.text }]);
     setTypingMsg(null);
   }, []);
@@ -625,8 +636,13 @@ Rules:
       }
 
       const proofRoute = getRouteConfig("proofread");
+      const sourceCtxObj = sourceAnalysis && appliedSkill ? {
+        authorName: appliedSkill.authorName || "Unknown",
+        targetVoice: targetVoice || appliedSkill.signatureStyle || "",
+        techniqueCount: extractedSkills?.length || appliedSkill.analysedTechniques?.length || 0,
+      } : null;
       trackCall();
-      const result = await callAI(buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules), draft, false, 1000, proofRoute.thinkingBudget, undefined, undefined, proofRoute.model);
+      const result = await callAI(buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, sourceCtxObj), draft, false, 1000, proofRoute.thinkingBudget, undefined, undefined, proofRoute.model);
       const parsed = JSON.parse(result.replace(/```json|```/g, "").trim());
       setProofread(parsed);
       setProofTab("grammar");
@@ -650,7 +666,7 @@ Rules:
       setProofread({ grammar: [], style: [], vocabulary: [], strengths: "Unable to analyse.", nextFocus: "Try again." });
     }
     setProofLoading(false);
-  }, [draft, topic, typeLabel, appliedSuggestions, appliedSkill, examRules]);
+  }, [draft, topic, typeLabel, appliedSuggestions, appliedSkill, examRules, sourceAnalysis, targetVoice, extractedSkills]);
 
   // "I've rewritten it" — student signals they've rewritten, Lyra verifies in chat
   const applySuggestion = useCallback((sug) => {
@@ -689,7 +705,7 @@ Rules:
           targetVoice={targetVoice} setTargetVoice={setTargetVoice}
           appliedSkill={appliedSkill} setAppliedSkill={setAppliedSkill}
           setWritingTechniques={setWritingTechniques}
-          onStart={() => { const autoTitle = generateTitle(topic, type); setTitle(autoTitle); setScreen("app"); setTimeout(() => saveNewWriting("default", autoTitle), 500); }}
+          onStart={() => { const autoTitle = generateTitle(topic, type); setTitle(autoTitle); saveNewWriting("default", autoTitle); setScreen("app"); }}
           trackCall={trackCall}
           sidebarProps={sidebarProps}
           onOpenTraining={openTrainingSession}
@@ -713,7 +729,7 @@ Rules:
           purpose={purpose} setPurpose={setPurpose}
           appliedSkill={appliedSkill} setAppliedSkill={setAppliedSkill}
           setWritingTechniques={setWritingTechniques}
-          onStart={() => { const autoTitle = generateTitle(topic, type); setTitle(autoTitle); setScreen("app"); setTimeout(() => saveNewWriting("default", autoTitle), 500); }}
+          onStart={() => { const autoTitle = generateTitle(topic, type); setTitle(autoTitle); saveNewWriting("default", autoTitle); setScreen("app"); }}
           sidebarProps={sidebarProps}
         />
         <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />

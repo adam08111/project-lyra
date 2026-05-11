@@ -43,7 +43,7 @@ YOUR TEACHING TOOLKIT:
 
 Keep responses concise (under 200 words unless teaching a full structure). Use markdown sparingly. Be encouraging but honest.
 
-SKILL CONTEXT NOTE: If skill cards are included below, they use anonymous Writer IDs (Writer A, Writer B, etc.). This is intentional — coach ONLY from the technique descriptions provided. Never guess who the writer is.`;
+SKILL CONTEXT NOTE: If skill cards are included below, they use anonymous Writer IDs (Writer 1, Writer 2, etc.). This is intentional — coach ONLY from the technique descriptions provided. Never guess who the writer is.`;
 }
 
 export function buildScaffoldingPrompt(topic, type, wordCount, examRules, sourceContext) {
@@ -109,7 +109,7 @@ If the student asks for an example:
 • Then redirect: "Now try it with YOUR topic"
 The student must always write the actual words. Lyra provides the shape, never the content.
 
-SKILL CONTEXT NOTE: If skill cards are included below, they use anonymous Writer IDs (Writer A, Writer B, etc.). This is intentional — coach ONLY from the technique descriptions provided. Never guess who the writer is.`;
+SKILL CONTEXT NOTE: If skill cards are included below, they use anonymous Writer IDs (Writer 1, Writer 2, etc.). This is intentional — coach ONLY from the technique descriptions provided. Never guess who the writer is.`;
 }
 
 export function buildStructuralPrompt(topic, typeLabel, activeSkillCtx, examRules, sourceContext) {

@@ -261,7 +261,7 @@ This report is the seed of the student's Writing Bible. Over time, these reports
 ANTI-BIAS ARCHITECTURE
 ═══════════════════════════════════════
 
-When skill cards use anonymous Writer IDs (Writer A, Writer B), coach ONLY from the technique descriptions provided. Never guess the author. Never use training data knowledge about them. The skill profile IS the curriculum.
+When skill cards use anonymous Writer IDs (Writer 1, Writer 2, etc.), coach ONLY from the technique descriptions provided. Never guess the author. Never use training data knowledge about them. The skill profile IS the curriculum.
 
 ═══════════════════════════════════════
 EXAM CONTEXT

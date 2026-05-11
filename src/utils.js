@@ -1,7 +1,7 @@
 // Shared utilities for parsing AI technique responses
 
 // === ANTI-BIAS: Author Identity Isolation ===
-// Students see real author names; the AI only ever sees "Writer A", "Writer B", etc.
+// Students see real author names; the AI only ever sees "Writer 1", "Writer 2", etc.
 // This prevents the AI's training data from contaminating coaching.
 
 /**
@@ -11,10 +11,12 @@
  * @param {Array} skills - Array of skill objects with authorName
  * @returns {{ anonymised: Array, mapping: Array<{writerLabel: string, realName: string}> }}
  */
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export function anonymiseSkillsForAI(skills) {
   const mapping = [];
   const anonymised = skills.map((skill, index) => {
-    const writerLabel = `Writer ${String.fromCharCode(65 + (index % 26))}`;
+    const writerLabel = `Writer ${index + 1}`;
     const originalAuthor = skill.authorName || '';
     mapping.push({ writerLabel, realName: originalAuthor });
 
@@ -32,7 +34,7 @@ export function anonymiseSkillsForAI(skills) {
 
       let result = text;
       patterns.forEach(pattern => {
-        result = result.replace(new RegExp(pattern, 'gi'), writerLabel);
+        result = result.replace(new RegExp(escapeRegex(pattern), 'gi'), writerLabel);
       });
       return result;
     };
@@ -85,7 +87,7 @@ export function anonymiseSkillsForAI(skills) {
 /**
  * Restores anonymous Writer labels back to real author names for display.
  *
- * @param {string} text - AI response text containing "Writer A", "Writer B" etc.
+ * @param {string} text - AI response text containing "Writer 1", "Writer 2" etc.
  * @param {Array<{writerLabel: string, realName: string}>} mapping - The mapping from anonymiseSkillsForAI
  * @returns {string} - Text with real author names restored
  */
@@ -94,7 +96,8 @@ export function restoreAuthorNames(text, mapping) {
   let result = text;
   mapping.forEach(({ writerLabel, realName }) => {
     if (realName) {
-      result = result.replace(new RegExp(writerLabel, 'g'), realName);
+      // \b at end avoids "Writer 1" matching inside "Writer 10"
+      result = result.replace(new RegExp(writerLabel + '\\b', 'g'), realName);
     }
   });
   return result;
@@ -108,7 +111,7 @@ ANTI-BIAS RULES — CRITICAL:
 
 You are coaching based on techniques the student personally extracted
 from published texts through Style Lab analysis. Each skill is labelled
-with an anonymous Writer ID (Writer A, Writer B, etc.).
+with an anonymous Writer ID (Writer 1, Writer 2, etc.).
 
 1. Do NOT attempt to identify any writer by their real name.
 2. Do NOT use any knowledge about any author from your training data.
@@ -118,7 +121,7 @@ with an anonymous Writer ID (Writer A, Writer B, etc.).
 5. Do NOT say "this author is known for..." or "this writer typically..."
 6. Do NOT reference any work, book, essay, or speech not quoted in the
    skill card.
-7. If the student asks "who is Writer A?", respond: "Writer A is the
+7. If the student asks "who is Writer 1?", respond: "Writer 1 is the
    author you analysed in Style Lab. I coach based on the techniques
    you extracted, not on background information about the writer."
 8. When comparing techniques across writers, compare ONLY the technique
