@@ -3,7 +3,7 @@ import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { styleProfilerPrompt, styleCoachPrompt } from "../prompts.js";
+import { styleProfilerPrompt, styleCoachPrompt, translatePrompt } from "../prompts.js";
 import { FeatherIcon } from "./Icons.jsx";
 import { useTypewriter } from "../hooks.js";
 import XRayView, {
@@ -170,6 +170,192 @@ function PracticeTypingBubble({ msg, onDone }) {
 // labelColorIndex, AnnotatedQuote, SectionCard, extractAuthor, saveStyleSkill, mono
 // are all imported from XRayView.jsx above
 
+// Build a structured text payload for the translator and parse the response per slot
+function buildConceptTranslateInput(c) {
+  const parts = [];
+  if (c.grammar)  parts.push(`GRAMMAR: ${c.grammar}`);
+  if (c.function) parts.push(`FUNCTION: ${c.function}`);
+  if (c.useIt)    parts.push(`USE IT: ${c.useIt}`);
+  if (c.example)  parts.push(`FROM THE TEXT: ${c.example}`);
+  return parts.join("\n\n");
+}
+
+function parseConceptTranslation(result) {
+  if (!result) return {};
+  // Collect EN/ZH pairs first
+  const pairs = result
+    .split(/\n\s*\n/)
+    .map(b => b.trim())
+    .filter(Boolean)
+    .map(b => {
+      const enMatch = b.match(/^EN:\s*(.+?)(?:\n|$)/s);
+      const zhMatch = b.match(/ZH:\s*(.+)$/s);
+      return { en: enMatch?.[1]?.trim() || "", zh: zhMatch?.[1]?.trim() || "" };
+    });
+
+  // Expanded Chinese label dictionary (matches what XRayView accepts)
+  const zhLabels = {
+    grammar:  /^(文法|語法|文法模式|語法模式|文法結構|語法結構|句法|句子結構)[:：]/,
+    function: /^(功能|作用|目的|用途|效用|效果)[:：]/,
+    useIt:    /^(試著使用|試試看|試試|嘗試一下|請試試|練習|自己試試|動手試試|試著套用|嘗試套用|套用練習|套用模板|套用方法|來試試|你也試試|你來試試)[:：]/,
+    example:  /^(文中引述|文中例子|文中範例|原文引述|原文範例|引文|引述|範例|原文)[:：]/,
+  };
+  const stripPrefix = (zh) =>
+    zh.replace(/^(文法|語法|文法模式|語法模式|文法結構|句法|功能|作用|目的|用途|效用|試著使用|試試看|試試|嘗試一下|練習|套用練習|套用模板|文中引述|文中例子|文中範例|原文引述|引文|引述|範例|原文)[:：]\s*/, "").trim();
+
+  const slots = { grammar: "", function: "", useIt: "", example: "" };
+
+  // Pass 1: route by explicit label (English-side preferred, Chinese-side fallback)
+  for (const p of pairs) {
+    let key = null;
+    if (/^GRAMMAR\b/i.test(p.en)) key = "grammar";
+    else if (/^FUNCTION\b/i.test(p.en)) key = "function";
+    else if (/^USE\s+IT\b/i.test(p.en)) key = "useIt";
+    else if (/^FROM\s+THE\s+TEXT\b/i.test(p.en)) key = "example";
+    else if (zhLabels.grammar.test(p.zh)) key = "grammar";
+    else if (zhLabels.function.test(p.zh)) key = "function";
+    else if (zhLabels.useIt.test(p.zh)) key = "useIt";
+    else if (zhLabels.example.test(p.zh)) key = "example";
+    if (key && !slots[key]) {
+      slots[key] = stripPrefix(p.zh);
+    }
+  }
+
+  // Pass 2: positional fallback — fill empty slots in source order
+  // (input was built as GRAMMAR → FUNCTION → USE IT → FROM THE TEXT, so pairs follow that order)
+  const order = ["grammar", "function", "useIt", "example"];
+  const unrouted = pairs.filter(p => {
+    const allRegexes = Object.values(zhLabels);
+    const enRouted = /^(GRAMMAR|FUNCTION|USE\s+IT|FROM\s+THE\s+TEXT)\b/i.test(p.en);
+    const zhRouted = allRegexes.some(re => re.test(p.zh));
+    return !enRouted && !zhRouted && p.zh;
+  });
+  let unroutedIdx = 0;
+  for (const slot of order) {
+    if (!slots[slot] && unrouted[unroutedIdx]) {
+      slots[slot] = stripPrefix(unrouted[unroutedIdx].zh);
+      unroutedIdx++;
+    }
+  }
+
+  return slots;
+}
+
+function SavedConceptCard({ concept, isExpanded, onToggle, onRemove }) {
+  const [translation, setTranslation] = useState(null); // { grammar, function, useIt, example }
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [translating, setTranslating] = useState(false);
+
+  const handleTranslate = async (e) => {
+    e.stopPropagation();
+    if (translating) return;
+    if (showTranslation) { setShowTranslation(false); return; }
+    if (translation) { setShowTranslation(true); return; }
+    const input = buildConceptTranslateInput(concept);
+    if (!input.trim()) return;
+    setTranslating(true);
+    try {
+      const route = getRouteConfig("translate");
+      const result = await callAI(translatePrompt, input, false, 2000, route.thinkingBudget, undefined, undefined, route.model);
+      setTranslation(parseConceptTranslation(result || ""));
+      setShowTranslation(true);
+    } catch (err) {
+      setTranslation({ grammar: "翻譯失敗。", function: "", useIt: "", example: "" });
+      setShowTranslation(true);
+    }
+    setTranslating(false);
+  };
+
+  const c = concept;
+  // Split useIt template + example on arrow
+  const splitUseIt = (text) => {
+    if (!text) return { template: "", example: "" };
+    const m = text.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
+    return { template: m ? m[1].trim() : text, example: m ? m[2].trim() : "" };
+  };
+  const enUse = splitUseIt(c.useIt);
+  const zhUse = splitUseIt(translation?.useIt || "");
+
+  return (
+    <div style={{ background: COLORS.card, borderTop: `1px solid ${isExpanded ? COLORS.accent1 : COLORS.border}`, borderRight: `1px solid ${isExpanded ? COLORS.accent1 : COLORS.border}`, borderBottom: `1px solid ${isExpanded ? COLORS.accent1 : COLORS.border}`, borderLeft: `3px solid ${COLORS.accent1}`, borderRadius: 14, marginBottom: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
+      <div onClick={onToggle} style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, cursor: "pointer" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono }}>{c.name}</div>
+          <div style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono, marginTop: 2 }}>{c.section}</div>
+        </div>
+        <button
+          onClick={(e) => { if (!isExpanded) onToggle(); handleTranslate(e); }}
+          disabled={translating}
+          style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: translating ? "#F0EDE8" : COLORS.card, color: COLORS.heading, cursor: translating ? "default" : "pointer", fontWeight: 600, flexShrink: 0 }}
+        >
+          {translating ? "翻譯中..." : showTranslation ? "隱藏翻譯" : "翻譯成中文"}
+        </button>
+        <span style={{ fontSize: 10, color: COLORS.muted, transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}>&#9654;</span>
+      </div>
+      {isExpanded && (
+        <div style={{ padding: "0 14px 14px", fontFamily: mono }}>
+          {c.grammar && (
+            <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 8, background: "#EDE8E0", borderRadius: 8, padding: "8px 10px" }}>
+              <span style={{ fontWeight: 700, color: COLORS.heading }}>Grammar pattern: </span>{c.grammar}
+              {showTranslation && translation?.grammar && (
+                <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${COLORS.border}`, color: COLORS.heading }}>
+                  <span style={{ fontWeight: 700 }}>文法：</span>{translation.grammar}
+                </div>
+              )}
+            </div>
+          )}
+          {c.function && (
+            <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 8, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
+              <span style={{ fontWeight: 700, color: COLORS.heading }}>Why use it: </span>{c.function}
+              {showTranslation && translation?.function && (
+                <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${COLORS.border}`, color: COLORS.heading }}>
+                  <span style={{ fontWeight: 700 }}>功能：</span>{translation.function}
+                </div>
+              )}
+            </div>
+          )}
+          {c.useIt && (
+            <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, marginBottom: 8, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
+              <span style={{ fontWeight: 700, color: COLORS.accent1 }}>Try it yourself: </span>{enUse.template}
+              {enUse.example && (
+                <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20" }}>
+                  <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{enUse.example}
+                </div>
+              )}
+              {showTranslation && translation?.useIt && (
+                <div style={{ marginTop: 8, paddingTop: 6, borderTop: `1px dashed ${COLORS.border}` }}>
+                  <span style={{ fontWeight: 700, color: COLORS.accent1 }}>試著使用：</span>{zhUse.template}
+                  {zhUse.example && (
+                    <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20" }}>
+                      <span style={{ fontWeight: 700, color: "#A6701F" }}>例如：</span>{zhUse.example}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {c.example && (
+            <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.6, fontStyle: "italic", marginBottom: 8 }}>
+              From: {c.example}
+              {showTranslation && translation?.example && (
+                <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${COLORS.border}`, color: COLORS.heading, fontStyle: "italic" }}>
+                  翻譯：{translation.example}
+                </div>
+              )}
+            </div>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1px solid ${COLORS.red || "#c44"}`, background: "transparent", color: COLORS.red || "#c44", cursor: "pointer" }}
+          >
+            Remove
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SavedConcepts() {
   const [concepts, setConcepts] = useState(() => JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]"));
   const [expanded, setExpanded] = useState(null);
@@ -198,48 +384,13 @@ function SavedConcepts() {
         {concepts.length} saved concept{concepts.length !== 1 ? "s" : ""}
       </div>
       {concepts.map((c, i) => (
-        <div key={i} style={{ background: COLORS.card, borderTop: `1px solid ${expanded === i ? COLORS.accent1 : COLORS.border}`, borderRight: `1px solid ${expanded === i ? COLORS.accent1 : COLORS.border}`, borderBottom: `1px solid ${expanded === i ? COLORS.accent1 : COLORS.border}`, borderLeft: `3px solid ${COLORS.accent1}`, borderRadius: 14, marginBottom: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
-          <div
-            onClick={() => setExpanded(expanded === i ? null : i)}
-            style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
-          >
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono }}>{c.name}</div>
-              <div style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono, marginTop: 2 }}>{c.section}</div>
-            </div>
-            <span style={{ fontSize: 10, color: COLORS.muted, transform: expanded === i ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>&#9654;</span>
-          </div>
-          {expanded === i && (
-            <div style={{ padding: "0 14px 14px", fontFamily: mono }}>
-              {c.grammar && (
-                <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 8, background: "#EDE8E0", borderRadius: 8, padding: "8px 10px" }}>
-                  <span style={{ fontWeight: 700, color: COLORS.heading }}>Grammar pattern: </span>{c.grammar}
-                </div>
-              )}
-              {c.function && (
-                <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 8, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
-                  <span style={{ fontWeight: 700, color: COLORS.heading }}>Why use it: </span>{c.function}
-                </div>
-              )}
-              {c.useIt && (
-                <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, marginBottom: 8, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
-                  <span style={{ fontWeight: 700, color: COLORS.accent1 }}>Try it yourself: </span>{c.useIt}
-                </div>
-              )}
-              {c.example && (
-                <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.6, fontStyle: "italic", marginBottom: 8 }}>
-                  From: {c.example}
-                </div>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); remove(i); }}
-                style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1px solid ${COLORS.red || "#c44"}`, background: "transparent", color: COLORS.red || "#c44", cursor: "pointer" }}
-              >
-                Remove
-              </button>
-            </div>
-          )}
-        </div>
+        <SavedConceptCard
+          key={i}
+          concept={c}
+          isExpanded={expanded === i}
+          onToggle={() => setExpanded(expanded === i ? null : i)}
+          onRemove={() => remove(i)}
+        />
       ))}
     </div>
   );

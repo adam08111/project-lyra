@@ -41,7 +41,7 @@ export function parseProfileSections(text) {
 }
 
 export function parseSectionContent(content) {
-  const parts = { keyIdea: "", body: "", example: "", breakdown: "", whyItWorks: "", structure: "", vocabUpgrade: "" };
+  const parts = { keyIdea: "", body: "", example: "", breakdown: "", whyItWorks: "", structure: "", watchOut: "", vocabUpgrade: "" };
   const lines = content.split("\n");
   let current = "body";
 
@@ -64,6 +64,9 @@ export function parseSectionContent(content) {
     } else if (trimmed.startsWith("STRUCTURE:")) {
       parts.structure = trimmed.replace("STRUCTURE:", "").trim();
       current = "structure";
+    } else if (trimmed.startsWith("WATCH OUT:")) {
+      parts.watchOut = trimmed.replace("WATCH OUT:", "").trim();
+      current = "watchOut";
     } else if (trimmed.startsWith("WRITER'S WORDS:") || trimmed.startsWith("WRITER\u2019S WORDS:") || trimmed.startsWith("VOCAB UPGRADE:")) {
       parts.vocabUpgrade = trimmed.replace(/(?:WRITER[''\u2019]S WORDS|VOCAB UPGRADE):/, "").trim();
       current = "vocab";
@@ -73,6 +76,7 @@ export function parseSectionContent(content) {
       else if (current === "breakdown") parts.breakdown += " " + trimmed;
       else if (current === "why") parts.whyItWorks += " " + trimmed;
       else if (current === "structure") parts.structure += " " + trimmed;
+      else if (current === "watchOut") parts.watchOut += " " + trimmed;
       else if (current === "vocab") parts.vocabUpgrade += " " + trimmed;
     }
   }
@@ -162,54 +166,119 @@ export function AnnotatedQuote({ text }) {
   );
 }
 
-// Parse "EN: ... \n ZH: ..." pair blocks from translation output
+// Parse translation output into [{ en, zh }] pairs.
+// Handles TWO output formats:
+//   A) Strict EN/ZH pair format (per prompt instructions):
+//      EN: ...
+//      ZH: ...
+//   B) Hybrid format the AI sometimes uses — English source labels preserved
+//      followed by Chinese content directly:
+//      KEY IDEA: 作者使用...
+//      FROM THE TEXT: 「...」
+//      BREAKDOWN: PLAIN MEANING: ...
 function parseTranslationPairs(text) {
   if (!text) return [];
-  // Drop pairs that translate hidden labels students don't need (e.g. DIFFICULTY)
+
   const isHiddenPair = (en, zh) => {
     if (!en && !zh) return true;
     if (en && /^DIFFICULTY\b/i.test(en.trim())) return true;
     if (zh && /^難度[:：]/.test(zh.trim())) return true;
     return false;
   };
-  return text
-    .split(/\n\s*\n/)
-    .map(p => p.trim())
-    .filter(Boolean)
-    .map(pair => {
-      const enMatch = pair.match(/^EN:\s*(.+?)(?:\n|$)/s);
-      const zhMatch = pair.match(/ZH:\s*(.+)$/s);
-      return {
-        en: enMatch ? enMatch[1].trim() : "",
-        zh: zhMatch ? zhMatch[1].trim() : "",
-      };
-    })
-    .filter(p => (p.en || p.zh) && !isHiddenPair(p.en, p.zh));
+
+  // === Format A: scan for EN:/ZH: markers anywhere in the text ===
+  // Robust against missing blank lines between pairs, or pairs on a single line.
+  const formatAPairs = (() => {
+    const re = /(^|\n)\s*(EN|ZH)\s*[:：]\s*/g;
+    const markers = [];
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const labelStart = m.index + m[1].length;
+      markers.push({ type: m[2].toUpperCase(), labelStart, contentStart: m.index + m[0].length });
+    }
+    if (markers.length === 0) return [];
+    const sections = markers.map((mk, i) => ({
+      type: mk.type,
+      content: text.slice(mk.contentStart, i + 1 < markers.length ? markers[i + 1].labelStart : text.length).trim(),
+    }));
+    const pairs = [];
+    for (let i = 0; i < sections.length; i++) {
+      if (sections[i].type === "EN" && i + 1 < sections.length && sections[i + 1].type === "ZH") {
+        pairs.push({ en: sections[i].content, zh: sections[i + 1].content });
+        i++;
+      }
+    }
+    return pairs.filter(p => (p.en || p.zh) && !isHiddenPair(p.en, p.zh));
+  })();
+
+  // If we got real EN/ZH pairs, use them
+  if (formatAPairs.length > 0 && formatAPairs.some(p => p.en && p.zh)) {
+    return formatAPairs;
+  }
+
+  // === Format B: English labels + Chinese content (no EN:/ZH: prefixes) ===
+  // Split the text into chunks at known English source labels.
+  // Each chunk becomes a synthetic pair: en = "LABEL: ..."  zh = <Chinese content>
+  // This lets the existing en-label router work correctly.
+  const labelPattern = /(KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER['’]?S\s+WORDS|VOCAB\s+UPGRADE|WATCH\s+OUT|DIFFICULTY)\s*[:：]/gi;
+
+  // Find all label matches with their positions
+  const matches = [];
+  let m;
+  while ((m = labelPattern.exec(text)) !== null) {
+    matches.push({ label: m[1].toUpperCase().replace(/\s+/g, " "), start: m.index, end: m.index + m[0].length });
+  }
+
+  if (matches.length === 0) return formatAPairs; // give up, return whatever we had
+
+  const pairs = [];
+  for (let i = 0; i < matches.length; i++) {
+    const cur = matches[i];
+    const nextStart = i + 1 < matches.length ? matches[i + 1].start : text.length;
+    let content = text.slice(cur.end, nextStart).trim().replace(/^[|｜]\s*/, "").replace(/\s*[|｜]\s*$/, "");
+    // If the AI inlined an EN/ZH separator inside the section, take only the ZH portion
+    const inlineZh = content.match(/(?:^|\n|\s)\s*ZH\s*[:：]\s*([\s\S]+)$/);
+    if (inlineZh) content = inlineZh[1].trim();
+    // Strip a leading "EN:" if the captured content starts with it
+    content = content.replace(/^\s*EN\s*[:：]\s*/, "").trim();
+    if (!content) continue;
+    const synthPair = { en: `${cur.label}: ${content}`, zh: content };
+    if (!isHiddenPair(synthPair.en, synthPair.zh)) pairs.push(synthPair);
+  }
+
+  return pairs.length > 0 ? pairs : formatAPairs;
 }
 
 // Group pairs by which sub-section their EN sentence came from.
 // Falls back to "body" for unmatched pairs.
 function groupPairsBySource(pairs, sources) {
-  // English-side section labels (preferred when AI keeps them verbatim)
+  // English-side section labels — these MUST match the exact labels used in
+  // styleProfilerPrompt (section.content), NOT the rendered UI labels.
+  // Source labels: KEY IDEA, FROM THE TEXT, BREAKDOWN (with sub-parts PLAIN MEANING,
+  // GRAMMAR, FUNCTION, USE IT), WHY IT WORKS, STRUCTURE, WATCH OUT, WRITER'S WORDS.
   const enLabelMap = [
     { regex: /^FROM\s+THE\s+TEXT\b/i, bucket: "example" },
     { regex: /^(BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT)\b/i, bucket: "breakdown" },
     { regex: /^WHY\s+IT\s+WORKS\b/i, bucket: "whyItWorks" },
-    { regex: /^TRY\s+THIS\s+PATTERN\b/i, bucket: "structure" },
-    { regex: /^WRITER['’]?S\s+WORDS\b/i, bucket: "vocabUpgrade" },
+    // STRUCTURE is the source label; "TRY THIS PATTERN" is only the UI label
+    { regex: /^(STRUCTURE|TRY\s+THIS\s+PATTERN)\b/i, bucket: "structure" },
+    { regex: /^(WRITER['’]?S\s+WORDS|VOCAB\s+UPGRADE)\b/i, bucket: "vocabUpgrade" },
     { regex: /^KEY\s+IDEA\b/i, bucket: "keyIdea" },
     { regex: /^DIFFICULTY\b/i, bucket: "body" },
+    { regex: /^WATCH\s+OUT\b/i, bucket: "watchOut" },
   ];
 
-  // Chinese-side labels (fallback when AI translates labels into Chinese)
+  // Chinese-side labels — many synonyms because the AI translates the labels
+  // differently across runs (文中引述 / 文中節錄 / 文中摘錄 all = "FROM THE TEXT").
   const zhLabelMap = [
-    { regex: /^(文中引述|文中例子|文中範例|範例|引述)/, bucket: "example" },
-    { regex: /^(解析|淺白解釋|淺白意義|簡單來說|文法|文法模式|語法|功能|作用|試著使用|嘗試一下|請試試|練習)/, bucket: "breakdown" },
-    { regex: /^(為什麼有效|為何有效|為何重要|此寫法的效果)/, bucket: "whyItWorks" },
-    { regex: /^(嘗試這個模式|試試這個模式|試試此模式|套用範本)/, bucket: "structure" },
-    { regex: /^(作者用詞|作者的用語|作者選詞|作家用詞)/, bucket: "vocabUpgrade" },
-    { regex: /^(主要想法|關鍵想法|重點想法|核心概念|核心想法|關鍵概念)/, bucket: "keyIdea" },
+    { regex: /^(文中引述|文中例子|文中範例|文中節錄|文中摘錄|原文引述|原文摘錄|原文範例|節錄|摘錄|引文|引述|範例|原文)/, bucket: "example" },
+    { regex: /^(解析|解構|句子解構|句子解析|句子分析|分析|分解|拆解|細部分析|淺白解釋|淺白意義|簡單來說|簡單意思|文法|文法模式|文法結構|語法|語法模式|句法|功能|作用|試著使用|試試看|嘗試一下|請試試|練習)/, bucket: "breakdown" },
+    { regex: /^(為什麼有效|為何有效|為何重要|此寫法的效果|為什麼這樣寫|效用)/, bucket: "whyItWorks" },
+    { regex: /^(結構|句型結構|寫作結構|句型範本|範本|句式|句型|嘗試這個模式|試試這個模式|試試此模式|套用範本|套用模板|模式)/, bucket: "structure" },
+    { regex: /^(作者用詞|作者的用語|作者選詞|作家用詞|寫作用詞|寫作詞彙|詞彙升級|用詞升級)/, bucket: "vocabUpgrade" },
+    { regex: /^(主要想法|關鍵想法|重點想法|核心概念|核心想法|關鍵概念|主要概念|主旨)/, bucket: "keyIdea" },
     { regex: /^(難度)/, bucket: "body" },
+    { regex: /^(注意|小心|警告|常見錯誤|要注意)/, bucket: "watchOut" },
   ];
 
   const groups = {};
@@ -343,8 +412,28 @@ export function SectionCard({ section, onSave, trackCall, index }) {
   // The English is already visible above in the sub-section itself, so we don't repeat it here.
   // Also strip redundant section-label prefixes (解析、文中例子 etc.) since the parent
   // sub-section already labels itself in English.
-  const stripRedundantPrefix = (zh) =>
-    zh.replace(/^(解析|文中例子|文中範例|為什麼有效|嘗試這個模式|作者用詞|難度|主要想法|關鍵想法|重點想法|關鍵概念|核心概念|核心想法)[:：]\s*/, "").trim();
+  // Strip any leading Chinese-label prefix so it doesn't appear DOUBLED next
+  // to the English label rendered ahead of it. The pattern catches ANY 1-10
+  // Chinese-character label followed by a colon — universal, no list to maintain.
+  // Examples it strips: 為何有效：/ 結構：/ 注意事項：/ 文中節錄：/ 簡單意思： etc.
+  // Applied repeatedly in case the AI nests labels (e.g. 解析：簡單意思：xxx).
+  const stripRedundantPrefix = (zh) => {
+    let out = zh;
+    for (let i = 0; i < 3; i++) {
+      const next = out.replace(/^[一-龥]{1,10}[:：]\s*/, "");
+      if (next === out) break;
+      out = next;
+    }
+    return out.trim();
+  };
+  // Map bucket key → English label prefix shown before the Chinese content
+  const bucketLabels = {
+    keyIdea: "KEY IDEA",
+    whyItWorks: "WHY IT WORKS",
+    vocabUpgrade: "WRITER'S WORDS",
+    watchOut: "WATCH OUT",
+  };
+
   const renderPairs = (key) => {
     const pairs = grouped[key];
     if (!pairs || pairs.length === 0) return null;
@@ -352,6 +441,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     if (zhLines.length === 0) return null;
     // The keyIdea bucket gets the same bold + numbered treatment as the English heading above it
     const isKeyIdea = key === "keyIdea";
+    const labelPrefix = bucketLabels[key];
     return (
       <div style={{ marginTop: isKeyIdea ? 4 : 8, marginBottom: isKeyIdea ? 14 : 12, paddingTop: 6 }}>
         {zhLines.map((zh, i) => (
@@ -363,7 +453,9 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             marginBottom: 4,
             fontFamily: mono,
           }}>
-            {isKeyIdea && index ? `${index}. ` : ""}{zh}
+            {isKeyIdea && index ? `${index}. ` : ""}
+            {labelPrefix && i === 0 ? <span style={{ fontWeight: 700 }}>{labelPrefix}: </span> : null}
+            {zh}
           </div>
         ))}
       </div>
@@ -392,7 +484,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             marginBottom: 8,
             fontFamily: mono,
           }}>
-            {index ? `${index}. ` : ""}{zh}
+            {index ? `${index}. ` : ""}<span>KEY IDEA: </span>{zh}
           </div>
         ))}
         {bodyLines.map((zh, i) => (
@@ -411,33 +503,176 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     );
   };
 
+  // Dedicated renderer for the FROM THE TEXT translation — shows the Chinese quote
+  // in a styled box that visually mirrors the English annotated-quote card above it.
+  const renderExampleTranslation = () => {
+    const pairs = grouped.example || [];
+    if (pairs.length === 0) return null;
+    const zhLines = pairs
+      .map(p => stripRedundantPrefix(p.zh || ""))
+      .filter(Boolean);
+    if (zhLines.length === 0) return null;
+    return (
+      <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 14px", marginTop: 6, marginBottom: 12, borderLeft: `3px solid ${COLORS.accent1}`, fontFamily: mono }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
+          翻譯 · Translation
+        </div>
+        {zhLines.map((zh, i) => (
+          <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.1, fontStyle: "italic", marginBottom: 4 }}>
+            <span style={{ fontWeight: 700, fontStyle: "normal" }}>FROM THE TEXT: </span>
+            <AnnotatedQuote text={zh} />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Dedicated renderer for the STRUCTURE / TRY THIS PATTERN translation.
+  // Splits the Chinese on the arrow so the example portion renders in its
+  // own cream-coloured card (matching the English version's treatment).
+  const renderStructureTranslation = () => {
+    const pairs = grouped.structure || [];
+    if (pairs.length === 0) return null;
+    const joined = pairs.map(p => stripRedundantPrefix(p.zh || "")).filter(Boolean).join(" ");
+    if (!joined) return null;
+    const m = joined.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
+    const template = m ? m[1].trim() : joined;
+    const example = m ? m[2].trim() : "";
+    return (
+      <div style={{ marginTop: 8, marginBottom: 12, paddingTop: 8, borderTop: `1px dashed ${COLORS.border}`, fontFamily: mono }}>
+        <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.8 }}>
+          <span style={{ fontWeight: 700 }}>STRUCTURE: </span>{template}
+        </div>
+        {example && (
+          <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
+            <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Structured renderer for the SENTENCE BREAKDOWN translation — mirrors the English
   // breakdown card layout (bold labels, "Why use it" in shaded box, "Try it yourself"
   // in dashed box).
   const renderBreakdownTranslation = () => {
     const pairs = grouped.breakdown || [];
     if (pairs.length === 0) return null;
+
+    // FAST PATH: route by pair.en label (works when Format B parser
+    // produced synthetic pairs like { en: "PLAIN MEANING: ...", zh: "..." }).
+    let plainFromPair = "", gramFromPair = "", funcFromPair = "", useItFromPair = "";
+    for (const p of pairs) {
+      const en = (p.en || "").trim();
+      const zh = (p.zh || "").trim();
+      if (/^PLAIN\s+MEANING\b/i.test(en)) plainFromPair = zh;
+      else if (/^GRAMMAR\b/i.test(en)) gramFromPair = zh;
+      else if (/^FUNCTION\b/i.test(en)) funcFromPair = zh;
+      else if (/^USE\s+IT\b/i.test(en)) useItFromPair = zh;
+    }
+    // If pair routing got at least 2 slots, use it directly via shared variables
+    const pairHitCount = [plainFromPair, gramFromPair, funcFromPair, useItFromPair].filter(Boolean).length;
+    if (pairHitCount >= 2) {
+      const plain = plainFromPair;
+      const gram = gramFromPair;
+      const func = funcFromPair;
+      const useIt = useItFromPair;
+      return (
+        <div style={{ background: "#EDE8E0", borderRadius: 10, padding: "10px 14px", marginTop: 8, marginBottom: 12, fontFamily: mono }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>BREAKDOWN</div>
+          {plain && (
+            <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
+              <span style={{ fontWeight: 700, color: COLORS.heading }}>PLAIN MEANING: </span>{plain}
+            </div>
+          )}
+          {gram && (
+            <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
+              <span style={{ fontWeight: 700, color: COLORS.heading }}>GRAMMAR: </span>{gram}
+            </div>
+          )}
+          {func && (
+            <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
+              <span style={{ fontWeight: 700, color: COLORS.heading }}>FUNCTION: </span>{func}
+            </div>
+          )}
+          {useIt && (() => {
+            const m = useIt.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
+            const template = m ? m[1].trim() : useIt;
+            const example = m ? m[2].trim() : "";
+            return (
+              <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
+                <span style={{ fontWeight: 700, color: COLORS.accent1 }}>USE IT: </span>{template}
+                {example && (
+                  <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
+                    <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      );
+    }
+
     const allZh = pairs.map(p => p.zh || "").filter(Boolean).join("\n");
     if (!allZh.trim()) return null;
 
-    // Strip top-level "解析:" / "BREAKDOWN:" prefix if present
-    const body = allZh.replace(/^\s*(解析|BREAKDOWN)[:：]\s*/i, "");
+    // Strip any top-level wrapper label that introduces the breakdown.
+    // The AI may invent its own wrapper (解析/概要/綜述/分析/句子解析/breakdown/etc).
+    const body = allZh.replace(/^\s*(?:解析|概要|綜述|分析|句子解析|句子分析|細部解析|BREAKDOWN)[:：]\s*/i, "");
 
-    // Pull each sub-part by Chinese label
+    // Label dictionaries — the AI uses many synonyms across sessions
+    const plainLabels  = ["淺白解釋", "淺白意義", "淺白含義", "白話解釋", "白話翻譯", "白話意義",
+                          "簡單來說", "簡單英文", "簡單英語", "簡單意思", "簡單含義", "簡明意思",
+                          "基本意思", "基本含義", "主要意思", "直白意思", "字面意思", "字面含義",
+                          "用簡單的話", "用簡單英文", "用淺白的話", "白話地說", "用平實的話",
+                          "明白意思", "易懂的意思", "簡單版本"];
+    const gramLabels   = ["文法", "語法", "文法模式", "語法模式", "文法結構", "語法結構", "句法",
+                          "文法用法", "文法現象", "句子結構", "語法用法"];
+    const funcLabels   = ["功能", "作用", "目的", "用途", "效用", "效果"];
+    const useLabels    = ["試著使用", "試試看", "試試", "嘗試一下", "請試試", "練習", "自己試試",
+                          "動手試試", "試著套用", "嘗試套用", "套用練習", "來試試", "套用模板",
+                          "套用方法", "你也試試", "你來試試"];
+    const allEndLabels = [...gramLabels, ...funcLabels, ...useLabels];
+
+    // Build a regex that matches `${start}[:：]${content up to ${end} or eof}`
+    // Whitespace, newlines, and pipe separators between segments are all valid boundaries.
     const grab = (startWords, endWords) => {
       const startPattern = startWords.join("|");
-      const endPattern = endWords.length ? `(?=\\s*(?:${endWords.join("|")})\\s*[:：])` : "$";
+      const endPattern = endWords.length
+        ? `(?=[\\s|｜]*(?:${endWords.join("|")})\\s*[:：])`
+        : "$";
       const re = new RegExp(`(?:${startPattern})\\s*[:：]\\s*([\\s\\S]+?)${endPattern}`, "i");
       const m = body.match(re);
-      return m?.[1]?.trim().replace(/\s*[|｜]\s*$/, "");
+      return m?.[1]?.trim().replace(/[\s|｜]+$/, "");
     };
-    const plain = grab(["淺白解釋", "淺白意義", "簡單來說", "簡單英文"],
-                       ["文法", "語法", "文法模式", "功能", "作用", "試著使用", "請試試", "練習", "嘗試一下"]);
-    const gram = grab(["文法", "語法", "文法模式"],
-                      ["功能", "作用", "試著使用", "請試試", "練習", "嘗試一下"]);
-    const func = grab(["功能", "作用"],
-                      ["試著使用", "請試試", "練習", "嘗試一下"]);
-    const useIt = grab(["試著使用", "請試試", "練習", "嘗試一下"], []);
+
+    let plain  = grab(plainLabels, allEndLabels);
+    let gram   = grab(gramLabels, [...funcLabels, ...useLabels]);
+    let func   = grab(funcLabels, useLabels);
+    let useIt  = grab(useLabels, []);
+
+    // Position-based fallback for any slot still empty.
+    // Splits on ANY Chinese-character label (1-12 chars before a colon), so the
+    // AI can use whatever Chinese terms it likes — we route by ORDER.
+    if (!plain || !gram || !func || !useIt) {
+      const segments = [];
+      const segRe = /([一-龥]{1,12})[:：]\s*([\s\S]+?)(?=[\s|｜]*[一-龥]{1,12}[:：]|$)/g;
+      let m;
+      while ((m = segRe.exec(body)) !== null) {
+        const label = m[1].trim();
+        const text = m[2].trim().replace(/[\s|｜]+$/, "");
+        // Filter out short wrapper-only labels with no actual content
+        if (text && text.length > 1) segments.push({ label, text });
+      }
+      // Skip any leading wrapper-like label that introduces the section
+      const wrapperRe = /^(解析|概要|綜述|分析|細部解析|句子解析|句子分析|內容解析)$/;
+      const items = (segments[0] && wrapperRe.test(segments[0].label)) ? segments.slice(1) : segments;
+      if (!plain  && items[0]) plain  = items[0].text;
+      if (!gram   && items[1]) gram   = items[1].text;
+      if (!func   && items[2]) func   = items[2].text;
+      if (!useIt  && items[3]) useIt  = items[3].text;
+    }
 
     if (!plain && !gram && !func && !useIt) {
       // Couldn't structurally parse — render raw lines as fallback
@@ -446,27 +681,37 @@ export function SectionCard({ section, onSave, trackCall, index }) {
 
     return (
       <div style={{ background: "#EDE8E0", borderRadius: 10, padding: "10px 14px", marginTop: 8, marginBottom: 12, fontFamily: mono }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>解析 · Breakdown</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>BREAKDOWN</div>
         {plain && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>淺白解釋：</span>{plain}
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>PLAIN MEANING: </span>{plain}
           </div>
         )}
         {gram && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>文法：</span>{gram}
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>GRAMMAR: </span>{gram}
           </div>
         )}
         {func && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>功能：</span>{func}
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>FUNCTION: </span>{func}
           </div>
         )}
-        {useIt && (
-          <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
-            <span style={{ fontWeight: 700, color: COLORS.accent1 }}>試著使用：</span>{useIt}
-          </div>
-        )}
+        {useIt && (() => {
+          const m = useIt.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
+          const template = m ? m[1].trim() : useIt;
+          const example = m ? m[2].trim() : "";
+          return (
+            <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
+              <span style={{ fontWeight: 700, color: COLORS.accent1 }}>USE IT: </span>{template}
+              {example && (
+                <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
+                  <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     );
   };
@@ -507,7 +752,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
               </div>
             </div>
           )}
-          {renderPairs("example")}
+          {renderExampleTranslation()}
           {parts.breakdown && (() => {
             const raw = parts.breakdown;
             const plainMatch = raw.match(/PLAIN MEANING:\s*(.*?)(?=\s*\|\s*GRAMMAR:|$)/i);
@@ -551,11 +796,21 @@ export function SectionCard({ section, onSave, trackCall, index }) {
                     <span style={{ fontWeight: 700, color: COLORS.heading }}>Why use it: </span>{funcText}
                   </div>
                 )}
-                {useText && (
-                  <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, fontFamily: mono, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
-                    <span style={{ fontWeight: 700, color: COLORS.accent1 }}>Try it yourself: </span>{useText}
-                  </div>
-                )}
+                {useText && (() => {
+                  const m = useText.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
+                  const template = m ? m[1].trim() : useText;
+                  const example = m ? m[2].trim() : "";
+                  return (
+                    <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, fontFamily: mono, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
+                      <span style={{ fontWeight: 700, color: COLORS.accent1 }}>Try it yourself: </span>{template}
+                      {example && (
+                        <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20" }}>
+                          <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ) : null;
           })()}
@@ -566,15 +821,31 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             </div>
           )}
           {renderPairs("whyItWorks")}
-          {parts.structure && (
-            <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 10, padding: "10px 14px", marginTop: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Try this pattern</div>
-              <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, fontFamily: mono }}>
-                {parts.structure}
+          {parts.structure && (() => {
+            const m = parts.structure.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
+            const template = m ? m[1].trim() : parts.structure;
+            const example = m ? m[2].trim() : "";
+            return (
+              <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 10, padding: "10px 14px", marginTop: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Try this pattern</div>
+                <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, fontFamily: mono }}>
+                  {template}
+                </div>
+                {example && (
+                  <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontFamily: mono, fontSize: 12, lineHeight: 1.7 }}>
+                    <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+                  </div>
+                )}
               </div>
+            );
+          })()}
+          {renderStructureTranslation()}
+          {parts.watchOut && (
+            <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, marginTop: 10, fontFamily: mono }}>
+              <span style={{ fontWeight: 700 }}>WATCH OUT: </span>{parts.watchOut}
             </div>
           )}
-          {renderPairs("structure")}
+          {renderPairs("watchOut")}
           {parts.vocabUpgrade && (
             <div style={{ marginTop: 10, padding: "10px 14px", background: "#F5F0EB", borderRadius: 10, border: `1px solid ${COLORS.border}` }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.green || "#5a8a5e", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Writer's words</div>
@@ -636,9 +907,23 @@ export function extractAuthor(text) {
 
 export function saveStyleSkill(authorName, profileSections) {
   try {
-    const techSections = ["COMPARING AND DESCRIBING", "SENTENCE PATTERNS", "HOW IDEAS ARE CONNECTED", "GRAMMAR TRICKS", "HOW THE WRITER PERSUADES"];
+    // All 7 technique sections (sections 1-7 in the styleProfilerPrompt).
+    // Previously this list missed WORD CHOICES and FEELING AND PERSONALITY,
+    // which caused legitimate analyses (especially opinion columns) to be
+    // flagged "too-short" even when 5+ rich sections existed.
+    const techSections = [
+      "COMPARING AND DESCRIBING",
+      "SENTENCE PATTERNS",
+      "HOW IDEAS ARE CONNECTED",
+      "WORD CHOICES",
+      "GRAMMAR TRICKS",
+      "HOW THE WRITER PERSUADES",
+      "FEELING AND PERSONALITY",
+    ];
     const validSections = profileSections.filter(s => techSections.includes(s.title));
-    if (validSections.length < 3) return null;
+    // Lowered threshold from 3 → 2. A two-technique analysis is still useful
+    // to save as a skill. Empty/single-section analyses are still rejected.
+    if (validSections.length < 2) return null;
 
     const whenSection = profileSections.find(s => s.title === "WHEN TO USE THIS STYLE");
     const sigSection = profileSections.find(s => s.title === "SIGNATURE STYLE");
