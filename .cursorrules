@@ -1,0 +1,16 @@
+This is Lyra, a single-file React JSX app (src/lyra.jsx) — an AI English writing coach.
+
+Read LYRA-PROJECT-BRIEF.md for full architecture, all system prompts, and design decisions.
+
+KEY RULES:
+- Single-file component. No external CSS or UI libraries. All styles are inline CSS-in-JS objects.
+- Uses window.storage API (shimmed to localStorage via src/storage-shim.js). Do NOT change to raw localStorage.
+- API calls go through callAI() function which calls api.anthropic.com (proxied locally via src/api-patch.js). Do NOT change the fetch URL.
+- Call trackCall() before every API call for the counter.
+- Mobile-first: max-width 430px, 100vh viewport.
+- Fonts: Courier Prime (body), Special Elite (main title only).
+- COLORS object at top defines the palette. Use it everywhere.
+- All animations are defined in the <style> tag inside the component's return.
+- Philosophy: AI never writes for the student. Socratic questioning only. Every word must be theirs.
+- No emojis in UI chrome (buttons, labels, headers).
+- Formality-aware prompts: formal types flag informal language, creative types accept it.
