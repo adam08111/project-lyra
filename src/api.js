@@ -1,8 +1,9 @@
-export async function callAI(systemPrompt, userMessage, useSearch = false, maxTokens = 1000, thinkingBudget, onChunk, signal, model) {
+export async function callAI(systemPrompt, userMessage, useSearch = false, maxTokens = 1000, thinkingBudget, onChunk, signal, model, responseSchema) {
   const body = { system: systemPrompt, message: userMessage, maxTokens };
   if (thinkingBudget) body.thinkingBudget = thinkingBudget;
   if (useSearch) body.useSearch = true;
   if (model) body.model = model;
+  if (responseSchema) body.responseSchema = responseSchema;
 
   // Use streaming when onChunk callback is provided, otherwise non-streaming
   if (!onChunk) body.stream = false;

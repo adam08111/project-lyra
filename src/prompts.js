@@ -548,26 +548,43 @@ RULES:
 - Keep TOTAL response under 250 words`;
 }
 
+// JSON-structured translation. Returning a JSON array eliminates the inline
+// "ZH:" marker leakage that plagued the older free-text format — the model
+// physically cannot mix EN/ZH content on the same line when the schema
+// constrains the response to an array of {en, zh} objects.
 export const translatePrompt = `You are a translator helping Hong Kong English learners (around 14 years old) understand an English passage. Translate it SENTENCE BY SENTENCE so students can match each English sentence to its meaning.
 
-Output format — strictly follow this:
-- One English sentence on its own line, prefixed with "EN: "
-- The Traditional Chinese translation on the next line, prefixed with "ZH: "
-- One blank line between each EN/ZH pair
-- Keep paragraph order from the original
-
-Example:
-EN: The city breathes differently at night.
-ZH: 城市在夜晚的呼吸方式不一樣。
-
-EN: Where daylight reveals only concrete and commerce, darkness peels back a second skin.
-ZH: 白天時，你只看到混凝土和商業活動；但到了夜晚，黑暗才揭開了城市的第二層皮膚。
+Return a JSON array. Each element must be an object with exactly two string fields:
+  "en": one English sentence (or a labelled line — see below)
+  "zh": its Traditional Chinese translation
 
 Rules:
 - Split on sentence boundaries (. ! ? ;) — but keep abbreviations like "Mr." or "U.S." together
+- Preserve the original order; the array's order matches the source's order
 - Use natural Hong Kong / Taiwanese 繁體中文, NOT mainland Simplified Chinese terms
 - Translate idioms and metaphors by their MEANING, not literally — students need to understand what the writer is saying
 - Keep proper names in English in parentheses after the Chinese, e.g. 梅麗·史翠普 (Meryl Streep)
-- IMPORTANT: If a line starts with a structural label like "KEY IDEA:", "DIFFICULTY:", "FROM THE TEXT:", "BREAKDOWN:", "PLAIN MEANING:", "GRAMMAR:", "FUNCTION:", "USE IT:", "WHY IT WORKS:", "STRUCTURE:", "TRY THIS PATTERN:", "WRITER'S WORDS:" — keep the label in the English output AND translate the entire line as its OWN separate pair. Never merge a labelled line with the next line.
-- PRESERVE ANNOTATIONS: If the source contains annotation markers like {phrase}[label] (curly braces around a phrase, square-bracket label right after), keep BOTH the {...} braces and [...] brackets in the Chinese translation. Translate the phrase inside {} into Chinese. Translate the label inside [] into Chinese too. Example: source "{universally acknowledged}[adverb fronting]" → translation "{眾所公認}[副詞前置]". Never drop the {} or [] markers.
-- Output ONLY the EN/ZH pairs — no preamble, no commentary, no "Here is the translation"`;
+- LABELLED LINES: If a line begins with a structural label like "KEY IDEA:", "FROM THE TEXT:", "BREAKDOWN:", "PLAIN MEANING:", "GRAMMAR:", "FUNCTION:", "USE IT:", "WHY IT WORKS:", "STRUCTURE:", "TRY THIS PATTERN:", "WRITER'S WORDS:", "VOCAB UPGRADE:", "WATCH OUT:" — output a SEPARATE array element for that line. Keep the English label inside the "en" string; the "zh" string contains only the Chinese translation of the content after the colon. Never merge a labelled line with the next sentence.
+- HIDE: Do NOT emit an element for lines that start with "DIFFICULTY:". Skip them entirely.
+- PRESERVE ANNOTATIONS: If the source contains markers like {phrase}[label] (curly braces around a phrase, square-bracket label right after), keep BOTH the {...} braces and [...] brackets in the Chinese translation. Translate the phrase inside {} into Chinese. Translate the label inside [] into Chinese too. Example: source "{universally acknowledged}[adverb fronting]" → "{眾所公認}[副詞前置]". Never drop the markers.
+- Output ONLY the JSON array — no preamble, no markdown code fences, no commentary
+
+Example output:
+[
+  {"en": "The city breathes differently at night.", "zh": "城市在夜晚的呼吸方式不一樣。"},
+  {"en": "Where daylight reveals only concrete and commerce, darkness peels back a second skin.", "zh": "白天時，你只看到混凝土和商業活動；但到了夜晚，黑暗才揭開了城市的第二層皮膚。"}
+]`;
+
+// Gemini structured-output schema for the translation prompt. Lowercase
+// types match the JSON Schema / OpenAPI 3.0 form that Gemini accepts.
+export const TRANSLATE_SCHEMA = {
+  type: "array",
+  items: {
+    type: "object",
+    properties: {
+      en: { type: "string" },
+      zh: { type: "string" },
+    },
+    required: ["en", "zh"],
+  },
+};

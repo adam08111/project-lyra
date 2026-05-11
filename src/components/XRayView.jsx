@@ -3,7 +3,7 @@ import { COLORS } from "../constants.js";
 import { FeatherIcon } from "./Icons.jsx";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { translatePrompt } from "../prompts.js";
+import { translatePrompt, TRANSLATE_SCHEMA } from "../prompts.js";
 
 // ── Shared font ──
 export const mono = "'Courier Prime', 'Courier New', monospace";
@@ -167,16 +167,12 @@ export function AnnotatedQuote({ text }) {
 }
 
 // Parse translation output into [{ en, zh }] pairs.
-// Handles TWO output formats:
-//   A) Strict EN/ZH pair format (per prompt instructions):
-//      EN: ...
-//      ZH: ...
-//   B) Hybrid format the AI sometimes uses — English source labels preserved
-//      followed by Chinese content directly:
-//      KEY IDEA: 作者使用...
-//      FROM THE TEXT: 「...」
-//      BREAKDOWN: PLAIN MEANING: ...
-function parseTranslationPairs(text) {
+// Parses the translator's response into [{en, zh}] pairs.
+// Preferred path: JSON array (from the structured-output Gemini config).
+// Fallbacks for legacy / malformed responses:
+//   A) Strict "EN: ... / ZH: ..." pair format
+//   B) Hybrid format with English labels followed by Chinese content directly
+export function parseTranslationPairs(text) {
   if (!text) return [];
 
   const isHiddenPair = (en, zh) => {
@@ -185,6 +181,32 @@ function parseTranslationPairs(text) {
     if (zh && /^難度[:：]/.test(zh.trim())) return true;
     return false;
   };
+
+  // === Preferred: JSON array (responseSchema-enforced) ===
+  // Strip optional code fences / surrounding prose, then JSON.parse.
+  const tryJson = () => {
+    const raw = text.trim();
+    // Find the outermost array bounds — robust to leading "```json" / trailing fences
+    const start = raw.indexOf("[");
+    const end = raw.lastIndexOf("]");
+    if (start === -1 || end === -1 || end < start) return null;
+    const slice = raw.slice(start, end + 1);
+    try {
+      const data = JSON.parse(slice);
+      if (!Array.isArray(data)) return null;
+      const pairs = data
+        .map(item => ({
+          en: typeof item?.en === "string" ? item.en.trim() : "",
+          zh: typeof item?.zh === "string" ? item.zh.trim() : "",
+        }))
+        .filter(p => !isHiddenPair(p.en, p.zh));
+      return pairs.length > 0 ? pairs : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const jsonPairs = tryJson();
+  if (jsonPairs) return jsonPairs;
 
   // === Format A: scan for EN:/ZH: markers anywhere in the text ===
   // Robust against missing blank lines between pairs, or pairs on a single line.
@@ -251,7 +273,7 @@ function parseTranslationPairs(text) {
 
 // Group pairs by which sub-section their EN sentence came from.
 // Falls back to "body" for unmatched pairs.
-function groupPairsBySource(pairs, sources) {
+export function groupPairsBySource(pairs, sources) {
   // English-side section labels — these MUST match the exact labels used in
   // styleProfilerPrompt (section.content), NOT the rendered UI labels.
   // Source labels: KEY IDEA, FROM THE TEXT, BREAKDOWN (with sub-parts PLAIN MEANING,
@@ -348,16 +370,14 @@ function groupPairsBySource(pairs, sources) {
     }
   }
 
-  // Last resort: if STILL empty and there are pairs, take the first one as keyIdea.
-  // The AI translates in source order, so the first pair is almost always the heading.
-  if (!groups.keyIdea && sources.keyIdea && pairs.length > 0) {
-    for (const [, list] of Object.entries(groups)) {
-      if (list.length > 0) {
-        groups.keyIdea = [list[0]];
-        list.splice(0, 1);
-        break;
-      }
-    }
+  // Last resort: if STILL empty and there are pairs, take the first UNLABELED
+  // pair (one that fell into "body") as keyIdea. The AI translates in source
+  // order, so the first pair is almost always the heading. Never steal from
+  // an explicitly-labelled bucket like watchOut or whyItWorks — that breaks
+  // their own rendering when the section is short or unconventional.
+  if (!groups.keyIdea && sources.keyIdea && groups.body && groups.body.length > 0) {
+    groups.keyIdea = [groups.body[0]];
+    groups.body.splice(0, 1);
   }
 
   return groups;
@@ -386,7 +406,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     try {
       const route = getRouteConfig("translate");
       if (trackCall) trackCall();
-      const result = await callAI(translatePrompt, section.content, false, 4000, route.thinkingBudget, undefined, undefined, route.model);
+      const result = await callAI(translatePrompt, section.content, false, 4000, route.thinkingBudget, undefined, undefined, route.model, TRANSLATE_SCHEMA);
       setTranslation(result || "");
       setShowTranslation(true);
     } catch (e) {
@@ -987,7 +1007,7 @@ export default function XRayView({ profileSections, authorName, referenceText, s
     try {
       const route = getRouteConfig("translate");
       if (trackCall) trackCall();
-      const result = await callAI(translatePrompt, referenceText, false, 4000, route.thinkingBudget, undefined, undefined, route.model);
+      const result = await callAI(translatePrompt, referenceText, false, 4000, route.thinkingBudget, undefined, undefined, route.model, TRANSLATE_SCHEMA);
       setTranslation(result || "");
       setShowTranslation(true);
     } catch (e) {
@@ -1062,23 +1082,12 @@ export default function XRayView({ profileSections, authorName, referenceText, s
           </div>
           {showTranslation && translation && (
             <div style={{ padding: "10px 14px 12px", borderTop: `1px solid ${COLORS.border}`, fontFamily: mono }}>
-              {translation
-                .split(/\n\s*\n/)
-                .map(pair => pair.trim())
-                .filter(Boolean)
-                .map((pair, i) => {
-                  const enMatch = pair.match(/^EN:\s*(.+?)(?:\n|$)/s);
-                  const zhMatch = pair.match(/ZH:\s*(.+)$/s);
-                  const en = enMatch ? enMatch[1].trim() : "";
-                  const zh = zhMatch ? zhMatch[1].trim() : "";
-                  if (!en && !zh) return null;
-                  return (
-                    <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px dashed ${COLORS.border}` }}>
-                      {en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, fontStyle: "italic" }}>{en}</div>}
-                      {zh && <div style={{ fontSize: 13, color: COLORS.heading, lineHeight: 1.7, marginTop: 4 }}>{zh}</div>}
-                    </div>
-                  );
-                })}
+              {parseTranslationPairs(translation).map((p, i) => (
+                <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px dashed ${COLORS.border}` }}>
+                  {p.en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, fontStyle: "italic" }}>{p.en}</div>}
+                  {p.zh && <div style={{ fontSize: 13, color: COLORS.heading, lineHeight: 1.7, marginTop: 4 }}>{p.zh}</div>}
+                </div>
+              ))}
             </div>
           )}
         </details>
