@@ -55,7 +55,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
       const all = JSON.parse(localStorage.getItem("lyra-training-progress") || "{}");
       all[skill.id] = progress;
       localStorage.setItem("lyra-training-progress", JSON.stringify(all));
-    } catch (e) { /* silent */ }
+    } catch (e) { console.error("save training progress:", e); }
   }, [progress, progressLoaded, skill?.id]);
 
   // Focus textarea when exercise screen opens

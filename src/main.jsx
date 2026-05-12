@@ -1,4 +1,3 @@
-import "./storage-shim.js";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import Lyra from "./lyra.jsx";

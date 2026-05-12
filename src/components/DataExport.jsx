@@ -30,11 +30,14 @@ export default function DataExport({ projects, grammarLog }) {
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        if (data.projects) {
-          await window.storage.set("lyra-projects", JSON.stringify(data.projects));
+        // Backup format invariant: projects is an array of projects, grammarLog
+        // is an array of entries. Anything else is malformed and could corrupt
+        // localStorage in ways that crash subsequent reads (e.g. `.map` on null).
+        if (Array.isArray(data.projects)) {
+          localStorage.setItem("lyra-projects", JSON.stringify(data.projects));
         }
-        if (data.grammarLog) {
-          await window.storage.set("grammar-log", JSON.stringify(data.grammarLog));
+        if (Array.isArray(data.grammarLog)) {
+          localStorage.setItem("grammar-log", JSON.stringify(data.grammarLog));
         }
         window.location.reload();
       } catch (err) {

@@ -584,7 +584,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice }) {
   );
 }
 
-export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining }) {
+export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, onApplySkill, initialTab, onOpenTraining }) {
   const [activeTab, setActiveTab] = useState("analyze");
 
   // Jump to requested tab when StyleLab opens

@@ -19,8 +19,10 @@ import { generateTitle } from "./titleGenerator.js";
 export default function Lyra() {
   // Core state
   const [screen, setScreen] = useState("source-setup");
-  const [userName, setUserName] = useState("");
-  const [userNameLoaded, setUserNameLoaded] = useState(false);
+  const [userName, setUserName] = useState(() => {
+    try { return localStorage.getItem("lyra-user-name") || ""; }
+    catch (e) { console.error("load user name:", e); return ""; }
+  });
   const [topic, setTopic] = useState("");
   const [type, setType] = useState(null);
   const [wordCount, setWordCount] = useState(null);
@@ -61,9 +63,13 @@ export default function Lyra() {
   const [checkFlash, setCheckFlash] = useState(false);
 
   // Grammar Log
-  const [grammarLog, setGrammarLog] = useState([]);
+  const [grammarLog, setGrammarLog] = useState(() => {
+    try {
+      const raw = localStorage.getItem("grammar-log");
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { console.error("load grammar log:", e); return []; }
+  });
   const [showGrammarLog, setShowGrammarLog] = useState(false);
-  const [grammarLogLoaded, setGrammarLogLoaded] = useState(false);
   const [miniLesson, setMiniLesson] = useState({});
 
   // Style Lab
@@ -86,8 +92,15 @@ export default function Lyra() {
 
   // Sidebar & Projects
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [projects, setProjects] = useState([{ id: "default", name: "My Writings", writings: [] }]);
-  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [projects, setProjects] = useState(() => {
+    try {
+      const raw = localStorage.getItem("lyra-projects");
+      return raw ? JSON.parse(raw) : [{ id: "default", name: "My Writings", writings: [] }];
+    } catch (e) {
+      console.error("load projects:", e);
+      return [{ id: "default", name: "My Writings", writings: [] }];
+    }
+  });
   const [activeWritingId, setActiveWritingId] = useState(null);
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [editingProjectName, setEditingProjectName] = useState("");
@@ -107,63 +120,24 @@ export default function Lyra() {
   const goalReached = currentWords >= targetNum;
 
   // === STORAGE EFFECTS ===
+  // Reads happen once via lazy useState initialisers above; here we just
+  // persist on change. localStorage.setItem can throw on quota/private-mode;
+  // we log and keep going so the in-memory state stays correct.
 
-  // Load user name
   useEffect(() => {
-    (async () => {
-      try {
-        const result = await window.storage.get("lyra-user-name");
-        if (result?.value) setUserName(result.value);
-      } catch (e) { /* first time */ }
-      setUserNameLoaded(true);
-    })();
-  }, []);
+    try { localStorage.setItem("lyra-user-name", userName); }
+    catch (e) { console.error("save user name:", e); }
+  }, [userName]);
 
-  // Save user name
   useEffect(() => {
-    if (!userNameLoaded) return;
-    (async () => {
-      try { await window.storage.set("lyra-user-name", userName); } catch (e) { console.error("save user name:", e); }
-    })();
-  }, [userName, userNameLoaded]);
+    try { localStorage.setItem("lyra-projects", JSON.stringify(projects)); }
+    catch (e) { console.error("save projects:", e); }
+  }, [projects]);
 
-  // Load projects
   useEffect(() => {
-    (async () => {
-      try {
-        const result = await window.storage.get("lyra-projects");
-        if (result?.value) setProjects(JSON.parse(result.value));
-      } catch (e) { /* first time */ }
-      setProjectsLoaded(true);
-    })();
-  }, []);
-
-  // Save projects
-  useEffect(() => {
-    if (!projectsLoaded) return;
-    (async () => {
-      try { await window.storage.set("lyra-projects", JSON.stringify(projects)); } catch (e) { console.error("save projects:", e); }
-    })();
-  }, [projects, projectsLoaded]);
-
-  // Load grammar log
-  useEffect(() => {
-    (async () => {
-      try {
-        const result = await window.storage.get("grammar-log");
-        if (result?.value) setGrammarLog(JSON.parse(result.value));
-      } catch (e) { /* no saved log yet */ }
-      setGrammarLogLoaded(true);
-    })();
-  }, []);
-
-  // Save grammar log
-  useEffect(() => {
-    if (!grammarLogLoaded) return;
-    (async () => {
-      try { await window.storage.set("grammar-log", JSON.stringify(grammarLog)); } catch (e) { console.error("save grammar-log:", e); }
-    })();
-  }, [grammarLog, grammarLogLoaded]);
+    try { localStorage.setItem("grammar-log", JSON.stringify(grammarLog)); }
+    catch (e) { console.error("save grammar-log:", e); }
+  }, [grammarLog]);
 
   // === AUTO-SAVE ===
 
@@ -255,22 +229,6 @@ export default function Lyra() {
     setProjects(prev => {
       const proj = prev.find(p => p.id === id);
       return prev.filter(p => p.id !== id).map(p => p.id === "default" ? { ...p, writings: [...(proj?.writings || []), ...p.writings] } : p);
-    });
-  }, []);
-
-  const moveWriting = useCallback((writingId, fromProjectId, toProjectId) => {
-    setProjects(prev => {
-      let writing = null;
-      return prev.map(p => {
-        if (p.id === fromProjectId) {
-          writing = p.writings.find(w => w.id === writingId);
-          return { ...p, writings: p.writings.filter(w => w.id !== writingId) };
-        }
-        if (p.id === toProjectId && writing) {
-          return { ...p, writings: [writing, ...p.writings] };
-        }
-        return p;
-      });
     });
   }, []);
 
@@ -723,7 +681,7 @@ Rules:
     sidebarOpen, setSidebarOpen, projects, setProjects, activeWritingId,
     expandedProjects, setExpandedProjects, editingProjectId, setEditingProjectId,
     editingProjectName, setEditingProjectName, createProject, renameProject,
-    deleteProject, moveWriting, deleteWriting, loadWriting,
+    deleteProject, deleteWriting, loadWriting,
     onNewWriting: resetToNew, grammarLog, setShowStyleLab,
   };
 
@@ -749,7 +707,7 @@ Rules:
           sidebarProps={sidebarProps}
           onOpenTraining={openTrainingSession}
         />
-        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
+        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
         {trainingSkill && <TrainingSession skill={trainingSkill} onClose={() => setTrainingSkill(null)} trackCall={trackCall} />}
       </>
     );

@@ -7,7 +7,7 @@ export default function Sidebar({
   sidebarOpen, setSidebarOpen, projects, setProjects, activeWritingId,
   expandedProjects, setExpandedProjects, editingProjectId, setEditingProjectId,
   editingProjectName, setEditingProjectName, createProject, renameProject,
-  deleteProject, moveWriting, deleteWriting, loadWriting, onNewWriting, grammarLog,
+  deleteProject, deleteWriting, loadWriting, onNewWriting, grammarLog,
   setShowStyleLab,
 }) {
   const [search, setSearch] = useState("");
