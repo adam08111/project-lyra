@@ -183,8 +183,16 @@ export function AnnotatedQuote({ text }) {
 // Lenient on whitespace around the label and separator so we also catch
 // AI output variants like " FROM THE TEXT :…", "FROM THE TEXT: …",
 // and full-width colon. Label list mirrors translatePrompt.
-const ENGLISH_LABELS_RE = /^\s*(?:KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER[''’]?S\s+WORDS|VOCAB(?:ULARY)?\s+UPGRADE|WATCH\s+OUT|FOR\s+EXAMPLE)\s*[:：]\s*/i;
-const CHINESE_LABEL_RE = /^\s*[一-龥]{1,10}\s*[:：]\s*/;
+// Tolerate an optional "N." / "N)" / "N、" numbering before the label —
+// the AI sometimes preserves its own list numbering when emitting zh.
+const NUMBER_PREFIX = "(?:\\s*\\d+\\s*[.)、\\u3001]\\s*)?";
+const ENGLISH_LABELS_RE = new RegExp(
+  "^\\s*" + NUMBER_PREFIX +
+  "(?:KEY\\s+IDEA|FROM\\s+THE\\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\\s+MEANING|GRAMMAR|FUNCTION|USE\\s+IT|WHY\\s+IT\\s+WORKS|STRUCTURE|TRY\\s+THIS\\s+PATTERN|WRITER[''’]?S\\s+WORDS|VOCAB(?:ULARY)?\\s+UPGRADE|WATCH\\s+OUT|FOR\\s+EXAMPLE)" +
+  "\\s*[:：]\\s*",
+  "i"
+);
+const CHINESE_LABEL_RE = new RegExp("^\\s*" + NUMBER_PREFIX + "[一-龥]{1,10}\\s*[:：]\\s*");
 export function stripRedundantPrefix(zh) {
   let out = zh || "";
   for (let i = 0; i < 5; i++) {
@@ -1084,11 +1092,11 @@ export default function XRayView({ profileSections, authorName, referenceText, s
             <div style={{ padding: "10px 14px 12px", borderTop: `1px solid ${COLORS.border}`, fontFamily: mono }}>
               {parseTranslationPairs(translation).map((p, i) => {
                 const zh = stripRedundantPrefix(p.zh);
+                if (!zh) return null;
                 return (
-                <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px dashed ${COLORS.border}` }}>
-                  {p.en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, fontStyle: "italic" }}>{p.en}</div>}
-                  {zh && <div style={{ fontSize: 13, color: COLORS.heading, lineHeight: 1.7, marginTop: 4 }}>{zh}</div>}
-                </div>
+                  <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px dashed ${COLORS.border}`, fontSize: 13, color: COLORS.heading, lineHeight: 1.7 }}>
+                    {zh}
+                  </div>
                 );
               })}
             </div>
