@@ -84,6 +84,15 @@ export function parseSectionContent(content) {
   // English + Chinese versions. The initial .replace() only removed the outer
   // one — loop stripRedundantPrefix to peel any remaining nested labels.
   for (const key of Object.keys(parts)) parts[key] = stripRedundantPrefix(parts[key]);
+  // TEMP DEBUG: surface the raw section content + parsed parts to the console
+  // so we can see exactly what the AI emitted vs what the strip produced.
+  // Remove once the label-leak is fully diagnosed.
+  if (typeof window !== "undefined") {
+    console.warn("[parseSectionContent] keyIdea =", JSON.stringify(parts.keyIdea));
+    console.warn("[parseSectionContent] body =", JSON.stringify(parts.body?.slice(0, 200)));
+    console.warn("[parseSectionContent] example =", JSON.stringify(parts.example?.slice(0, 200)));
+    console.warn("[parseSectionContent] source first 300 chars =", JSON.stringify(content.slice(0, 300)));
+  }
   return parts;
 }
 
