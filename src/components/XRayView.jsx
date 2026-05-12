@@ -432,15 +432,21 @@ export function SectionCard({ section, onSave, trackCall, index }) {
   // The English is already visible above in the sub-section itself, so we don't repeat it here.
   // Also strip redundant section-label prefixes (解析、文中例子 etc.) since the parent
   // sub-section already labels itself in English.
-  // Strip any leading Chinese-label prefix so it doesn't appear DOUBLED next
-  // to the English label rendered ahead of it. The pattern catches ANY 1-10
-  // Chinese-character label followed by a colon — universal, no list to maintain.
-  // Examples it strips: 為何有效：/ 結構：/ 注意事項：/ 文中節錄：/ 簡單意思： etc.
-  // Applied repeatedly in case the AI nests labels (e.g. 解析：簡單意思：xxx).
+  // Strip any leading label prefix that the AI may leak into the Chinese
+  // string against the translatePrompt's "zh contains only the translation"
+  // rule. Catches both Chinese-character labels (為何有效：、結構：、文中節錄：)
+  // and the English structural labels the prompt enumerates
+  // (KEY IDEA:, FROM THE TEXT:, BREAKDOWN:, PLAIN MEANING:, GRAMMAR:,
+  //  FUNCTION:, USE IT:, WHY IT WORKS:, STRUCTURE:, TRY THIS PATTERN:,
+  //  WRITER'S WORDS:, VOCAB UPGRADE:, WATCH OUT:, FOR EXAMPLE:).
+  // Applied repeatedly so nested labels (解析：FROM THE TEXT：xxx) collapse.
+  const ENGLISH_LABELS = /^(?:KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER[''’]?S\s+WORDS|VOCAB(?:ULARY)?\s+UPGRADE|WATCH\s+OUT|FOR\s+EXAMPLE)[:：]\s*/i;
+  const CHINESE_LABEL = /^[一-龥]{1,10}[:：]\s*/;
   const stripRedundantPrefix = (zh) => {
     let out = zh;
-    for (let i = 0; i < 3; i++) {
-      const next = out.replace(/^[一-龥]{1,10}[:：]\s*/, "");
+    for (let i = 0; i < 4; i++) {
+      let next = out.replace(CHINESE_LABEL, "");
+      next = next.replace(ENGLISH_LABELS, "");
       if (next === out) break;
       out = next;
     }
