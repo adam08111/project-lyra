@@ -180,11 +180,14 @@ export function AnnotatedQuote({ text }) {
 // WHY IT WORKS:, STRUCTURE:, TRY THIS PATTERN:, WRITER'S WORDS:,
 // VOCAB UPGRADE:, WATCH OUT:, FOR EXAMPLE:).
 // Loops so nested labels (解析：FROM THE TEXT：xxx) collapse fully.
-const ENGLISH_LABELS_RE = /^(?:KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER[''’]?S\s+WORDS|VOCAB(?:ULARY)?\s+UPGRADE|WATCH\s+OUT|FOR\s+EXAMPLE)[:：]\s*/i;
-const CHINESE_LABEL_RE = /^[一-龥]{1,10}[:：]\s*/;
+// Lenient on whitespace around the label and separator so we also catch
+// AI output variants like " FROM THE TEXT :…", "FROM THE TEXT: …",
+// and full-width colon. Label list mirrors translatePrompt.
+const ENGLISH_LABELS_RE = /^\s*(?:KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER[''’]?S\s+WORDS|VOCAB(?:ULARY)?\s+UPGRADE|WATCH\s+OUT|FOR\s+EXAMPLE)\s*[:：]\s*/i;
+const CHINESE_LABEL_RE = /^\s*[一-龥]{1,10}\s*[:：]\s*/;
 export function stripRedundantPrefix(zh) {
   let out = zh || "";
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     let next = out.replace(CHINESE_LABEL_RE, "");
     next = next.replace(ENGLISH_LABELS_RE, "");
     if (next === out) break;
