@@ -113,7 +113,7 @@ export default function SourceSetup({
             existingSkillsCtx = `\n\nCROSS-REFERENCE: The student has previously studied these techniques from other authors: ${skillList.join(", ")}. If this new text uses any of the SAME techniques, mention the connection: "This writer also uses [technique] (like in your previous analysis), but [how they use it differently]." Only mention genuine overlaps — do not force connections.`;
           }
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error("cross-reference skills lookup:", e); }
       const userMsg = sourceText + existingSkillsCtx;
 
       const analysisRoute = getRouteConfig("style_analysis");

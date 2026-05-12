@@ -1,4 +1,5 @@
 import { LYRA_BRAIN } from "./lyra-brain.js";
+import { ANTI_BIAS_BLOCK } from "./utils.js";
 
 export function buildCoachPrompt(topic, type, wordCount, examRules, sourceContext) {
   const examBlock = examRules ? `\n${examRules}\nYou MUST follow these exam rules in ALL coaching advice. If a technique or suggestion would violate these rules, do NOT suggest it — even if the technique is otherwise good writing. The student's exam score depends on this.` : "";
@@ -156,7 +157,7 @@ OTHER RULES:
 - When suggesting vocabulary, choose synonyms that match EXACTLY what the student meant — not just any formal word.
 - Keep all original facts, figures, names, and specific details unchanged.
 - Templates must make sense within the context of their ${typeLabel.toLowerCase()} about "${topic}".
-- If a sentence is too simple to restructure without changing its meaning, skip it and pick another sentence.${activeSkillCtx ? `\n- Do NOT suggest changes that contradict or undo the deployed skill's techniques. Suggestions should complement the student's chosen style.` : ""}`;
+- If a sentence is too simple to restructure without changing its meaning, skip it and pick another sentence.${activeSkillCtx ? `\n- Do NOT suggest changes that contradict or undo the deployed skill's techniques. Suggestions should complement the student's chosen style.` : ""}${activeSkillCtx ? ANTI_BIAS_BLOCK : ""}`;
 }
 
 export function buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, sourceContext) {
@@ -195,7 +196,7 @@ Provide up to 4 grammar issues (each MUST include example_wrong and example_corr
 
 CRITICAL:
 - Do NOT flag or reverse any previously applied style improvements. Focus only on genuine grammar errors, new style opportunities, and vocabulary upgrades.
-- Vocabulary synonyms MUST match what the student meant in context. Do not suggest a word that shifts the meaning even slightly.${activeSkillCtx ? `\n- Do NOT flag or suggest replacing vocabulary or phrasing that aligns with the deployed skill. The student is intentionally using that style.` : ""}`;
+- Vocabulary synonyms MUST match what the student meant in context. Do not suggest a word that shifts the meaning even slightly.${activeSkillCtx ? `\n- Do NOT flag or suggest replacing vocabulary or phrasing that aligns with the deployed skill. The student is intentionally using that style.` : ""}${activeSkillCtx ? ANTI_BIAS_BLOCK : ""}`;
 }
 
 export const styleProfilerPrompt = LYRA_BRAIN + `\n\nYou are a friendly writing teacher helping English learners understand how great writers write. Analyse a piece of writing and explain its style in SIMPLE, CLEAR language.

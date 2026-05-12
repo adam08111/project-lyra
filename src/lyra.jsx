@@ -121,7 +121,7 @@ export default function Lyra() {
   useEffect(() => {
     if (!userNameLoaded) return;
     (async () => {
-      try { await window.storage.set("lyra-user-name", userName); } catch (e) { /* silent */ }
+      try { await window.storage.set("lyra-user-name", userName); } catch (e) { console.error("save user name:", e); }
     })();
   }, [userName, userNameLoaded]);
 
@@ -140,7 +140,7 @@ export default function Lyra() {
   useEffect(() => {
     if (!projectsLoaded) return;
     (async () => {
-      try { await window.storage.set("lyra-projects", JSON.stringify(projects)); } catch (e) { /* silent */ }
+      try { await window.storage.set("lyra-projects", JSON.stringify(projects)); } catch (e) { console.error("save projects:", e); }
     })();
   }, [projects, projectsLoaded]);
 
@@ -159,7 +159,7 @@ export default function Lyra() {
   useEffect(() => {
     if (!grammarLogLoaded) return;
     (async () => {
-      try { await window.storage.set("grammar-log", JSON.stringify(grammarLog)); } catch (e) { /* silent */ }
+      try { await window.storage.set("grammar-log", JSON.stringify(grammarLog)); } catch (e) { console.error("save grammar-log:", e); }
     })();
   }, [grammarLog, grammarLogLoaded]);
 
@@ -395,7 +395,8 @@ Rules:
     const paragraphs = draft.split(/\n\n+/).filter(p => p.trim().split(/\s+/).length >= 12);
     if (paragraphs.length === 0) return;
     const lastPara = paragraphs[paragraphs.length - 1].trim();
-    if (lastPara === lastAnalysed.current) return;
+    const normalisedPara = lastPara.toLowerCase().replace(/\s+/g, " ");
+    if (normalisedPara === lastAnalysed.current) return;
     sugTimer.current = setTimeout(async () => {
       try {
         // SKILL-AWARE: Build anonymised active skill context so suggestions don't contradict deployed techniques
@@ -424,9 +425,9 @@ Rules:
         if (parsed.suggestions?.length) {
           setSuggestions(parsed.suggestions);
           setSugBadge(true);
-          lastAnalysed.current = lastPara;
+          lastAnalysed.current = normalisedPara;
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error("structural-suggest:", e); }
     }, 2500);
     return () => clearTimeout(sugTimer.current);
   }, [draft, appliedSkill]);
@@ -459,7 +460,7 @@ Rules:
 
       // Load all saved skills and anonymise them
       let savedSkills = [];
-      try { savedSkills = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]"); } catch (e) {}
+      try { savedSkills = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]"); } catch (e) { console.error("parse saved skills:", e); }
 
       let skillCtx = "";
       let allSkillsCtx = "";
@@ -579,7 +580,7 @@ Rules:
           }
         }
       }
-    } catch (e) { /* classification failed — display without roles */ }
+    } catch (e) { console.error("PEEL classification failed:", e); }
 
     // 3. Show techniques immediately
     setAppliedSkill(skill);
@@ -612,7 +613,7 @@ Rules:
           setWritingTechniques(prev => prev ? [...prev, ...enriched] : enriched);
           trackCall();
         }
-      } catch (e) { /* enrichment failed — continue with existing techniques */ }
+      } catch (e) { console.error("skill enrichment failed:", e); }
       setTechsEnriching(false);
     }
   }, [topic, typeLabel]);
@@ -785,7 +786,7 @@ Rules:
             onHelpMeStart={() => sendChat("I'm stuck and don't know how to start. Help me begin writing.", false, true)}
             onDeploySkills={() => {
               let saved = [];
-              try { saved = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]"); } catch (e) {}
+              try { saved = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]"); } catch (e) { console.error("parse saved skills:", e); }
               if (saved.length === 0) { setShowStyleLab(true); return; }
               // ANTI-BIAS: Anonymise skill names before sending to AI for recommendation
               const { anonymised, mapping } = anonymiseSkillsForAI(saved);

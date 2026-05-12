@@ -75,8 +75,8 @@ export function syncLearningData(data, ctx) {
         topic: topic?.slice(0, 80) || "",
         date: new Date().toISOString(),
       }));
-      localStorage.setItem("lyra-skill-deployments", JSON.stringify([...newEntries, ...existing]));
-    } catch (e) { /* silent */ }
+      localStorage.setItem("lyra-skill-deployments", JSON.stringify([...newEntries, ...existing].slice(0, 500)));
+    } catch (e) { console.error("learning-sync skill-deployments:", e); }
   }
 
   // 3. Growth → before/after evolution log
@@ -92,8 +92,8 @@ export function syncLearningData(data, ctx) {
         why: g.why_better,
         topic: topic?.slice(0, 80) || "",
       }));
-      localStorage.setItem("lyra-growth-log", JSON.stringify([...newEntries, ...existing]));
-    } catch (e) { /* silent */ }
+      localStorage.setItem("lyra-growth-log", JSON.stringify([...newEntries, ...existing].slice(0, 500)));
+    } catch (e) { console.error("learning-sync growth-log:", e); }
   }
 
   // 4. Structures learned → structure library
@@ -113,9 +113,9 @@ export function syncLearningData(data, ctx) {
       const names = new Set(existing.map(s => s.name));
       const unique = newEntries.filter(s => !names.has(s.name));
       if (unique.length) {
-        localStorage.setItem("lyra-structures", JSON.stringify([...unique, ...existing]));
+        localStorage.setItem("lyra-structures", JSON.stringify([...unique, ...existing].slice(0, 500)));
       }
-    } catch (e) { /* silent */ }
+    } catch (e) { console.error("learning-sync structures:", e); }
   }
 
   // 5. Vocabulary acquired → vocabulary arsenal
@@ -135,8 +135,8 @@ export function syncLearningData(data, ctx) {
       const words = new Set(existing.map(v => v.strong));
       const unique = newEntries.filter(v => !words.has(v.strong));
       if (unique.length) {
-        localStorage.setItem("lyra-vocabulary", JSON.stringify([...unique, ...existing]));
+        localStorage.setItem("lyra-vocabulary", JSON.stringify([...unique, ...existing].slice(0, 500)));
       }
-    } catch (e) { /* silent */ }
+    } catch (e) { console.error("learning-sync vocabulary:", e); }
   }
 }

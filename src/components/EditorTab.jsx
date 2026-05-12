@@ -297,7 +297,9 @@ export default function EditorTab({
               </div>
 
               {/* Grammar tab */}
-              {proofTab === "grammar" && proofread.grammar?.map((g, i) => (
+              {proofTab === "grammar" && proofread.grammar?.map((g, i) => {
+                const lessonId = "proof_" + g.phrase;
+                return (
                 <div key={i} style={{ ...s.card, marginBottom: 10, padding: 12 }}>
                   <div style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, background: "#FFF5F5", color: COLORS.red, display: "inline-block", marginBottom: 6 }}>{g.phrase}</div>
                   <div style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, background: "#F0FFF0", color: COLORS.green, display: "inline-block", marginLeft: 6, marginBottom: 6 }}>{g.correction}</div>
@@ -312,22 +314,23 @@ export default function EditorTab({
                   )}
                   <div style={{ fontSize: 10, color: COLORS.accent2, marginTop: 4 }}>Saved to Grammar Log</div>
                   <button onClick={() => {
-                    const fakeEntry = { id: "proof_" + i, rule: g.rule, phrase: g.phrase, correction: g.correction, explanation: g.explanation };
+                    const fakeEntry = { id: lessonId, rule: g.rule, phrase: g.phrase, correction: g.correction, explanation: g.explanation };
                     fetchMiniLesson(fakeEntry);
-                  }} style={{ marginTop: 8, width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: miniLesson["proof_" + i]?.content ? COLORS.bg3 : COLORS.card, fontFamily: mono, fontSize: 11, cursor: "pointer", color: COLORS.heading, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.2s" }}>
-                    {miniLesson["proof_" + i]?.loading ? (
+                  }} style={{ marginTop: 8, width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: miniLesson[lessonId]?.content ? COLORS.bg3 : COLORS.card, fontFamily: mono, fontSize: 11, cursor: "pointer", color: COLORS.heading, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.2s" }}>
+                    {miniLesson[lessonId]?.loading ? (
                       <><div style={{ animation: "featherWrite 1.8s ease-in-out infinite", display: "inline-block" }}><FeatherIcon size={12} /></div> Loading...</>
-                    ) : miniLesson["proof_" + i]?.content ? (
+                    ) : miniLesson[lessonId]?.content ? (
                       "Hide lesson"
                     ) : (
                       <><FeatherIcon size={12} /> Teach me this</>
                     )}
                   </button>
-                  {miniLesson["proof_" + i]?.content && !miniLesson["proof_" + i]?.loading && (
-                    <MiniLessonCard content={miniLesson["proof_" + i].content} rule={g.rule} phrase={g.phrase} correction={g.correction} sendChat={sendChat} setTab={setTab} />
+                  {miniLesson[lessonId]?.content && !miniLesson[lessonId]?.loading && (
+                    <MiniLessonCard content={miniLesson[lessonId].content} rule={g.rule} phrase={g.phrase} correction={g.correction} sendChat={sendChat} setTab={setTab} />
                   )}
                 </div>
-              ))}
+                );
+              })}
 
               {/* Style tab */}
               {proofTab === "style" && proofread.style?.map((st, i) => (
