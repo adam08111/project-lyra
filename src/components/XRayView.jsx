@@ -446,22 +446,15 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     }
     return out.trim();
   };
-  // Map bucket key → English label prefix shown before the Chinese content
-  const bucketLabels = {
-    keyIdea: "KEY IDEA",
-    whyItWorks: "WHY IT WORKS",
-    vocabUpgrade: "WRITER'S WORDS",
-    watchOut: "WATCH OUT",
-  };
-
   const renderPairs = (key) => {
     const pairs = grouped[key];
     if (!pairs || pairs.length === 0) return null;
     const zhLines = pairs.map(p => stripRedundantPrefix(p.zh || "")).filter(Boolean);
     if (zhLines.length === 0) return null;
-    // The keyIdea bucket gets the same bold + numbered treatment as the English heading above it
+    // The keyIdea bucket gets the same bold + numbered treatment as the English heading above it.
+    // Section labels (KEY IDEA / WHY IT WORKS / WATCH OUT / WRITER'S WORDS) are omitted here
+    // because the English original card directly above already carries them.
     const isKeyIdea = key === "keyIdea";
-    const labelPrefix = bucketLabels[key];
     return (
       <div style={{ marginTop: isKeyIdea ? 4 : 8, marginBottom: isKeyIdea ? 14 : 12, paddingTop: 6 }}>
         {zhLines.map((zh, i) => (
@@ -474,7 +467,6 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             fontFamily: mono,
           }}>
             {isKeyIdea && index ? `${index}. ` : ""}
-            {labelPrefix && i === 0 ? <span style={{ fontWeight: 700 }}>{labelPrefix}: </span> : null}
             {zh}
           </div>
         ))}
@@ -504,7 +496,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             marginBottom: 8,
             fontFamily: mono,
           }}>
-            {index ? `${index}. ` : ""}<span>KEY IDEA: </span>{zh}
+            {index ? `${index}. ` : ""}{zh}
           </div>
         ))}
         {bodyLines.map((zh, i) => (
@@ -539,7 +531,6 @@ export function SectionCard({ section, onSave, trackCall, index }) {
         </div>
         {zhLines.map((zh, i) => (
           <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.1, fontStyle: "italic", marginBottom: 4 }}>
-            <span style={{ fontWeight: 700, fontStyle: "normal" }}>FROM THE TEXT: </span>
             <AnnotatedQuote text={zh} />
           </div>
         ))}
@@ -561,11 +552,11 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     return (
       <div style={{ marginTop: 8, marginBottom: 12, paddingTop: 8, borderTop: `1px dashed ${COLORS.border}`, fontFamily: mono }}>
         <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.8 }}>
-          <span style={{ fontWeight: 700 }}>STRUCTURE: </span>{template}
+          {template}
         </div>
         {example && (
           <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
-            <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+            {example}
           </div>
         )}
       </div>
@@ -602,17 +593,17 @@ export function SectionCard({ section, onSave, trackCall, index }) {
           <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>BREAKDOWN</div>
           {plain && (
             <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, color: COLORS.heading }}>PLAIN MEANING: </span>{plain}
+              {plain}
             </div>
           )}
           {gram && (
             <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, color: COLORS.heading }}>GRAMMAR: </span>{gram}
+              {gram}
             </div>
           )}
           {func && (
             <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
-              <span style={{ fontWeight: 700, color: COLORS.heading }}>FUNCTION: </span>{func}
+              {func}
             </div>
           )}
           {useIt && (() => {
@@ -621,10 +612,10 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             const example = m ? m[2].trim() : "";
             return (
               <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
-                <span style={{ fontWeight: 700, color: COLORS.accent1 }}>USE IT: </span>{template}
+                {template}
                 {example && (
                   <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
-                    <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+                    {example}
                   </div>
                 )}
               </div>
@@ -704,17 +695,17 @@ export function SectionCard({ section, onSave, trackCall, index }) {
         <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>BREAKDOWN</div>
         {plain && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>PLAIN MEANING: </span>{plain}
+            {plain}
           </div>
         )}
         {gram && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>GRAMMAR: </span>{gram}
+            {gram}
           </div>
         )}
         {func && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>FUNCTION: </span>{func}
+            {func}
           </div>
         )}
         {useIt && (() => {
@@ -723,10 +714,10 @@ export function SectionCard({ section, onSave, trackCall, index }) {
           const example = m ? m[2].trim() : "";
           return (
             <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
-              <span style={{ fontWeight: 700, color: COLORS.accent1 }}>USE IT: </span>{template}
+              {template}
               {example && (
                 <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
-                  <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+                  {example}
                 </div>
               )}
             </div>
