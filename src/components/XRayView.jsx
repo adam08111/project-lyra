@@ -80,6 +80,10 @@ export function parseSectionContent(content) {
       else if (current === "vocab") parts.vocabUpgrade += " " + trimmed;
     }
   }
+  // AI occasionally emits the label twice ("KEY IDEA: KEY IDEA: …") or mixes
+  // English + Chinese versions. The initial .replace() only removed the outer
+  // one — loop stripRedundantPrefix to peel any remaining nested labels.
+  for (const key of Object.keys(parts)) parts[key] = stripRedundantPrefix(parts[key]);
   return parts;
 }
 
