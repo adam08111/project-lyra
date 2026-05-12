@@ -172,6 +172,27 @@ export function AnnotatedQuote({ text }) {
 // Fallbacks for legacy / malformed responses:
 //   A) Strict "EN: ... / ZH: ..." pair format
 //   B) Hybrid format with English labels followed by Chinese content directly
+// Strip any leading label prefix the AI leaks into the Chinese string
+// against the translatePrompt's "zh contains only the translation" rule.
+// Catches Chinese-character labels (為何有效：、結構：、文中節錄：) and the
+// English structural labels the prompt enumerates (KEY IDEA:, FROM THE
+// TEXT:, BREAKDOWN:, PLAIN MEANING:, GRAMMAR:, FUNCTION:, USE IT:,
+// WHY IT WORKS:, STRUCTURE:, TRY THIS PATTERN:, WRITER'S WORDS:,
+// VOCAB UPGRADE:, WATCH OUT:, FOR EXAMPLE:).
+// Loops so nested labels (解析：FROM THE TEXT：xxx) collapse fully.
+const ENGLISH_LABELS_RE = /^(?:KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER[''’]?S\s+WORDS|VOCAB(?:ULARY)?\s+UPGRADE|WATCH\s+OUT|FOR\s+EXAMPLE)[:：]\s*/i;
+const CHINESE_LABEL_RE = /^[一-龥]{1,10}[:：]\s*/;
+export function stripRedundantPrefix(zh) {
+  let out = zh || "";
+  for (let i = 0; i < 4; i++) {
+    let next = out.replace(CHINESE_LABEL_RE, "");
+    next = next.replace(ENGLISH_LABELS_RE, "");
+    if (next === out) break;
+    out = next;
+  }
+  return out.trim();
+}
+
 export function parseTranslationPairs(text) {
   if (!text) return [];
 
@@ -430,28 +451,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
 
   // Render helper: show ONLY the Chinese translation right beneath each sub-section.
   // The English is already visible above in the sub-section itself, so we don't repeat it here.
-  // Also strip redundant section-label prefixes (解析、文中例子 etc.) since the parent
-  // sub-section already labels itself in English.
-  // Strip any leading label prefix that the AI may leak into the Chinese
-  // string against the translatePrompt's "zh contains only the translation"
-  // rule. Catches both Chinese-character labels (為何有效：、結構：、文中節錄：)
-  // and the English structural labels the prompt enumerates
-  // (KEY IDEA:, FROM THE TEXT:, BREAKDOWN:, PLAIN MEANING:, GRAMMAR:,
-  //  FUNCTION:, USE IT:, WHY IT WORKS:, STRUCTURE:, TRY THIS PATTERN:,
-  //  WRITER'S WORDS:, VOCAB UPGRADE:, WATCH OUT:, FOR EXAMPLE:).
-  // Applied repeatedly so nested labels (解析：FROM THE TEXT：xxx) collapse.
-  const ENGLISH_LABELS = /^(?:KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER[''’]?S\s+WORDS|VOCAB(?:ULARY)?\s+UPGRADE|WATCH\s+OUT|FOR\s+EXAMPLE)[:：]\s*/i;
-  const CHINESE_LABEL = /^[一-龥]{1,10}[:：]\s*/;
-  const stripRedundantPrefix = (zh) => {
-    let out = zh;
-    for (let i = 0; i < 4; i++) {
-      let next = out.replace(CHINESE_LABEL, "");
-      next = next.replace(ENGLISH_LABELS, "");
-      if (next === out) break;
-      out = next;
-    }
-    return out.trim();
-  };
+  // see module-level stripRedundantPrefix at top of file
   const renderPairs = (key) => {
     const pairs = grouped[key];
     if (!pairs || pairs.length === 0) return null;
@@ -1079,12 +1079,15 @@ export default function XRayView({ profileSections, authorName, referenceText, s
           </div>
           {showTranslation && translation && (
             <div style={{ padding: "10px 14px 12px", borderTop: `1px solid ${COLORS.border}`, fontFamily: mono }}>
-              {parseTranslationPairs(translation).map((p, i) => (
+              {parseTranslationPairs(translation).map((p, i) => {
+                const zh = stripRedundantPrefix(p.zh);
+                return (
                 <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px dashed ${COLORS.border}` }}>
                   {p.en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, fontStyle: "italic" }}>{p.en}</div>}
-                  {p.zh && <div style={{ fontSize: 13, color: COLORS.heading, lineHeight: 1.7, marginTop: 4 }}>{p.zh}</div>}
+                  {zh && <div style={{ fontSize: 13, color: COLORS.heading, lineHeight: 1.7, marginTop: 4 }}>{zh}</div>}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </details>

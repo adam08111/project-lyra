@@ -10,6 +10,7 @@ import XRayView, {
   parseProfileSections, parseSectionContent, parseAnnotations,
   labelColorIndex, ANNOTATION_COLORS, AnnotatedQuote, SectionCard,
   extractAuthor, saveStyleSkill, mono, parseTranslationPairs,
+  stripRedundantPrefix,
 } from "./XRayView.jsx";
 
 function CoachMessage({ text, profileSections }) {
@@ -190,9 +191,11 @@ const ZH_CONCEPT_LABELS = {
 };
 
 function stripZhConceptPrefix(zh) {
-  // Strip any leading Chinese-label prefix (e.g. "文法：", "功能："). Loop so
-  // nested prefixes like "解析：文法：xxx" collapse fully.
-  let out = zh || "";
+  // First peel off the structural English labels the AI may leak (KEY IDEA:,
+  // GRAMMAR:, FUNCTION:, USE IT:, FROM THE TEXT:, etc.) via the shared
+  // helper, then strip the StyleLab-specific Chinese concept labels
+  // (文法：、功能：、試著使用：、文中引述：) and any of their nested variants.
+  let out = stripRedundantPrefix(zh);
   for (let i = 0; i < 3; i++) {
     let next = out;
     for (const re of Object.values(ZH_CONCEPT_LABELS)) next = next.replace(re, "");
