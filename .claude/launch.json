@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-launch.json",
+  "configurations": [
+    {
+      "name": "lyra-vite",
+      "command": "node",
+      "args": ["src/.claude/start-vite.mjs"],
+      "port": 3000,
+      "readyPattern": "Local:|ready in"
+    },
+    {
+      "name": "lyra-proxy",
+      "command": "node",
+      "args": ["server/proxy.js"],
+      "port": 3001,
+      "readyPattern": "Proxy running",
+      "env": {
+        "GEMINI_API_KEY": "${env:GEMINI_API_KEY}"
+      }
+    }
+  ]
+}
