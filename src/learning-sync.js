@@ -109,12 +109,11 @@ export function syncLearningData(data, ctx) {
         chinese: s.chinese || "",
         learnedAt: new Date().toISOString(),
       }));
-      // Deduplicate by name
-      const names = new Set(existing.map(s => s.name));
-      const unique = newEntries.filter(s => !names.has(s.name));
-      if (unique.length) {
-        localStorage.setItem("lyra-structures", JSON.stringify([...unique, ...existing].slice(0, 500)));
-      }
+      // Replace existing entries with same name — the new record may carry
+      // richer fields (description, chinese, example) than the older one.
+      const newNames = new Set(newEntries.map(s => s.name));
+      const kept = existing.filter(s => !newNames.has(s.name));
+      localStorage.setItem("lyra-structures", JSON.stringify([...newEntries, ...kept].slice(0, 500)));
     } catch (e) { console.error("learning-sync structures:", e); }
   }
 
@@ -131,12 +130,12 @@ export function syncLearningData(data, ctx) {
         category: v.category || "",
         learnedAt: new Date().toISOString(),
       }));
-      // Deduplicate by strong word
-      const words = new Set(existing.map(v => v.strong));
-      const unique = newEntries.filter(v => !words.has(v.strong));
-      if (unique.length) {
-        localStorage.setItem("lyra-vocabulary", JSON.stringify([...unique, ...existing].slice(0, 500)));
-      }
+      // Replace existing entries with same strong word — the new record may
+      // carry a different collocation, category, or chinese translation
+      // that the older record was missing.
+      const newWords = new Set(newEntries.map(v => v.strong));
+      const kept = existing.filter(v => !newWords.has(v.strong));
+      localStorage.setItem("lyra-vocabulary", JSON.stringify([...newEntries, ...kept].slice(0, 500)));
     } catch (e) { console.error("learning-sync vocabulary:", e); }
   }
 }

@@ -54,6 +54,8 @@ export default function Lyra() {
   const [proofTab, setProofTab] = useState("grammar");
   const [proofLoading, setProofLoading] = useState(false);
   const sugTimer = useRef(null);
+  const sugSeqRef = useRef(0);
+  const skillSeqRef = useRef(0);
   const lastAnalysed = useRef("");
   const [appliedSuggestions, setAppliedSuggestions] = useState([]);
   const [checkFlash, setCheckFlash] = useState(false);
@@ -225,6 +227,7 @@ export default function Lyra() {
     setAppliedSuggestions([]);
     setMiniLesson({});
     setAppliedSkill(null);
+    skillSeqRef.current++;
     setWritingTechniques(null);
     setTechsEnriching(false);
     setExtractedSkills(null);
@@ -300,6 +303,7 @@ export default function Lyra() {
     setAppliedSuggestions([]);
     setMiniLesson({});
     setAppliedSkill(null);
+    skillSeqRef.current++;
     setWritingTechniques(null);
     setTechsEnriching(false);
     setSourceText("");
@@ -398,6 +402,7 @@ Rules:
     const normalisedPara = lastPara.toLowerCase().replace(/\s+/g, " ");
     if (normalisedPara === lastAnalysed.current) return;
     sugTimer.current = setTimeout(async () => {
+      const seq = ++sugSeqRef.current;
       try {
         // SKILL-AWARE: Build anonymised active skill context so suggestions don't contradict deployed techniques
         let activeSkillCtx = null;
@@ -421,6 +426,7 @@ Rules:
         } : null;
         trackCall();
         const result = await callAI(buildStructuralPrompt(topic, typeLabel, activeSkillCtx, examRules, sourceCtxObj), lastPara, false, 1000, sugRoute.thinkingBudget, undefined, undefined, sugRoute.model);
+        if (seq !== sugSeqRef.current) return;
         const parsed = JSON.parse(result.replace(/```json|```/g, "").trim());
         if (parsed.suggestions?.length) {
           setSuggestions(parsed.suggestions);
@@ -553,11 +559,20 @@ Rules:
     link: "linking the paragraph back to the question or forward to the next point",
   };
 
+  const dismissSkill = useCallback(() => {
+    skillSeqRef.current++;
+    setWritingTechniques(null);
+    setTechsEnriching(false);
+  }, []);
+
   const applySkillWithEnrichment = useCallback(async (skill) => {
     // 1. Extract raw techniques
     const rawTechs = skill.analysedTechniques || skill.researchedTechniques
       || (skill.techniques || []).map(t => ({ technique: t }));
     if (!rawTechs.length) { setAppliedSkill(skill); return; }
+
+    // Bump seq so any earlier in-flight apply / dismiss invalidates itself
+    const seq = ++skillSeqRef.current;
 
     // 2. Fast AI call to classify paragraph roles (no web search)
     //    ANTI-BIAS: Anonymise skill before PEEL classification to prevent author-biased role assignment
@@ -570,6 +585,7 @@ Rules:
       const classifyPrompt = `The student is writing a ${typeLabel || "piece"} about: "${(topic || "").slice(0, 200)}".\nThey have these writing techniques (from an anonymous writer they studied):\n${techList}\n\nFor each technique, decide which part of a PEEL body paragraph it best helps with:\n- "point" \u2014 writing the topic/point sentence\n- "evidence" \u2014 introducing or framing evidence/quotes\n- "explanation" \u2014 explaining or analysing the evidence\n- "link" \u2014 linking back to the question or to the next paragraph\n- "hook" \u2014 for opening hooks (introduction only)\n- "conclusion" \u2014 for concluding sentences\n\nReturn a JSON array of objects, one per technique, in order:\n[{"index":0,"role":"point"}, {"index":1,"role":"evidence"}, ...]`;
       const peelRoute = getRouteConfig("peel_classify");
       const roleResult = await callAI("Return only valid JSON array. No markdown, no explanation, no commentary — just the JSON. Do NOT attempt to identify the writer.", classifyPrompt, false, 4096, peelRoute.thinkingBudget, undefined, undefined, peelRoute.model);
+      if (seq !== skillSeqRef.current) return;
       const roleText = typeof roleResult === "string" ? roleResult : roleResult.text;
       const jsonMatch = roleText.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
@@ -581,6 +597,8 @@ Rules:
         }
       }
     } catch (e) { console.error("PEEL classification failed:", e); }
+
+    if (seq !== skillSeqRef.current) return;
 
     // 3. Show techniques immediately
     setAppliedSkill(skill);
@@ -602,6 +620,7 @@ Rules:
         const userPrompt = `The student is writing a ${typeLabel || "piece"} about: "${(topic || "").slice(0, 200)}".\nThey already have writing techniques for these paragraph parts: ${coveredStr}.\nThey need techniques specifically for: ${missingStr}.\n\nSearch the web for expert articles about writing strong ${(typeLabel || "writing").toLowerCase()} paragraphs.\nFocus on: ${roleDescs}.\n\nExtract exactly ${missingRoles.length} specific writing technique${missingRoles.length > 1 ? "s" : ""}, one per missing part.\n\nFormat as numbered sections (one per technique). Inside each section use bold labels (not numbered sub-items):\n\n1. **Technique name here**\n**What to do:** 1-2 sentences explaining the technique clearly\n**Example:** a concrete example applied to the student's topic\n**Paragraph role:** one of: ${missingStr}\n**Source:** [Article Title](https://url)`;
         const enrichRoute = getRouteConfig("skill_enrich");
         const enrichResult = await callAI(sysPrompt, userPrompt, true, 2048, enrichRoute.thinkingBudget, undefined, undefined, enrichRoute.model);
+        if (seq !== skillSeqRef.current) return;
         const enriched = parseTechniques(enrichResult);
         if (enriched) {
           // Ensure each has a paragraphRole
@@ -614,7 +633,7 @@ Rules:
           trackCall();
         }
       } catch (e) { console.error("skill enrichment failed:", e); }
-      setTechsEnriching(false);
+      if (seq === skillSeqRef.current) setTechsEnriching(false);
     }
   }, [topic, typeLabel]);
 
@@ -814,7 +833,7 @@ Rules:
             sendChat={sendChat} setTab={setTab}
             writingTechniques={writingTechniques}
             appliedSkill={appliedSkill}
-            setWritingTechniques={setWritingTechniques}
+            onDismissSkill={dismissSkill}
             techsEnriching={techsEnriching}
             onApplySkill={applySkillWithEnrichment}
             pendingSkillsOpen={pendingSkillsOpen}

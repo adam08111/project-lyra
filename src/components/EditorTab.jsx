@@ -23,7 +23,7 @@ export default function EditorTab({
   miniLesson, fetchMiniLesson, sendChat, setTab,
   writingTechniques,
   appliedSkill,
-  setWritingTechniques,
+  onDismissSkill,
   techsEnriching,
   onApplySkill,
   pendingSkillsOpen,
@@ -92,7 +92,7 @@ export default function EditorTab({
               )}
             </div>
             <button
-              onClick={() => { if (setWritingTechniques) setWritingTechniques(null); }}
+              onClick={() => { if (onDismissSkill) onDismissSkill(); }}
               style={{ background: "none", border: "none", fontSize: 16, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}
             >
               {"\u00d7"}
