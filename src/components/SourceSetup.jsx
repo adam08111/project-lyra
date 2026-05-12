@@ -56,25 +56,13 @@ export default function SourceSetup({
       setUploadedImage(reader.result);
       setScanning(true);
       try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 2000,
-            messages: [{
-              role: "user",
-              content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-                { type: "text", text: "Extract ALL the text from this image. Return ONLY the extracted text — no commentary, no explanation. Preserve paragraphs and line breaks." }
-              ]
-            }]
-          }),
-        });
-        const data = await res.json();
-        const extracted = data.content?.map(b => b.text || "").filter(Boolean).join("\n") || "";
+        const parts = [
+          { inline_data: { mime_type: mediaType, data: base64 } },
+          { text: "Extract ALL the text from this image. Return ONLY the extracted text — no commentary, no explanation. Preserve paragraphs and line breaks." },
+        ];
+        const extracted = await callAI("", parts, false, 2000, undefined, undefined, undefined, "gemini-flash-latest");
         if (extracted) setSourceText(extracted);
-      } catch (err) { /* silent */ }
+      } catch (err) { console.error("Source OCR failed:", err); }
       setScanning(false);
     };
     reader.readAsDataURL(file);
@@ -93,25 +81,13 @@ export default function SourceSetup({
       const mediaType = file.type || "image/jpeg";
       setTopicScanning(true);
       try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 1000,
-            messages: [{
-              role: "user",
-              content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-                { type: "text", text: "Extract the writing task, essay question, or assignment prompt from this image. Return ONLY the text of the task/question — no commentary, no explanation. If there are multiple questions, extract all of them." }
-              ]
-            }]
-          }),
-        });
-        const data = await res.json();
-        const extracted = data.content?.map(b => b.text || "").filter(Boolean).join("\n") || "";
+        const parts = [
+          { inline_data: { mime_type: mediaType, data: base64 } },
+          { text: "Extract the writing task, essay question, or assignment prompt from this image. Return ONLY the text of the task/question — no commentary, no explanation. If there are multiple questions, extract all of them." },
+        ];
+        const extracted = await callAI("", parts, false, 1000, undefined, undefined, undefined, "gemini-flash-latest");
         if (extracted) setTopic(prev => prev ? prev + "\n\n" + extracted : extracted);
-      } catch (err) { /* silent */ }
+      } catch (err) { console.error("Topic OCR failed:", err); }
       setTopicScanning(false);
     };
     reader.readAsDataURL(file);

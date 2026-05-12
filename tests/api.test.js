@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { callAI } from "../src/api.js";
 
-// Mock global fetch
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
@@ -9,98 +8,192 @@ beforeEach(() => {
   mockFetch.mockReset();
 });
 
-describe("callAI", () => {
-  it("sends POST request with correct structure", async () => {
+// SSE helper — build a ReadableStream that emits SSE-formatted chunks.
+function sseStream(chunks) {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const c of chunks) controller.enqueue(encoder.encode(c));
+      controller.close();
+    },
+  });
+}
+
+describe("callAI — non-streaming (no onChunk)", () => {
+  it("POSTs to /api/gemini with system, message, maxTokens, stream:false", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "Hello student!" }] }),
+      json: async () => ({ text: "ok" }),
     });
 
-    const result = await callAI("You are a coach", "Help me write");
+    await callAI("You are a coach", "Help me write");
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe("https://api.anthropic.com/v1/messages");
+    expect(url).toBe("/api/gemini");
     expect(options.method).toBe("POST");
+    expect(options.headers).toEqual({ "Content-Type": "application/json" });
 
     const body = JSON.parse(options.body);
-    expect(body.model).toBe("claude-sonnet-4-6");
-    expect(body.max_tokens).toBe(1000);
     expect(body.system).toBe("You are a coach");
-    expect(body.messages).toEqual([{ role: "user", content: "Help me write" }]);
+    expect(body.message).toBe("Help me write");
+    expect(body.maxTokens).toBe(1000);
+    expect(body.stream).toBe(false);
+    expect(body.useSearch).toBeUndefined();
+    expect(body.thinkingBudget).toBeUndefined();
+    expect(body.model).toBeUndefined();
+    expect(body.responseSchema).toBeUndefined();
   });
 
-  it("returns text content from response", async () => {
+  it("returns plain text string when response has no sources", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "Great work!" }] }),
+      json: async () => ({ text: "Hello student!" }),
     });
 
     const result = await callAI("system", "user message");
-    expect(result).toBe("Great work!");
+    expect(result).toBe("Hello student!");
   });
 
-  it("joins multiple text blocks", async () => {
+  it("returns { text, sources } object when grounding sources are present", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "Part 1" }, { text: "Part 2" }] }),
+      json: async () => ({ text: "From the web", sources: [{ title: "T", uri: "https://x" }] }),
     });
 
-    const result = await callAI("system", "user message");
-    expect(result).toBe("Part 1\nPart 2");
+    const result = await callAI("system", "user message", true);
+    expect(result).toEqual({ text: "From the web", sources: [{ title: "T", uri: "https://x" }] });
   });
 
-  it("returns empty string if no content", async () => {
+  it("returns empty string when response has no text and no sources", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [] }),
+      json: async () => ({}),
     });
 
     const result = await callAI("system", "user message");
     expect(result).toBe("");
   });
 
-  it("includes web search tool when requested", async () => {
+  it("includes useSearch flag when requested", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "Found info" }] }),
+      json: async () => ({ text: "ok" }),
     });
 
     await callAI("system", "search this", true);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.tools).toEqual([{ type: "web_search_20250305", name: "web_search" }]);
+    expect(body.useSearch).toBe(true);
   });
 
-  it("does not include tools when search is false", async () => {
+  it("includes thinkingBudget, model, responseSchema when passed", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "response" }] }),
+      json: async () => ({ text: "ok" }),
     });
 
-    await callAI("system", "no search");
+    const schema = { type: "array", items: { type: "string" } };
+    await callAI("system", "msg", false, 2048, 512, undefined, undefined, "gemini-flash-latest", schema);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.tools).toBeUndefined();
+    expect(body.maxTokens).toBe(2048);
+    expect(body.thinkingBudget).toBe(512);
+    expect(body.model).toBe("gemini-flash-latest");
+    expect(body.responseSchema).toEqual(schema);
   });
 
-  it("throws on non-OK response", async () => {
+  it("passes signal through to fetch for abort support", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: "ok" }),
+    });
+
+    const ctrl = new AbortController();
+    await callAI("system", "msg", false, 1000, undefined, undefined, ctrl.signal);
+
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it("forwards an array message (for vision parts) unchanged in body.message", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: "extracted" }),
+    });
+
+    const parts = [
+      { inline_data: { mime_type: "image/jpeg", data: "AAAA" } },
+      { text: "Extract text" },
+    ];
+    await callAI("", parts, false, 2000, undefined, undefined, undefined, "gemini-flash-latest");
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.message).toEqual(parts);
+  });
+
+  it("throws on non-OK response with status code in error message", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 429,
       text: async () => "Rate limited",
     });
 
-    await expect(callAI("system", "test")).rejects.toThrow("API request failed (429)");
+    await expect(callAI("system", "test")).rejects.toThrow(/429.*Rate limited/);
   });
+});
 
-  it("filters out non-text blocks", async () => {
+describe("callAI — streaming (onChunk provided)", () => {
+  it("does NOT send stream:false when onChunk is given (streaming mode)", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "text" }, { type: "tool_use" }, { text: "" }, { text: "more" }] }),
+      body: { getReader: () => sseStream([`data: ${JSON.stringify({ text: "x" })}\n\n`, "data: [DONE]\n\n"]).getReader() },
     });
 
-    const result = await callAI("system", "test");
-    expect(result).toBe("text\nmore");
+    await callAI("system", "msg", false, 1000, undefined, () => {});
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.stream).toBeUndefined();
+  });
+
+  it("accumulates streamed text chunks and returns the full string", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => sseStream([
+        `data: ${JSON.stringify({ text: "Hello" })}\n\n`,
+        `data: ${JSON.stringify({ text: " world" })}\n\n`,
+        "data: [DONE]\n\n",
+      ]).getReader() },
+    });
+
+    const seen = [];
+    const result = await callAI("system", "msg", false, 1000, undefined, (partial) => seen.push(partial));
+    expect(result).toBe("Hello world");
+    expect(seen).toEqual(["Hello", "Hello world"]);
+  });
+
+  it("propagates an error payload as a thrown Error", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => sseStream([
+        `data: ${JSON.stringify({ error: "model overloaded" })}\n\n`,
+        "data: [DONE]\n\n",
+      ]).getReader() },
+    });
+
+    await expect(callAI("system", "msg", false, 1000, undefined, () => {})).rejects.toThrow("model overloaded");
+  });
+
+  it("silently skips non-JSON data lines instead of crashing", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => sseStream([
+        "data: not-json\n\n",
+        `data: ${JSON.stringify({ text: "ok" })}\n\n`,
+        "data: [DONE]\n\n",
+      ]).getReader() },
+    });
+
+    const result = await callAI("system", "msg", false, 1000, undefined, () => {});
+    expect(result).toBe("ok");
   });
 });

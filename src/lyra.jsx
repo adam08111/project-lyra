@@ -7,7 +7,6 @@ import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildP
 import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK } from "./utils.js";
 import { extractLearningData, syncLearningData } from "./learning-sync.js";
 import { LyraAvatar } from "./components/Icons.jsx";
-import Onboarding from "./components/Onboarding.jsx";
 import SourceSetup from "./components/SourceSetup.jsx";
 import ChatTab from "./components/ChatTab.jsx";
 import EditorTab from "./components/EditorTab.jsx";
@@ -206,6 +205,7 @@ export default function Lyra() {
     setWordCount(writing.wordCount || null);
     setPurpose(writing.purpose || null);
     setTitle(writing.title || "Untitled");
+    setEditingTitle(false);
     setDraft(writing.draft || "");
     setMessages(writing.messages || []);
     setSourceText(writing.sourceText || "");
@@ -216,9 +216,19 @@ export default function Lyra() {
     typedWelcome.current = true;
     setWelcomeText("");
     setTypingMsg(null);
+    setChatLoading(false);
     setSuggestions(null);
+    setSugBadge(false);
     setProofread(null);
+    setProofTab("grammar");
+    setProofLoading(false);
     setAppliedSuggestions([]);
+    setMiniLesson({});
+    setAppliedSkill(null);
+    setWritingTechniques(null);
+    setTechsEnriching(false);
+    setExtractedSkills(null);
+    setTargetVoice("");
     setApiCalls(0);
     apiCallRef.current = 0;
     setSidebarOpen(false);
@@ -269,20 +279,29 @@ export default function Lyra() {
   const resetToNew = useCallback(() => {
     setSidebarOpen(false);
     setScreen("source-setup");
+    setTab("chat");
     setTopic("");
     setType(null);
     setWordCount(null);
+    setPurpose(null);
     setMessages([]);
     setDraft("");
     setTitle("Untitled");
+    setEditingTitle(false);
     typedWelcome.current = false;
     setWelcomeText("");
     setTypingMsg(null);
+    setChatLoading(false);
     setSuggestions(null);
+    setSugBadge(false);
     setProofread(null);
+    setProofTab("grammar");
+    setProofLoading(false);
     setAppliedSuggestions([]);
+    setMiniLesson({});
     setAppliedSkill(null);
     setWritingTechniques(null);
+    setTechsEnriching(false);
     setSourceText("");
     setSourceAnalysis("");
     setExtractedSkills(null);
@@ -709,28 +728,6 @@ Rules:
           trackCall={trackCall}
           sidebarProps={sidebarProps}
           onOpenTraining={openTrainingSession}
-        />
-        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
-        {trainingSkill && <TrainingSession skill={trainingSkill} onClose={() => setTrainingSkill(null)} trackCall={trackCall} />}
-      </>
-    );
-  }
-
-  // === ONBOARDING SCREEN (legacy — for loaded writings without source) ===
-
-  if (screen === "onboarding") {
-    return (
-      <>
-        <Onboarding
-          userName={userName} setUserName={setUserName}
-          topic={topic} setTopic={setTopic}
-          type={type} setType={setType}
-          wordCount={wordCount} setWordCount={setWordCount}
-          purpose={purpose} setPurpose={setPurpose}
-          appliedSkill={appliedSkill} setAppliedSkill={setAppliedSkill}
-          setWritingTechniques={setWritingTechniques}
-          onStart={() => { const autoTitle = generateTitle(topic, type); setTitle(autoTitle); saveNewWriting("default", autoTitle); setScreen("app"); }}
-          sidebarProps={sidebarProps}
         />
         <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
         {trainingSkill && <TrainingSession skill={trainingSkill} onClose={() => setTrainingSkill(null)} trackCall={trackCall} />}

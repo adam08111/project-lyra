@@ -138,9 +138,12 @@ const server = http.createServer((req, res) => {
       } else if (responseMimeType && !useSearch) {
         genConfig.responseMimeType = responseMimeType;
       }
+      // message can be a string (text-only) or an array of Gemini parts
+      // (mixed text + inline_data) for vision calls. Array passes through.
+      const userParts = Array.isArray(message) ? message : [{ text: message || "" }];
       const geminiReq = {
         system_instruction: { parts: [{ text: system || "" }] },
-        contents: [{ role: "user", parts: [{ text: message || "" }] }],
+        contents: [{ role: "user", parts: userParts }],
         generationConfig: genConfig,
       };
       if (useSearch) {
