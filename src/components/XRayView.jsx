@@ -135,6 +135,7 @@ export function AnnotatedQuote({ text }) {
       {segments.map((seg, i) => {
         if (!seg.label) return <span key={i}>{seg.text}</span>;
         const c = ANNOTATION_COLORS[labelColorIndex(seg.label)];
+        const isCJK = /[一-龥]/.test(seg.label);
         return (
           <ruby key={i} style={{
             background: c.bg,
@@ -146,15 +147,19 @@ export function AnnotatedQuote({ text }) {
             {seg.text}
             <rp>(</rp>
             <rt style={{
-              fontSize: 10,
+              fontSize: isCJK ? 13 : 11,
               fontWeight: 700,
               color: c.text,
-              textTransform: "lowercase",
-              letterSpacing: 0.5,
+              textTransform: isCJK ? "none" : "lowercase",
+              letterSpacing: isCJK ? 0 : 0.5,
               fontStyle: "normal",
               fontFamily: mono,
               textAlign: "center",
-              whiteSpace: "nowrap",
+              whiteSpace: "normal",
+              lineHeight: isCJK ? 1.3 : 1.1,
+              wordBreak: "keep-all",
+              marginBottom: 6,
+              transform: "translateY(-3px)",
             }}>
               {seg.label}
             </rt>
@@ -419,17 +424,29 @@ export function SectionCard({ section, onSave, trackCall, index }) {
   // Applied repeatedly in case the AI nests labels (e.g. 解析：簡單意思：xxx).
   const stripRedundantPrefix = (zh) => {
     let out = zh;
-    for (let i = 0; i < 3; i++) {
-      const next = out.replace(/^[一-龥]{1,10}[:：]\s*/, "");
+    // Strip Chinese label prefixes AND English source labels AND EN:/ZH: markers AND
+    // leading pipe separators (the AI's breakdown format uses `| LABEL:` per line).
+    // Loop handles nested prefixes like "解析：FROM THE TEXT：xxx" or "| GRAMMAR: ...".
+    for (let i = 0; i < 5; i++) {
+      let next = out;
+      // 0. Leading pipe separator (the AI's breakdown rows often start with `| `)
+      next = next.replace(/^[|｜]\s*/, "");
+      // 1. Chinese label prefix (e.g. 解析：/ 為何有效：)
+      next = next.replace(/^[一-龥]{1,10}[:：]\s*/, "");
+      // 2. English source label prefix that the renderer will re-add (e.g. FROM THE TEXT:/ KEY IDEA:)
+      next = next.replace(/^(KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER['’]?S\s+WORDS|VOCAB\s+UPGRADE|WATCH\s+OUT|DIFFICULTY)\s*[:：]\s*/i, "");
+      // 3. Stray EN:/ZH: markers leaked from the AI's pair format (§12.9 known bug)
+      next = next.replace(/^(EN|ZH)\s*[:：]\s*/i, "");
       if (next === out) break;
       out = next;
     }
     return out.trim();
   };
-  // Map bucket key → English label prefix shown before the Chinese content
+  // Map bucket key → label prefix shown before the Chinese content. CJK prefixes
+  // use full-width colons automatically (handled by the renderer below).
   const bucketLabels = {
     keyIdea: "KEY IDEA",
-    whyItWorks: "WHY IT WORKS",
+    whyItWorks: "寫法的好處",
     vocabUpgrade: "WRITER'S WORDS",
     watchOut: "WATCH OUT",
   };
@@ -454,7 +471,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             fontFamily: mono,
           }}>
             {isKeyIdea && index ? `${index}. ` : ""}
-            {labelPrefix && i === 0 ? <span style={{ fontWeight: 700 }}>{labelPrefix}: </span> : null}
+            {labelPrefix && i === 0 ? <span style={{ fontWeight: 700 }}>{labelPrefix}{/[一-龥]/.test(labelPrefix) ? "：" : ": "}</span> : null}
             {zh}
           </div>
         ))}
@@ -484,7 +501,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             marginBottom: 8,
             fontFamily: mono,
           }}>
-            {index ? `${index}. ` : ""}<span>KEY IDEA: </span>{zh}
+            {index ? `${index}. ` : ""}{zh}
           </div>
         ))}
         {bodyLines.map((zh, i) => (
@@ -514,12 +531,11 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     if (zhLines.length === 0) return null;
     return (
       <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 14px", marginTop: 6, marginBottom: 12, borderLeft: `3px solid ${COLORS.accent1}`, fontFamily: mono }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
-          翻譯 · Translation
+        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.muted, marginBottom: 8, letterSpacing: 1 }}>
+          譯文
         </div>
         {zhLines.map((zh, i) => (
-          <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.1, fontStyle: "italic", marginBottom: 4 }}>
-            <span style={{ fontWeight: 700, fontStyle: "normal" }}>FROM THE TEXT: </span>
+          <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 4.5, fontStyle: "italic", marginBottom: 4 }}>
             <AnnotatedQuote text={zh} />
           </div>
         ))}
@@ -579,20 +595,20 @@ export function SectionCard({ section, onSave, trackCall, index }) {
       const useIt = useItFromPair;
       return (
         <div style={{ background: "#EDE8E0", borderRadius: 10, padding: "10px 14px", marginTop: 8, marginBottom: 12, fontFamily: mono }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>BREAKDOWN</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, letterSpacing: 1 }}>句子解析</div>
           {plain && (
             <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, color: COLORS.heading }}>PLAIN MEANING: </span>{plain}
+              <span style={{ fontWeight: 700, color: COLORS.heading }}>淺白解釋：</span>{plain}
             </div>
           )}
           {gram && (
             <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, color: COLORS.heading }}>GRAMMAR: </span>{gram}
+              <span style={{ fontWeight: 700, color: COLORS.heading }}>文法：</span>{gram}
             </div>
           )}
           {func && (
             <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
-              <span style={{ fontWeight: 700, color: COLORS.heading }}>FUNCTION: </span>{func}
+              <span style={{ fontWeight: 700, color: COLORS.heading }}>功能：</span>{func}
             </div>
           )}
           {useIt && (() => {
@@ -601,10 +617,10 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             const example = m ? m[2].trim() : "";
             return (
               <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
-                <span style={{ fontWeight: 700, color: COLORS.accent1 }}>USE IT: </span>{template}
+                <span style={{ fontWeight: 700, color: COLORS.accent1 }}>試著使用：</span>{template}
                 {example && (
                   <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
-                    <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+                    <span style={{ fontWeight: 700, color: "#A6701F" }}>例如：</span>{example}
                   </div>
                 )}
               </div>
@@ -621,18 +637,19 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     // The AI may invent its own wrapper (解析/概要/綜述/分析/句子解析/breakdown/etc).
     const body = allZh.replace(/^\s*(?:解析|概要|綜述|分析|句子解析|句子分析|細部解析|BREAKDOWN)[:：]\s*/i, "");
 
-    // Label dictionaries — the AI uses many synonyms across sessions
+    // Label dictionaries — the AI uses many synonyms across sessions, including the
+    // English source labels (when it preserves them in the Chinese translation).
     const plainLabels  = ["淺白解釋", "淺白意義", "淺白含義", "白話解釋", "白話翻譯", "白話意義",
                           "簡單來說", "簡單英文", "簡單英語", "簡單意思", "簡單含義", "簡明意思",
                           "基本意思", "基本含義", "主要意思", "直白意思", "字面意思", "字面含義",
                           "用簡單的話", "用簡單英文", "用淺白的話", "白話地說", "用平實的話",
-                          "明白意思", "易懂的意思", "簡單版本"];
+                          "明白意思", "易懂的意思", "簡單版本", "PLAIN\\s+MEANING"];
     const gramLabels   = ["文法", "語法", "文法模式", "語法模式", "文法結構", "語法結構", "句法",
-                          "文法用法", "文法現象", "句子結構", "語法用法"];
-    const funcLabels   = ["功能", "作用", "目的", "用途", "效用", "效果"];
+                          "文法用法", "文法現象", "句子結構", "語法用法", "GRAMMAR"];
+    const funcLabels   = ["功能", "作用", "目的", "用途", "效用", "效果", "FUNCTION"];
     const useLabels    = ["試著使用", "試試看", "試試", "嘗試一下", "請試試", "練習", "自己試試",
                           "動手試試", "試著套用", "嘗試套用", "套用練習", "來試試", "套用模板",
-                          "套用方法", "你也試試", "你來試試"];
+                          "套用方法", "你也試試", "你來試試", "USE\\s+IT"];
     const allEndLabels = [...gramLabels, ...funcLabels, ...useLabels];
 
     // Build a regex that matches `${start}[:：]${content up to ${end} or eof}`
@@ -653,11 +670,11 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     let useIt  = grab(useLabels, []);
 
     // Position-based fallback for any slot still empty.
-    // Splits on ANY Chinese-character label (1-12 chars before a colon), so the
-    // AI can use whatever Chinese terms it likes — we route by ORDER.
+    // Splits on ANY Chinese-character label (1-12 chars before a colon) OR English
+    // source labels, so the AI can use whatever terms it likes — we route by ORDER.
     if (!plain || !gram || !func || !useIt) {
       const segments = [];
-      const segRe = /([一-龥]{1,12})[:：]\s*([\s\S]+?)(?=[\s|｜]*[一-龥]{1,12}[:：]|$)/g;
+      const segRe = /((?:[一-龥]{1,12})|(?:PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT))\s*[:：]\s*([\s\S]+?)(?=[\s|｜]*(?:[一-龥]{1,12}|(?:PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT))\s*[:：]|$)/gi;
       let m;
       while ((m = segRe.exec(body)) !== null) {
         const label = m[1].trim();
@@ -674,27 +691,45 @@ export function SectionCard({ section, onSave, trackCall, index }) {
       if (!useIt  && items[3]) useIt  = items[3].text;
     }
 
+    // If the AI omitted a PLAIN MEANING label but emitted content BEFORE the first
+    // matched label, treat that leading content as the plain meaning.
+    if (!plain) {
+      const firstLabel = body.match(/(?:[一-龥]{1,12}|(?:PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT))\s*[:：]/i);
+      if (firstLabel && firstLabel.index > 0) {
+        const leading = body.slice(0, firstLabel.index).trim().replace(/[\s|｜]+$/, "");
+        if (leading.length > 1) plain = leading;
+      }
+    }
+
     if (!plain && !gram && !func && !useIt) {
-      // Couldn't structurally parse — render raw lines as fallback
-      return renderPairs("breakdown");
+      // Couldn't structurally parse — render raw lines in a card so visuals match
+      // the other styled breakdown paths.
+      const rawPairs = renderPairs("breakdown");
+      if (!rawPairs) return null;
+      return (
+        <div style={{ background: "#EDE8E0", borderRadius: 10, padding: "10px 14px", marginTop: 8, marginBottom: 12, fontFamily: mono }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, letterSpacing: 1 }}>句子解析</div>
+          {rawPairs}
+        </div>
+      );
     }
 
     return (
       <div style={{ background: "#EDE8E0", borderRadius: 10, padding: "10px 14px", marginTop: 8, marginBottom: 12, fontFamily: mono }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>BREAKDOWN</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, letterSpacing: 1 }}>句子解析</div>
         {plain && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>PLAIN MEANING: </span>{plain}
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>淺白解釋：</span>{plain}
           </div>
         )}
         {gram && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6 }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>GRAMMAR: </span>{gram}
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>文法：</span>{gram}
           </div>
         )}
         {func && (
           <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 6, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
-            <span style={{ fontWeight: 700, color: COLORS.heading }}>FUNCTION: </span>{func}
+            <span style={{ fontWeight: 700, color: COLORS.heading }}>功能：</span>{func}
           </div>
         )}
         {useIt && (() => {
@@ -703,10 +738,10 @@ export function SectionCard({ section, onSave, trackCall, index }) {
           const example = m ? m[2].trim() : "";
           return (
             <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
-              <span style={{ fontWeight: 700, color: COLORS.accent1 }}>USE IT: </span>{template}
+              <span style={{ fontWeight: 700, color: COLORS.accent1 }}>試著使用：</span>{template}
               {example && (
                 <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
-                  <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
+                  <span style={{ fontWeight: 700, color: "#A6701F" }}>例如：</span>{example}
                 </div>
               )}
             </div>
@@ -747,7 +782,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
           {parts.example && (
             <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 14px", marginBottom: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>From the text</div>
-              <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.1, fontStyle: "italic", fontFamily: mono }}>
+              <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 4.5, fontStyle: "italic", fontFamily: mono }}>
                 <AnnotatedQuote text={parts.example} />
               </div>
             </div>

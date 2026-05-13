@@ -590,3 +590,94 @@ Known issues that remain (12 May 2026):
 - **Section numbering** — each technique card prefixed with `1.`, `2.`, etc. on the KEY IDEA line; the Chinese KEY IDEA translation mirrors the numbering.
 - **saveStyleSkill bug fix** — validator was missing WORD CHOICES and FEELING AND PERSONALITY from its technique list, causing false "too-short" warnings on legitimate analyses. Now counts all 7 technique sections with `≥ 2` threshold.
 
+---
+
+## 13. UPDATE — 14 May 2026
+
+### 13.1 Annotation Rendering Rebuilt (`AnnotatedQuote`)
+
+The `{phrase}[label]` annotated quote rendering in `src/components/XRayView.jsx` went through several layouts (per-word inline-block, inline-flex column, position-absolute overlay) before settling on a **refined ruby approach** that handles both English and CJK labels universally:
+
+- Phrase allowed to wrap naturally at word boundaries (no `whiteSpace: nowrap` on the ruby base)
+- Label (rt) **auto-styles by content type** via `/[一-龥]/.test(seg.label)`:
+  - CJK labels (隱喻, 方式狀語從句): fontSize 13, no letter-spacing, no lowercase-transform, lineHeight 1.3
+  - English labels (metaphor, adverbial clause of manner): fontSize 11, letter-spacing 0.5, lowercase, lineHeight 1.1
+- `wordBreak: keep-all` on the rt prevents CJK characters splitting mid-word (e.g., 隱喻 staying together instead of breaking to 隱 / 喻)
+- `transform: translateY(-3px)` + `marginBottom: 6` lifts the label off the underlined phrase visually
+- Universal — applies to both the English FROM THE TEXT card and the Chinese 譯文 card automatically
+
+### 13.2 Universal Prefix Stripper
+
+`stripRedundantPrefix` extended to handle four prefix classes in a single 5-iteration loop:
+
+1. **Chinese label prefix** `^[一-龥]{1,10}[:：]` — existing
+2. **English source label prefix** (`KEY IDEA` / `FROM THE TEXT` / `GRAMMAR` / `FUNCTION` / `WHY IT WORKS` / etc.) — NEW
+3. **Stray `EN:` / `ZH:` markers** — resolves the §12.9 known bug
+4. **Leading pipe separator** (`| GRAMMAR:` pattern that the AI uses in breakdown rows) — NEW
+
+Universal across every translation renderer: `renderPairs`, `renderKeyIdeaAndBody`, `renderExampleTranslation`, `renderStructureTranslation`, `renderBreakdownTranslation`.
+
+### 13.3 Breakdown Translation Parser — English Label Support
+
+`renderBreakdownTranslation` had a failure mode where the AI preserved English sub-labels (`PLAIN MEANING:`, `GRAMMAR:`, `FUNCTION:`, `USE IT:`) inside the Chinese translation. The slow-path Chinese-only label dictionaries missed them, the parser fell through to raw `renderPairs`, and the user saw loose unstyled lines like `| GRAMMAR: 這裡使用了...`.
+
+Fixes:
+
+- Slow-path dictionaries now include English regex equivalents: `PLAIN\s+MEANING`, `GRAMMAR`, `FUNCTION`, `USE\s+IT`
+- Position-based segment regex extended to match English labels too (case-insensitive)
+- New **"leading content" fallback** captures any text before the first matched label as PLAIN MEANING (rescues cases where the AI omits the leading label entirely)
+- Last-resort fallback now wraps `renderPairs` output in a styled BREAKDOWN card so visual consistency holds regardless of parse outcome
+
+### 13.4 Translation Card — Chinese Sub-Labels
+
+Translation cards now display Chinese sub-labels in place of preserved English ones:
+
+| English (source card) | Chinese (translation card) |
+|---|---|
+| `TRANSLATION` (header) | `譯文` |
+| `BREAKDOWN` (header) | `句子解析` |
+| `PLAIN MEANING:` | `淺白解釋：` |
+| `GRAMMAR:` | `文法：` |
+| `FUNCTION:` | `功能：` |
+| `USE IT:` | `試著使用：` |
+| `For example:` | `例如：` |
+| `WHY IT WORKS:` | `寫法的好處：` |
+
+`renderPairs` auto-detects CJK content in `bucketLabels` and emits the Chinese full-width colon `：` for CJK labels, ASCII `": "` for English labels.
+
+### 13.5 Visual Spacing Polish
+
+| Element | Before | After |
+|---|---|---|
+| `譯文` header font-size | 10 | 13 |
+| English FROM THE TEXT card line-height | 2.1 | 4.5 |
+| Chinese 譯文 card line-height | 2.1 | 4.5 |
+| Annotation label lift | none | `translateY(-3px) + marginBottom: 6` |
+
+Both cards now have generous vertical room so annotation labels sit clearly above their phrases without crowding the line above.
+
+### 13.6 Prefix Cleanups (renderer-side)
+
+- `FROM THE TEXT:` duplicated prefix on the 譯文 card → removed (the universal `stripRedundantPrefix` handles the AI-emitted one; the renderer-added one was dropped)
+- `KEY IDEA:` prefix on translated key-idea line → removed (kept the `1.` / `2.` numbering)
+
+### 13.7 Dev Environment Setup (worktree-local)
+
+The worktree at `src/.claude/worktrees/nifty-ritchie-06acd9/` had no `.claude/launch.json` of its own and the preview-MCP-registered servers from 10 May were 3+ days stale (missing the §12.4 UTF-8 fix). Recovery:
+
+- Killed orphan `node.exe` (PID 22568) squatting on port 3001 alongside the registered proxy
+- Created worktree-local `.claude/launch.json` + `.claude/start-vite.mjs` — the latter uses **single `..`** to resolve the project root because `.claude/` sits at the worktree root (whereas the main repo's `.claude/` is one level nested at `src/.claude/`, hence its `../..`)
+- Copied `.env` from `C:\Users\Owner\Downloads\lyra-dev\.env` into the worktree root so `server/proxy.js` could find `GEMINI_API_KEY` via its `resolve(__dirname, "../.env")` lookup
+
+### 13.8 Known Issue from §12.9 — Status
+
+The §12.9 "inline `ZH:` markers leaking through" known issue is now addressed by extension of `stripRedundantPrefix` (rule #3 above). Subsequent leaks of any English source label or pipe separator are also caught by the same universal stripper.
+
+### 13.9 Files Changed (since 13 May 2026)
+
+| File | Status | Purpose |
+|---|---|---|
+| `src/components/XRayView.jsx` | UPDATED | `AnnotatedQuote` rebuild, `stripRedundantPrefix` universal extension, `renderBreakdownTranslation` English-label parsing + leading-content fallback + styled fallback card, Chinese sub-label translations, CJK-aware colon rendering, spacing/font-size polish |
+| `.claude/launch.json` | NEW (worktree-local) | Worktree dev server config |
+| `.claude/start-vite.mjs` | NEW (worktree-local) | Worktree-local Vite launcher (single `..` for worktree root) |
+| `.env` | NEW (worktree-local, copied from main repo, gitignored) | Proxy API key lookup |
