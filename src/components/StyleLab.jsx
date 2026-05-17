@@ -9,7 +9,7 @@ import { useTypewriter } from "../hooks.js";
 import XRayView, {
   parseProfileSections, parseSectionContent, parseAnnotations,
   labelColorIndex, ANNOTATION_COLORS, AnnotatedQuote, SectionCard,
-  extractAuthor, saveStyleSkill, mono
+  extractAuthor, saveStyleSkill, mono, parseStructureContent
 } from "./XRayView.jsx";
 
 function CoachMessage({ text, profileSections }) {
@@ -518,12 +518,39 @@ export function SavedSkills({ onCountChange, onApply, onPractice }) {
                           {t.description}
                         </div>
                       )}
-                      {t.structure && (
-                        <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px", marginBottom: t.example ? 6 : 0 }}>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, marginBottom: 3, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Try this pattern</div>
-                          <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono }}>{t.structure}</div>
-                        </div>
-                      )}
+                      {t.structure && (() => {
+                        const parsed = parseStructureContent(t.structure);
+                        if (!parsed) return null;
+                        return (
+                          <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px", marginBottom: t.example ? 6 : 0 }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Give it a go</div>
+                            {parsed.kind === "task-example" ? (
+                              <>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono, marginBottom: 5 }}>
+                                  {parsed.intro}
+                                </div>
+                                <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono, marginBottom: parsed.example ? 5 : 0 }}>
+                                  <span style={{ fontWeight: 700 }}>Task: </span>{parsed.task}
+                                </div>
+                                {parsed.example && (
+                                  <div style={{ background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 5, padding: "5px 8px", color: "#6B4A20", fontFamily: mono, fontSize: 11, lineHeight: 1.5 }}>
+                                    <span style={{ fontWeight: 700, color: "#A6701F" }}>Example: </span>{parsed.example}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono }}>{parsed.template}</div>
+                                {parsed.kind === "template-arrow" && parsed.example && (
+                                  <div style={{ marginTop: 5, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 5, padding: "5px 8px", color: "#6B4A20", fontFamily: mono, fontSize: 11, lineHeight: 1.5 }}>
+                                    <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{parsed.example}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {t.example && (
                         <div style={{ fontSize: 10, color: COLORS.muted, fontStyle: "italic", lineHeight: 1.5, borderLeft: `2px solid ${COLORS.accent1}`, paddingLeft: 8, marginTop: 4 }}>
                           {t.example}

@@ -62,7 +62,16 @@ export function parseSectionContent(content) {
       parts.whyItWorks = trimmed.replace("WHY IT WORKS:", "").trim();
       current = "why";
     } else if (trimmed.startsWith("STRUCTURE:")) {
-      parts.structure = trimmed.replace("STRUCTURE:", "").trim();
+      // Strip the AI's internal "TYPE 1 — FILL-IN-THE-BLANK:" / "TYPE 2 — REWRITE PROMPT:" /
+      // "TYPE 3 — HYBRID:" prefix — these are prompt-internal categorisation markers,
+      // students don't need to see them on the English source card.
+      let structureContent = trimmed.replace("STRUCTURE:", "").trim();
+      structureContent = structureContent.replace(/^TYPE\s+\d+\s*[—\-–]\s*[A-Z][A-Z0-9\s\-/()]+\s*[:：.。]\s*/i, "");
+      // Strip the inline "Flat: " label (TYPE 2 — REWRITE PROMPT format) — the
+      // bare neutral sentence reads fine on its own. Keep Task: and Example: as
+      // they're meaningful labels for the student.
+      structureContent = structureContent.replace(/\bFlat\s*[:：]\s*/gi, "");
+      parts.structure = structureContent;
       current = "structure";
     } else if (trimmed.startsWith("WATCH OUT:")) {
       parts.watchOut = trimmed.replace("WATCH OUT:", "").trim();
@@ -193,24 +202,38 @@ function parseTranslationPairs(text) {
 
   // === Format A: scan for EN:/ZH: markers anywhere in the text ===
   // Robust against missing blank lines between pairs, or pairs on a single line.
+  // PRE-NORMALIZE: LITE often emits subsequent EN:/ZH: markers mid-line (after
+  // a period or whitespace) without a newline. Insert a newline before each
+  // mid-line marker so the strict `(^|\n)` boundary regex can find them all.
+  const normalized = text.replace(
+    /([^\n\r])\s*(EN|ZH)\s*[:：]\s*/g,
+    (full, prev, marker) => `${prev}\n${marker.toUpperCase()}: `
+  );
   const formatAPairs = (() => {
     const re = /(^|\n)\s*(EN|ZH)\s*[:：]\s*/g;
     const markers = [];
     let m;
-    while ((m = re.exec(text)) !== null) {
+    while ((m = re.exec(normalized)) !== null) {
       const labelStart = m.index + m[1].length;
       markers.push({ type: m[2].toUpperCase(), labelStart, contentStart: m.index + m[0].length });
     }
     if (markers.length === 0) return [];
     const sections = markers.map((mk, i) => ({
       type: mk.type,
-      content: text.slice(mk.contentStart, i + 1 < markers.length ? markers[i + 1].labelStart : text.length).trim(),
+      content: normalized.slice(mk.contentStart, i + 1 < markers.length ? markers[i + 1].labelStart : normalized.length).trim(),
     }));
     const pairs = [];
     for (let i = 0; i < sections.length; i++) {
-      if (sections[i].type === "EN" && i + 1 < sections.length && sections[i + 1].type === "ZH") {
-        pairs.push({ en: sections[i].content, zh: sections[i + 1].content });
-        i++;
+      if (sections[i].type === "EN") {
+        const next = sections[i + 1];
+        if (next && next.type === "ZH") {
+          pairs.push({ en: sections[i].content, zh: next.content });
+          i++;
+        } else {
+          // Orphan EN with no following ZH — emit pair with empty zh so the
+          // completeness guard can detect the LITE model's silent skips.
+          pairs.push({ en: sections[i].content, zh: "" });
+        }
       }
     }
     return pairs.filter(p => (p.en || p.zh) && !isHiddenPair(p.en, p.zh));
@@ -265,36 +288,59 @@ function groupPairsBySource(pairs, sources) {
     { regex: /^FROM\s+THE\s+TEXT\b/i, bucket: "example" },
     { regex: /^(BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT)\b/i, bucket: "breakdown" },
     { regex: /^WHY\s+IT\s+WORKS\b/i, bucket: "whyItWorks" },
-    // STRUCTURE is the source label; "TRY THIS PATTERN" is only the UI label
-    { regex: /^(STRUCTURE|TRY\s+THIS\s+PATTERN)\b/i, bucket: "structure" },
+    // STRUCTURE is the source label; "TRY THIS PATTERN" is only the UI label.
+    // Flat / Task / Example are TYPE 2/3 sub-pieces that the AI sometimes emits
+    // as their own EN/ZH pair without the STRUCTURE parent — route to structure.
+    { regex: /^(STRUCTURE|TRY\s+THIS\s+PATTERN|Flat|Task|Example|Pattern)\s*[:：]/i, bucket: "structure" },
     { regex: /^(WRITER['’]?S\s+WORDS|VOCAB\s+UPGRADE)\b/i, bucket: "vocabUpgrade" },
     { regex: /^KEY\s+IDEA\b/i, bucket: "keyIdea" },
     { regex: /^DIFFICULTY\b/i, bucket: "body" },
     { regex: /^WATCH\s+OUT\b/i, bucket: "watchOut" },
+    // Structure orphans: TYPE 1 fill-in-the-blank template has multiple `____` runs
+    // — the AI often emits this template as its own pair WITHOUT the STRUCTURE parent.
+    { regex: /_{3,}[\s\S]*?_{3,}/, bucket: "structure" },
+    // Structure orphans: TYPE 1 example pair begins with arrow (the example
+    // that follows the template, e.g. `→ "Example sentence here."`).
+    { regex: /^["「『]?\s*(?:→|→|->)\s/, bucket: "structure" },
+    // WRITER'S WORDS vocab pairs: `plain phrase → "fancy word"`. Require content
+    // BEFORE the arrow so structure arrow-examples (which START with `→`) aren't
+    // mis-routed here.
+    { regex: /^[^→\n_"「『]{2,}\s(?:→|→|->)\s.*["""''「『]/i, bucket: "vocabUpgrade" },
   ];
 
   // Chinese-side labels — many synonyms because the AI translates the labels
   // differently across runs (文中引述 / 文中節錄 / 文中摘錄 all = "FROM THE TEXT").
   const zhLabelMap = [
-    { regex: /^(文中引述|文中例子|文中範例|文中節錄|文中摘錄|原文引述|原文摘錄|原文範例|節錄|摘錄|引文|引述|範例|原文)/, bucket: "example" },
-    { regex: /^(解析|解構|句子解構|句子解析|句子分析|分析|分解|拆解|細部分析|淺白解釋|淺白意義|簡單來說|簡單意思|文法|文法模式|文法結構|語法|語法模式|句法|功能|作用|試著使用|試試看|嘗試一下|請試試|練習)/, bucket: "breakdown" },
-    { regex: /^(為什麼有效|為何有效|為何重要|此寫法的效果|為什麼這樣寫|效用)/, bucket: "whyItWorks" },
-    { regex: /^(結構|句型結構|寫作結構|句型範本|範本|句式|句型|嘗試這個模式|試試這個模式|試試此模式|套用範本|套用模板|模式)/, bucket: "structure" },
+    { regex: /^(文中引述|文中例子|文中範例|文中節錄|文中摘錄|原文引述|原文摘錄|原文範例|節錄|摘錄|引文|引述|範例|原文|文中內容|來自文本|摘自內文)/, bucket: "example" },
+    { regex: /^(解析|解構|句子解構|句子解析|句子分析|分析|分解|拆解|細部分析|淺白解釋|淺白意義|淺白意涵|簡單來說|簡單意思|簡單解釋|淺顯易懂的解釋|文法|文法模式|文法結構|語法|語法模式|句法|功能|作用|試著使用|試試看|嘗試一下|請試試|練習|活用|運用它|用法|試著運用)/, bucket: "breakdown" },
+    { regex: /^(為什麼有效|為何有效|為何重要|此寫法的效果|為什麼這樣寫|效用|寫法的好處)/, bucket: "whyItWorks" },
+    { regex: /^(結構|句型結構|寫作結構|句型範本|範本|句式|句型|嘗試這個模式|試試這個模式|試試此模式|套用範本|套用模板|模式|結構拆解|平鋪直敘|平淡說法|任務|範例|例子|模式)/, bucket: "structure" },
     { regex: /^(作者用詞|作者的用語|作者選詞|作家用詞|寫作用詞|寫作詞彙|詞彙升級|用詞升級)/, bucket: "vocabUpgrade" },
     { regex: /^(主要想法|關鍵想法|重點想法|核心概念|核心想法|關鍵概念|主要概念|主旨)/, bucket: "keyIdea" },
     { regex: /^(難度)/, bucket: "body" },
-    { regex: /^(注意|小心|警告|常見錯誤|要注意)/, bucket: "watchOut" },
+    { regex: /^(注意|小心|警告|常見錯誤|要注意|注意事項)/, bucket: "watchOut" },
+    // Structure orphans (Chinese-side mirror of the enLabelMap pattern rules)
+    { regex: /_{3,}[\s\S]*?_{3,}/, bucket: "structure" },
+    { regex: /^["「『]?\s*(?:→|→|->)\s/, bucket: "structure" },
+    // WRITER'S WORDS vocab pairs (Chinese-side mirror)
+    { regex: /^[^→\n_"「『]{2,}\s(?:→|→|->)\s.*["」『「''""]/i, bucket: "vocabUpgrade" },
   ];
 
   const groups = {};
   const fallback = "body";
+  // Normalize a pair side for label-routing — strip leading pipe separators
+  // (the AI's `| GRAMMAR:` / `| 文法：` row format would otherwise defeat the
+  // `^` anchor on every label regex).
+  const labelProbe = (s) => (s || "").trim().replace(/^[|｜]\s*/, "");
+
   for (const pair of pairs) {
     let bucket = null;
 
     // 1. Check English-side label
-    if (pair.en) {
+    const enProbe = labelProbe(pair.en);
+    if (enProbe) {
       for (const { regex, bucket: b } of enLabelMap) {
-        if (regex.test(pair.en.trim())) {
+        if (regex.test(enProbe)) {
           bucket = b;
           break;
         }
@@ -302,9 +348,10 @@ function groupPairsBySource(pairs, sources) {
     }
 
     // 2. Check Chinese-side label (when AI translated the label into Chinese)
-    if (!bucket && pair.zh) {
+    const zhProbe = labelProbe(pair.zh);
+    if (!bucket && zhProbe) {
       for (const { regex, bucket: b } of zhLabelMap) {
-        if (regex.test(pair.zh.trim())) {
+        if (regex.test(zhProbe)) {
           bucket = b;
           break;
         }
@@ -368,6 +415,119 @@ function groupPairsBySource(pairs, sources) {
   return groups;
 }
 
+// ============================================================================
+// parseStructureContent — universal parser for the "GIVE IT A GO" / STRUCTURE
+// content. Handles all three prompt-defined formats (FILL-IN-THE-BLANK,
+// REWRITE PROMPT, HYBRID) in both English and Chinese-translated forms.
+//
+// Returns one of:
+//   { kind: "task-example", intro, task, example }   — TYPE 2/3 (Task/Example)
+//   { kind: "template-arrow", template, example }    — TYPE 1 (fill-in + arrow)
+//   { kind: "plain", template }                      — neither pattern matched
+//   null                                             — no content
+// ============================================================================
+export function parseStructureContent(text) {
+  if (!text || typeof text !== "string") return null;
+  // Strip inline labels that don't belong on the student-facing surface.
+  const cleaned = text
+    .replace(/^TYPE\s+\d+\s*[—\-–]\s*[A-Z][A-Z0-9\s\-/()]+\s*[:：.。]\s*/i, "")
+    .replace(/^(?:第\s*[一二三四五六七八九十\d]+\s*類型?|類型?\s*[一二三四五六七八九十\d]+|型\s*[一二三四五六七八九十\d]+)\s*[—\-–]\s*[一-龥A-Za-z0-9\s\-/()「」『』""]+\s*[:：.。]\s*/, "")
+    .replace(/\bFlat\s*[:：]\s*/gi, "")
+    .replace(/(中性句|平實句|平直句|平淡句|平鋪直敘|普通句|直白句|平句|中立句|平凡句|樸素句)\s*[:：]\s*/g, "")
+    .trim();
+  if (!cleaned) return null;
+
+  // TYPE 2/3 — Task/Example labels (English or Chinese-translated)
+  const taskMatch = cleaned.match(/^([\s\S]+?)\s*(?:Task|任務|任务|作業)\s*[:：]\s*([\s\S]+?)(?:\s*(?:Example|範例|例子|例如)\s*[:：]\s*([\s\S]+))?$/i);
+  if (taskMatch) {
+    return {
+      kind: "task-example",
+      intro: taskMatch[1].trim(),
+      task: taskMatch[2].trim(),
+      example: taskMatch[3] ? taskMatch[3].trim() : "",
+    };
+  }
+
+  // TYPE 1 — fill-in-the-blank with arrow split
+  const arrowMatch = cleaned.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
+  if (arrowMatch) {
+    return {
+      kind: "template-arrow",
+      template: arrowMatch[1].trim(),
+      example: arrowMatch[2].trim(),
+    };
+  }
+
+  return { kind: "plain", template: cleaned };
+}
+
+// ============================================================================
+// translateWithGuard — universal completeness-guarded translation helper.
+// Used by every translate path so the LITE-tier silent-skip behaviour is
+// caught regardless of caller (X-Ray sections, raw reference passages, etc.).
+//
+// How it works:
+//   1. Fires the main translate call.
+//   2. Parses the response via parseTranslationPairs.
+//   3. Detects two classes of "missing" translations:
+//        a) Orphan EN pairs (EN line with no following ZH) — universal,
+//           catches sentence-level skips in any unstructured passage.
+//        b) Caller-supplied expectedUnits — labelled sub-sections the caller
+//           knows should be present (e.g. PLAIN MEANING / GRAMMAR / FUNCTION /
+//           USE IT in X-Ray BREAKDOWN content).
+//   4. Fires focused parallel re-translate calls for each missing item.
+//   5. Validates each focused response (must parse to at least one valid pair)
+//      before appending — bare echoed source lines are dropped so they can't
+//      corrupt the last legitimate pair's zh content.
+// ============================================================================
+export async function translateWithGuard(sourceText, route, trackCall, expectedUnits = []) {
+  if (trackCall) trackCall();
+  let result = await callAI(translatePrompt, sourceText, false, 4000, route.thinkingBudget, undefined, undefined, route.model);
+  result = result || "";
+
+  const parsedPairs = parseTranslationPairs(result);
+
+  // (a) Orphan EN pairs — universal sentence-level skip detection.
+  const missingLines = [];
+  for (const p of parsedPairs) {
+    const en = (p.en || "").trim();
+    const zh = (p.zh || "").trim();
+    if (en && (!zh || zh.length < 2)) missingLines.push(en);
+  }
+
+  // (b) Caller-supplied labelled expected units. Strip leading pipe from
+  // pair.en before matching so the AI's `| GRAMMAR:` row format doesn't
+  // trip a false "missing" alarm.
+  for (const unit of expectedUnits) {
+    if (!unit || !unit.label || !unit.content || unit.content.length < 3) continue;
+    const labelRegex = new RegExp(`^(?:${unit.label.replace(/\s+/g, "\\s+")})\\b`, "i");
+    const covered = parsedPairs.some(p =>
+      p.zh && p.zh.trim().length > 1 && labelRegex.test((p.en || "").trim().replace(/^[|｜]\s*/, ""))
+    );
+    if (!covered) missingLines.push(`${unit.label}: ${unit.content}`);
+  }
+
+  if (missingLines.length === 0) return result;
+
+  // Fire all missing-line re-calls in parallel — small inputs, LITE handles each cleanly.
+  const focused = await Promise.all(missingLines.map(line =>
+    callAI(translatePrompt, line, false, 600, route.thinkingBudget, undefined, undefined, route.model)
+      .catch(() => "")
+  ));
+  // SAFE APPEND: only accept a focused-call response if it parses to at
+  // least one VALID EN/ZH pair (with non-empty zh). Bare echoed lines would
+  // otherwise leak through and corrupt the LAST legitimate pair's zh via
+  // parseTranslationPairs' end-of-text capture.
+  const validExtras = [];
+  for (const f of focused) {
+    if (!f || !f.trim()) continue;
+    const parsed = parseTranslationPairs(f);
+    if (parsed.some(p => p.zh && p.zh.trim().length > 1)) validExtras.push(f.trim());
+  }
+  if (validExtras.length > 0) result = result.trim() + "\n\n" + validExtras.join("\n\n");
+  return result;
+}
+
 export function SectionCard({ section, onSave, trackCall, index }) {
   const parts = parseSectionContent(section.content);
   const hasStructure = parts.keyIdea || parts.example;
@@ -390,9 +550,31 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     setTranslating(true);
     try {
       const route = getRouteConfig("translate");
-      if (trackCall) trackCall();
-      const result = await callAI(translatePrompt, section.content, false, 4000, route.thinkingBudget, undefined, undefined, route.model);
-      setTranslation(result || "");
+      // Caller-supplied labelled expected units — derived from `parts` so the
+      // helper's missing-section detection knows what to look for. Body
+      // paragraphs (parts.body) are intentionally NOT listed because they're
+      // unlabelled — orphan-EN detection inside the helper covers any sentence
+      // skip in the body content automatically.
+      const expectedUnits = [];
+      if (parts.keyIdea)      expectedUnits.push({ label: "KEY IDEA",       content: parts.keyIdea });
+      if (parts.example)      expectedUnits.push({ label: "FROM THE TEXT",  content: parts.example });
+      if (parts.whyItWorks)   expectedUnits.push({ label: "WHY IT WORKS",   content: parts.whyItWorks });
+      if (parts.structure)    expectedUnits.push({ label: "STRUCTURE",      content: parts.structure });
+      if (parts.vocabUpgrade) expectedUnits.push({ label: "WRITER'S WORDS", content: parts.vocabUpgrade });
+      if (parts.watchOut)     expectedUnits.push({ label: "WATCH OUT",      content: parts.watchOut });
+      if (parts.breakdown) {
+        // Sub-section split — parts.breakdown is `PLAIN MEANING: ... | GRAMMAR: ... | ...`
+        const subRe = /(PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT)\s*[:：]\s*([\s\S]+?)(?=\s*[|｜]\s*(?:PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT)\s*[:：]|$)/gi;
+        let sm;
+        while ((sm = subRe.exec(parts.breakdown)) !== null) {
+          const subContent = sm[2].trim().replace(/[\s|｜]+$/, "");
+          if (subContent && subContent.length >= 3) {
+            expectedUnits.push({ label: sm[1].trim().replace(/\s+/g, " "), content: subContent });
+          }
+        }
+      }
+      const result = await translateWithGuard(section.content, route, trackCall, expectedUnits);
+      setTranslation(result);
       setShowTranslation(true);
     } catch (e) {
       setTranslation("翻譯失敗，請再試一次。");
@@ -437,6 +619,11 @@ export function SectionCard({ section, onSave, trackCall, index }) {
       next = next.replace(/^(KEY\s+IDEA|FROM\s+THE\s+TEXT|EXAMPLE|BREAKDOWN|PLAIN\s+MEANING|GRAMMAR|FUNCTION|USE\s+IT|WHY\s+IT\s+WORKS|STRUCTURE|TRY\s+THIS\s+PATTERN|WRITER['’]?S\s+WORDS|VOCAB\s+UPGRADE|WATCH\s+OUT|DIFFICULTY)\s*[:：]\s*/i, "");
       // 3. Stray EN:/ZH: markers leaked from the AI's pair format (§12.9 known bug)
       next = next.replace(/^(EN|ZH)\s*[:：]\s*/i, "");
+      // 4. TYPE markers — English (e.g. "TYPE 1 — FILL-IN-THE-BLANK:" or "TYPE 1 — FILL-IN-THE-BLANK.")
+      next = next.replace(/^TYPE\s+\d+\s*[—\-–]\s*[A-Z][A-Z0-9\s\-/()]+\s*[:：.。]\s*/i, "");
+      // 5. TYPE markers — Chinese translation. Covers all common forms:
+      //    "類型 1 — 填空題：" / "類型一 — 填空題：" / "型 1 — 填空題：" / "第一類型 — 填空題：" / "第1類型 — 填空題："
+      next = next.replace(/^(?:第\s*[一二三四五六七八九十\d]+\s*類型?|類型?\s*[一二三四五六七八九十\d]+|型\s*[一二三四五六七八九十\d]+)\s*[—\-–]\s*[一-龥A-Za-z0-9\s\-/()「」『』""]+\s*[:：.。]\s*/, "");
       if (next === out) break;
       out = next;
     }
@@ -448,7 +635,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     keyIdea: "KEY IDEA",
     whyItWorks: "寫法的好處",
     vocabUpgrade: "WRITER'S WORDS",
-    watchOut: "WATCH OUT",
+    watchOut: "注意事項",
   };
 
   const renderPairs = (key) => {
@@ -490,29 +677,26 @@ export function SectionCard({ section, onSave, trackCall, index }) {
       .map(p => stripRedundantPrefix(p.zh || ""))
       .filter(Boolean);
     if (keyIdeaLines.length === 0 && bodyLines.length === 0) return null;
+    // Unified style — matches the English body paragraph styling (size 12,
+    // regular weight, COLORS.text). KEY IDEA translation reads as part of the
+    // same Chinese paragraph rather than its own bold heading.
+    const lineStyle = {
+      fontSize: 12,
+      fontWeight: 400,
+      color: COLORS.text,
+      lineHeight: 1.8,
+      marginBottom: 4,
+      fontFamily: mono,
+    };
     return (
       <div style={{ marginTop: 8, marginBottom: 12, paddingTop: 6 }}>
         {keyIdeaLines.map((zh, i) => (
-          <div key={`k${i}`} style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: COLORS.heading,
-            lineHeight: 1.6,
-            marginBottom: 8,
-            fontFamily: mono,
-          }}>
+          <div key={`k${i}`} style={lineStyle}>
             {index ? `${index}. ` : ""}{zh}
           </div>
         ))}
         {bodyLines.map((zh, i) => (
-          <div key={`b${i}`} style={{
-            fontSize: 12,
-            fontWeight: 400,
-            color: COLORS.heading,
-            lineHeight: 1.8,
-            marginBottom: 4,
-            fontFamily: mono,
-          }}>
+          <div key={`b${i}`} style={lineStyle}>
             {zh}
           </div>
         ))}
@@ -550,19 +734,36 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     const pairs = grouped.structure || [];
     if (pairs.length === 0) return null;
     const joined = pairs.map(p => stripRedundantPrefix(p.zh || "")).filter(Boolean).join(" ");
-    if (!joined) return null;
-    const m = joined.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
-    const template = m ? m[1].trim() : joined;
-    const example = m ? m[2].trim() : "";
+    const parsed = parseStructureContent(joined);
+    if (!parsed) return null;
     return (
-      <div style={{ marginTop: 8, marginBottom: 12, paddingTop: 8, borderTop: `1px dashed ${COLORS.border}`, fontFamily: mono }}>
-        <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.8 }}>
-          <span style={{ fontWeight: 700 }}>STRUCTURE: </span>{template}
-        </div>
-        {example && (
-          <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
-            <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
-          </div>
+      <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 10, padding: "10px 14px", marginTop: 8, marginBottom: 12, fontFamily: mono }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 6, letterSpacing: 1 }}>試試看</div>
+        {parsed.kind === "task-example" ? (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading, lineHeight: 1.7, marginBottom: 8 }}>
+              {parsed.intro}
+            </div>
+            <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, marginBottom: parsed.example ? 8 : 0 }}>
+              <span style={{ fontWeight: 700 }}>任務：</span>{parsed.task}
+            </div>
+            {parsed.example && (
+              <div style={{ background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
+                <span style={{ fontWeight: 700, color: "#A6701F" }}>範例：</span>{parsed.example}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7 }}>
+              {parsed.template}
+            </div>
+            {parsed.kind === "template-arrow" && parsed.example && (
+              <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontSize: 12, lineHeight: 1.7 }}>
+                <span style={{ fontWeight: 700, color: "#A6701F" }}>範例：</span>{parsed.example}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -577,10 +778,14 @@ export function SectionCard({ section, onSave, trackCall, index }) {
 
     // FAST PATH: route by pair.en label (works when Format B parser
     // produced synthetic pairs like { en: "PLAIN MEANING: ...", zh: "..." }).
+    // Pass each zh through stripRedundantPrefix so the AI-emitted "文法：" / "GRAMMAR:"
+    // prefix doesn't end up doubled with the renderer's own "文法：" prefix.
+    // Strip leading `|` from pair.en before label-matching — the AI's
+    // `| GRAMMAR:` row format would otherwise defeat the `^` anchor.
     let plainFromPair = "", gramFromPair = "", funcFromPair = "", useItFromPair = "";
     for (const p of pairs) {
-      const en = (p.en || "").trim();
-      const zh = (p.zh || "").trim();
+      const en = (p.en || "").trim().replace(/^[|｜]\s*/, "");
+      const zh = stripRedundantPrefix((p.zh || "").trim());
       if (/^PLAIN\s+MEANING\b/i.test(en)) plainFromPair = zh;
       else if (/^GRAMMAR\b/i.test(en)) gramFromPair = zh;
       else if (/^FUNCTION\b/i.test(en)) funcFromPair = zh;
@@ -613,8 +818,8 @@ export function SectionCard({ section, onSave, trackCall, index }) {
           )}
           {useIt && (() => {
             const m = useIt.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
-            const template = m ? m[1].trim() : useIt;
-            const example = m ? m[2].trim() : "";
+            const template = stripRedundantPrefix(m ? m[1].trim() : useIt);
+            const example = stripRedundantPrefix(m ? m[2].trim() : "");
             return (
               <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
                 <span style={{ fontWeight: 700, color: COLORS.accent1 }}>試著使用：</span>{template}
@@ -714,6 +919,13 @@ export function SectionCard({ section, onSave, trackCall, index }) {
       );
     }
 
+    // Strip any nested label prefix (e.g. "文法：文法：xxx" / "GRAMMAR: 文法：xxx")
+    // so the renderer's own prefix doesn't end up doubled.
+    plain = stripRedundantPrefix(plain || "");
+    gram  = stripRedundantPrefix(gram || "");
+    func  = stripRedundantPrefix(func || "");
+    useIt = stripRedundantPrefix(useIt || "");
+
     return (
       <div style={{ background: "#EDE8E0", borderRadius: 10, padding: "10px 14px", marginTop: 8, marginBottom: 12, fontFamily: mono }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 8, letterSpacing: 1 }}>句子解析</div>
@@ -734,8 +946,8 @@ export function SectionCard({ section, onSave, trackCall, index }) {
         )}
         {useIt && (() => {
           const m = useIt.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
-          const template = m ? m[1].trim() : useIt;
-          const example = m ? m[2].trim() : "";
+          const template = stripRedundantPrefix(m ? m[1].trim() : useIt);
+          const example = stripRedundantPrefix(m ? m[2].trim() : "");
           return (
             <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
               <span style={{ fontWeight: 700, color: COLORS.accent1 }}>試著使用：</span>{template}
@@ -857,19 +1069,36 @@ export function SectionCard({ section, onSave, trackCall, index }) {
           )}
           {renderPairs("whyItWorks")}
           {parts.structure && (() => {
-            const m = parts.structure.match(/^([\s\S]+?)\s*(?:→|→|->)\s*([\s\S]+)$/);
-            const template = m ? m[1].trim() : parts.structure;
-            const example = m ? m[2].trim() : "";
+            const parsed = parseStructureContent(parts.structure);
+            if (!parsed) return null;
             return (
               <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 10, padding: "10px 14px", marginTop: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Try this pattern</div>
-                <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, fontFamily: mono }}>
-                  {template}
-                </div>
-                {example && (
-                  <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontFamily: mono, fontSize: 12, lineHeight: 1.7 }}>
-                    <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{example}
-                  </div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Give it a go</div>
+                {parsed.kind === "task-example" ? (
+                  <>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading, lineHeight: 1.7, fontFamily: mono, marginBottom: 8 }}>
+                      {parsed.intro}
+                    </div>
+                    <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, fontFamily: mono, marginBottom: parsed.example ? 8 : 0 }}>
+                      <span style={{ fontWeight: 700 }}>Task: </span>{parsed.task}
+                    </div>
+                    {parsed.example && (
+                      <div style={{ background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontFamily: mono, fontSize: 12, lineHeight: 1.7 }}>
+                        <span style={{ fontWeight: 700, color: "#A6701F" }}>Example: </span>{parsed.example}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7, fontFamily: mono }}>
+                      {parsed.template}
+                    </div>
+                    {parsed.kind === "template-arrow" && parsed.example && (
+                      <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20", fontFamily: mono, fontSize: 12, lineHeight: 1.7 }}>
+                        <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{parsed.example}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );
@@ -1021,9 +1250,10 @@ export default function XRayView({ profileSections, authorName, referenceText, s
     setTranslating(true);
     try {
       const route = getRouteConfig("translate");
-      if (trackCall) trackCall();
-      const result = await callAI(translatePrompt, referenceText, false, 4000, route.thinkingBudget, undefined, undefined, route.model);
-      setTranslation(result || "");
+      // Raw passage — no labelled units to enumerate; the helper's orphan-EN
+      // detection alone catches LITE's sentence-level skips.
+      const result = await translateWithGuard(referenceText, route, trackCall);
+      setTranslation(result);
       setShowTranslation(true);
     } catch (e) {
       setTranslation("翻譯失敗，請再試一次。");

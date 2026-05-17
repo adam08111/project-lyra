@@ -681,3 +681,153 @@ The §12.9 "inline `ZH:` markers leaking through" known issue is now addressed b
 | `.claude/launch.json` | NEW (worktree-local) | Worktree dev server config |
 | `.claude/start-vite.mjs` | NEW (worktree-local) | Worktree-local Vite launcher (single `..` for worktree root) |
 | `.env` | NEW (worktree-local, copied from main repo, gitignored) | Proxy API key lookup |
+
+---
+
+## 14. UPDATE — 17 May 2026
+
+A long debugging session focused on hardening the LITE-tier translation pipeline. The LITE model (`gemini-3.1-flash-lite-preview`) is reliable on simple inputs but exhibits several quirky failure modes on complex labelled content: silent sub-section skips, mid-line `EN:` / `ZH:` markers without newlines, dropped EN prefixes, and `| LABEL:` row-prefix corruption. Multiple universal fixes landed to make the rendered translation card resilient regardless of how the AI formats its output.
+
+### 14.1 `translateWithGuard` — Universal Completeness Guard
+
+Extracted a module-level helper in `src/components/XRayView.jsx` that every translation path now routes through:
+
+```js
+translateWithGuard(sourceText, route, trackCall, expectedUnits?)
+```
+
+How it works:
+1. Fires the main translate call.
+2. Parses the response via `parseTranslationPairs`.
+3. Detects two classes of missing translations:
+   - **Universal**: orphan EN pairs (any EN with empty or missing ZH) — catches sentence-level skips in raw passages
+   - **Caller-supplied**: labelled expected units (KEY IDEA / FROM THE TEXT / BREAKDOWN sub-labels / etc.) — caller passes them as an array
+4. Fires focused parallel re-translate calls for each missing item.
+5. Validates each focused response (must parse to ≥1 valid pair with non-empty zh) before appending — bare echoed source lines are dropped so they can't corrupt the trailing pair's content.
+
+Used by:
+
+| Caller | expectedUnits passed |
+|---|---|
+| `SectionCard.handleTranslate` (X-Ray section translation) | All labelled units from `parts` + breakdown sub-labels (PLAIN MEANING / GRAMMAR / FUNCTION / USE IT) |
+| `XRayView.handleTranslate` (raw reference passage translation in Style Lab) | None — orphan-EN detection alone handles sentence skips |
+
+### 14.2 `parseTranslationPairs` Hardening
+
+Two structural fixes in `parseTranslationPairs`:
+
+1. **Mid-line EN/ZH marker normalization** — LITE often emits subsequent `EN:` / `ZH:` markers mid-line (after a period or whitespace) without a newline. Added a pre-normalize pass that inserts `\n` before any mid-line marker so the strict `(^|\n)` boundary regex catches them all instead of only catching the first.
+
+2. **Orphan EN handling** — when an `EN:` is followed by another `EN:` (no `ZH:` between), the pair was previously discarded silently. Now emits a pair with `zh: ""` so `translateWithGuard` can detect the silent skip.
+
+### 14.3 `parseStructureContent` — Universal STRUCTURE Parser
+
+New exported helper that parses the AI's STRUCTURE content into one of three shapes:
+
+```
+{ kind: "task-example", intro, task, example }   // TYPE 2/3 — REWRITE PROMPT / HYBRID
+{ kind: "template-arrow", template, example }    // TYPE 1 — FILL-IN-THE-BLANK
+{ kind: "plain", template }                      // unmatched
+```
+
+Strips inline labels (`TYPE N — XXX:`, Chinese `第一類型 — XXX：`, `Flat:`, `中性句：` / `平實句：` and 9 other Chinese synonyms) before parsing. Auto-detects English (`Task:` / `Example:`) AND translated Chinese (`任務：` / `範例：` / `例子：` / `例如：`) labels in the same regex.
+
+Used universally by FOUR render sites — XRayView SectionCard (English source), XRayView `renderStructureTranslation` (Chinese translation), StyleLab SavedSkills, EditorTab technique strip.
+
+### 14.4 Universal `stripRedundantPrefix` Extension
+
+Extended to handle five prefix classes in one loop:
+
+1. Chinese label prefix (`^[一-龥]{1,10}[:：]`) — existing
+2. English source label prefix (`KEY IDEA` / `FROM THE TEXT` / `GRAMMAR` / etc.) — added §13
+3. Stray `EN:` / `ZH:` markers (resolves §12.9) — added §13
+4. Leading pipe separator (`| GRAMMAR:` row format) — NEW
+5. TYPE markers — English (`TYPE 1 — FILL-IN-THE-BLANK:` / `TYPE 1 — FILL-IN-THE-BLANK.`) AND Chinese (`第一類型 — 填空題：` / `類型 1 — XXX：` / `型 1 — XXX：` variants) — NEW
+
+### 14.5 Universal Pipe-Strip in Routing
+
+The AI sometimes prefixes breakdown rows with `| ` separators (`EN: | GRAMMAR: ...` / `ZH: | 文法：...`). The leading `|` defeated the `^GRAMMAR` anchor in routing regexes, causing GRAMMAR / FUNCTION pairs to fall to the body bucket and disappear from the breakdown card.
+
+Universal fix — applied at all three routing decision points:
+- `groupPairsBySource` — added `labelProbe()` that strips `^[|｜]\s*` from both `en` and `zh` before regex testing
+- `renderBreakdownTranslation` Fast Path — same strip on `en` before label tests
+- `translateWithGuard` completeness covered-check — same strip when verifying coverage
+
+### 14.6 Pattern-Based STRUCTURE / VOCAB Routing
+
+The AI sometimes orphans STRUCTURE template/example pairs (the template line after `STRUCTURE: TYPE 1 — FILL-IN-THE-BLANK.` lacks any label) and WRITER'S WORDS vocab pairs (each `plain → "fancy"` pair emitted without the `WRITER'S WORDS:` parent). These orphans were falling to body / wrong buckets via the substring fallback.
+
+Added pattern-based rules to `enLabelMap` AND mirrored in `zhLabelMap`:
+
+| Pattern | Bucket | Catches |
+|---|---|---|
+| `_{3,}[\s\S]*?_{3,}` | structure | TYPE 1 fill-in-the-blank templates (multiple `____` runs) |
+| `^["「『]?\s*(?:→\|→\|->)\s` | structure | TYPE 1 arrow examples (`→ "Example sentence"`) |
+| `^[^→\n_"「『]{2,}\s(?:→\|→\|->)\s.*["」『]` | vocabUpgrade | True vocab pairs (content + arrow + quoted, NOT starting with arrow/blank/quote) |
+
+Also added Flat/Task/Example/Pattern keyword routing — TYPE 2/3 STRUCTURE sub-pieces emitted as their own pairs without the STRUCTURE parent now route to structure correctly.
+
+### 14.7 Translation Card UI Rebuild
+
+Multiple iterations on the Chinese translation card visual design driven by user feedback:
+
+- **譯文 header** (was `翻譯 · TRANSLATION`) at fontSize 13
+- **No `FROM THE TEXT:` prefix** in translation card (cleaner — the 譯文 header is enough context)
+- **句子解析 BREAKDOWN card** with Chinese sub-labels: `淺白解釋：` / `文法：` / `功能：` / `試著使用：` / `例如：`
+- **試試看 GIVE IT A GO card** with same dashed-border + beige bg as English version, with `任務：` and `範例：` sub-labels in the same cream-amber sub-card styling
+- **寫法的好處** (was `WHY IT WORKS:`) auto-routed via `bucketLabels` + CJK-aware colon detection
+- **注意事項** (was `WATCH OUT:`) — same auto-routing
+- **No `KEY IDEA:` prefix** on translated key idea (kept the `1.` / `2.` numbering only)
+- **Annotation label upgrade** — CJK labels (隱喻, 方式狀語從句) get fontSize 13 / no letter-spacing / no lowercase / lineHeight 1.3 + `wordBreak: keep-all` so 隱喻 stays atomic instead of splitting to 隱 / 喻
+- **Generous line-height (4.5)** on both English FROM THE TEXT card AND Chinese 譯文 card — ruby annotation labels lifted 3px with marginBottom 6 for breathing room
+
+### 14.8 GIVE IT A GO Card Rebuild
+
+Renamed `TRY THIS PATTERN` → `GIVE IT A GO` (chosen by user from alternatives: PRACTICE IT / YOUR TURN / NOW YOU TRY / etc.). Applied across all four render sites (XRayView, StyleLab, EditorTab × 2 cards).
+
+The card now detects TYPE 1/2/3 format via the shared `parseStructureContent` and renders three styled blocks for TYPE 2/3:
+- **Bold intro** (the Flat sentence — `Flat:` label stripped)
+- **Task: ...** on a new line with bold label
+- **Example: ...** in a cream-amber sub-card
+
+TYPE 1 fill-in-the-blank format renders the template + arrow example in the same sub-card.
+
+`TYPE N — XXX.` prefix (and the Chinese equivalent `第一類型 — XXX。` / `類型 N — XXX：` / `型 N — XXX：`) stripped universally in both `parseSectionContent` and `stripRedundantPrefix`.
+
+`Flat:` inline label + 11 Chinese variants (`中性句` / `平實句` / `平直句` / `平淡句` / `平鋪直敘` / `普通句` / `直白句` / `平句` / `中立句` / `平凡句` / `樸素句`) stripped — keeps the bare neutral sentence, drops the label.
+
+### 14.9 Debug Logging on Non-Streaming Proxy Path
+
+The streaming branch in `server/proxy.js` had a `[DEBUG translate response]` log added in an earlier agent session, but `callAI(..., false, ...)` (non-streaming) hits a different branch with no debug log. Added the same log line to the non-streaming `proxyRes.on("end")` handler so future translation debugging can inspect the raw LITE response with:
+
+```
+preview_logs({ search: "[DEBUG translate" })
+```
+
+### 14.10 Bug-Hunting Agents
+
+Two investigation agents deployed during this session to trace root causes:
+
+1. **First agent** — confirmed the completeness-guard `presenceRe` was too permissive (matched label-substring anywhere, including orphaned EN lines with no ZH), causing focused re-calls to skip when they shouldn't. Result: rewrote the guard to use `parseTranslationPairs`-validated coverage.
+
+2. **Second agent** — diagnosed the duplication + raw English leak from the focused re-call. Found two root causes: (a) `labelRe` greedy-captured body paragraphs as part of KEY IDEA's content, then focused re-call retranslated everything → duplicates; (b) bare echoed lines from focused calls got appended verbatim and corrupted the trailing pair's `zh` via `parseTranslationPairs`' end-of-text capture. Result: switched to `parts`-based label sourcing (no greedy regex) + safe-append (validate each focused response parses to ≥1 valid pair before appending).
+
+### 14.11 Files Changed (since 14 May 2026)
+
+| File | Status | Purpose |
+|---|---|---|
+| `src/components/XRayView.jsx` | UPDATED | `translateWithGuard` extracted, `parseStructureContent` added, `parseTranslationPairs` orphan-EN + mid-line marker normalization, `stripRedundantPrefix` extended with pipe + TYPE markers, `groupPairsBySource` pipe-strip + pattern-based STRUCTURE/VOCAB routing, breakdown Fast Path pipe-strip, translation card UI rebuild, GIVE IT A GO card rebuild |
+| `src/components/StyleLab.jsx` | UPDATED | `parseStructureContent` import + use for SavedSkills card rendering, GIVE IT A GO rename |
+| `src/components/EditorTab.jsx` | UPDATED | `parseStructureContent` import + use for technique strip rendering, GIVE IT A GO rename |
+| `src/prompts.js` | UPDATED | `translatePrompt` strengthened with "translate EVERY labelled section" CRITICAL rule + count-and-verify instruction |
+| `server/proxy.js` | UPDATED | `[DEBUG translate response]` log added to non-streaming branch |
+
+### 14.12 Status of Known Issues
+
+- §12.9 inline `ZH:` markers leak — **resolved** via `stripRedundantPrefix` rule #3 (§13.4) and parser orphan-EN handling (§14.2)
+- LITE silent sub-section skip — **resolved** via `translateWithGuard` orphan-EN + labelled-unit detection (§14.1)
+- Body paragraph duplication from focused re-call — **resolved** via `parts`-based label sourcing (§14.10)
+- Raw English source leaking into trailing ZH — **resolved** via safe-append validation (§14.10)
+- LITE `| GRAMMAR:` row format defeating `^GRAMMAR` routing — **resolved** via universal pipe-strip in routing (§14.5)
+- STRUCTURE orphan pairs (template / arrow-example) leaking to wrong buckets — **resolved** via pattern-based routing rules (§14.6)
+

@@ -181,6 +181,10 @@ const server = http.createServer((req, res) => {
 
             let buffer = "";
             const utf8Decoder = new StringDecoder("utf8");
+            // DEBUG: accumulate raw model text for translate-tier responses so we can
+            // inspect what the LITE model actually returned (pair structure, missing labels).
+            const isLiteTranslate = MODEL === "gemini-3.1-flash-lite-preview";
+            let debugAccum = "";
             proxyRes.on("data", (chunk) => {
               // Use StringDecoder so multi-byte UTF-8 chars (Chinese, em-dashes, emoji)
               // aren't corrupted when split across chunk boundaries
@@ -197,6 +201,7 @@ const server = http.createServer((req, res) => {
                     const parts = data.candidates?.[0]?.content?.parts || [];
                     for (const part of parts) {
                       if (part.text) {
+                        if (isLiteTranslate) debugAccum += part.text;
                         res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
                       }
                     }
@@ -216,6 +221,9 @@ const server = http.createServer((req, res) => {
               // Flush any remaining bytes from the decoder
               const tail = utf8Decoder.end();
               if (tail) buffer += tail;
+              if (isLiteTranslate) {
+                console.log("[DEBUG translate response]", JSON.stringify(debugAccum.slice(0, 2000)));
+              }
               res.write("data: [DONE]\n\n");
               res.end();
             });
@@ -276,6 +284,9 @@ const server = http.createServer((req, res) => {
               try {
                 const geminiData = JSON.parse(responseBody);
                 const text = geminiData.candidates?.[0]?.content?.parts?.map(p => p.text || "").filter(Boolean).join("\n") || "";
+                if (MODEL === "gemini-3.1-flash-lite-preview") {
+                  console.log("[DEBUG translate response]", JSON.stringify(text.slice(0, 2000)));
+                }
                 const usage = geminiData.usageMetadata;
                 if (usage) console.log(`[Tokens] prompt=${usage.promptTokenCount || 0} response=${usage.candidatesTokenCount || 0} thinking=${usage.thoughtsTokenCount || 0} total=${usage.totalTokenCount || 0}`);
                 const result = { text };

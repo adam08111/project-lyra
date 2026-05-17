@@ -4,6 +4,7 @@ import { sharedStyles as s } from "../styles.js";
 import { FeatherIcon } from "./Icons.jsx";
 import MiniLessonCard from "./MiniLessonCard.jsx";
 import { SavedSkills } from "./StyleLab.jsx";
+import { parseStructureContent } from "./XRayView.jsx";
 
 const mono = "'Courier Prime', monospace";
 
@@ -157,16 +158,43 @@ export default function EditorTab({
                           {t.description}
                         </div>
                       )}
-                      {t.structure && (
-                        <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, marginBottom: 3, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>
-                            Try this pattern
+                      {t.structure && (() => {
+                        const parsed = parseStructureContent(t.structure);
+                        if (!parsed) return null;
+                        return (
+                          <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>
+                              Give it a go
+                            </div>
+                            {parsed.kind === "task-example" ? (
+                              <>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono, marginBottom: 5 }}>
+                                  {parsed.intro}
+                                </div>
+                                <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono, marginBottom: parsed.example ? 5 : 0 }}>
+                                  <span style={{ fontWeight: 700 }}>Task: </span>{parsed.task}
+                                </div>
+                                {parsed.example && (
+                                  <div style={{ background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 5, padding: "5px 8px", color: "#6B4A20", fontFamily: mono, fontSize: 11, lineHeight: 1.5 }}>
+                                    <span style={{ fontWeight: 700, color: "#A6701F" }}>Example: </span>{parsed.example}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono }}>
+                                  {parsed.template}
+                                </div>
+                                {parsed.kind === "template-arrow" && parsed.example && (
+                                  <div style={{ marginTop: 5, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 5, padding: "5px 8px", color: "#6B4A20", fontFamily: mono, fontSize: 11, lineHeight: 1.5 }}>
+                                    <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{parsed.example}
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </div>
-                          <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono }}>
-                            {t.structure}
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                       {t.example && (
                         <div style={{ fontSize: 11, color: COLORS.muted, fontStyle: "italic", lineHeight: 1.5, borderLeft: `2px solid ${COLORS.blue}`, paddingLeft: 8 }}>
                           {t.example}
