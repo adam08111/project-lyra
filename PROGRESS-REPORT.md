@@ -831,3 +831,57 @@ Two investigation agents deployed during this session to trace root causes:
 - LITE `| GRAMMAR:` row format defeating `^GRAMMAR` routing — **resolved** via universal pipe-strip in routing (§14.5)
 - STRUCTURE orphan pairs (template / arrow-example) leaking to wrong buckets — **resolved** via pattern-based routing rules (§14.6)
 
+---
+
+## 15. UPDATE — 17 May 2026 (afternoon) — Saved Skills tab refactor
+
+The Skills tab in Style Lab previously rendered each saved skill as one large inline-expanded card with body / GIVE IT A GO / FROM THE TEXT / etc. all dumped together → wall of text. Refactored into a three-level navigation flow so students can drill into individual techniques without losing context of the whole list.
+
+### 15.1 Three-Level Navigation
+
+| Level | Content shown | Trigger |
+|---|---|---|
+| 1. **Skills list** | Compact rows — author name + edit icon + `›` chevron | Default view of the Skills tab |
+| 2. **Skill detail** (`SavedSkillDetail`) | Back link + author header + signature + "When to use:" card + collapsed technique cards (key idea only) + Remove / Practice / Write-with-this-skill buttons | Click a row in the skills list |
+| 3. **Technique detail** | Full `SectionCard` rendering (FROM THE TEXT / GIVE IT A GO / breakdown / 翻譯成中文 / WATCH OUT / WRITER'S WORDS — same as the post-X-Ray analysis page) | Click a technique row in the skill detail; collapse with `▾ Collapse` button |
+
+Each level isolates one concern — list browse, skill overview, single technique deep-dive. No more wall-of-text.
+
+### 15.2 New `sections` Field on Saved Skills
+
+`saveStyleSkill` (`XRayView.jsx:1212`) now also stores the original full section content alongside the existing lossy `analysedTechniques`:
+
+```js
+sections: validSections.map(s => ({ title: s.title, content: s.content }))
+```
+
+This is the unredacted raw section data — `SectionCard` can re-render the saved skill with the same rich layout it produced after the original analysis. Forward-compat: any skill saved after this commit gets the full content.
+
+### 15.3 Legacy-Skill Fallback + Banner
+
+Skills saved BEFORE the `sections` field upgrade only stored four fields per technique (`technique`, `description` sliced to 250 chars, `structure`, `example` sliced to 200 chars). Those fields don't include BREAKDOWN / WHY IT WORKS / WATCH OUT / WRITER'S WORDS — the data simply isn't there.
+
+Implemented `synthSectionFromTechnique` to convert legacy `analysedTechnique` records into the `{title, content}` shape `SectionCard` expects, so the detail view at least renders what's available. Added a yellow banner in `SavedSkillDetail` (only shown when `skill.sections` is missing) explaining the limitation:
+
+> **Legacy skill:** only the key idea + brief description were saved. To see the full breakdown / why it works / watch out / writer's words sections, re-analyse the source passage and save again.
+
+`saveStyleSkill` dedupes by `authorName` — re-saving the same author overwrites the legacy entry with the full new-format content.
+
+### 15.4 Per-Technique Remove Buttons
+
+Each `CollapsibleTechnique` card now has a red `×` button (fontSize 16, fontWeight 700, `COLORS.red`) for removing a single technique from a saved skill. Wired through:
+
+- `CollapsibleTechnique` accepts `onRemove` prop
+- `SavedSkillDetail` accepts `onRemoveTechnique(techIdx, hasFullSections)`
+- `SavedSkills.removeTechnique` mutates either `skill.sections` (new format) OR `skill.analysedTechniques + skill.techniques` (legacy format) — keeps both arrays in sync regardless of which one the detail view rendered from
+- Persists to localStorage immediately
+
+`×` uses `e.stopPropagation()` so clicking it doesn't also trigger the card's expand-on-click handler.
+
+### 15.5 Files Changed (this session)
+
+| File | Status | Purpose |
+|---|---|---|
+| `src/components/XRayView.jsx` | UPDATED | `saveStyleSkill` now also stores `sections: [{title, content}]` array for full re-render fidelity |
+| `src/components/StyleLab.jsx` | UPDATED | `SavedSkills` rewritten as list-then-detail navigation; new `SavedSkillDetail` and `CollapsibleTechnique` components; `synthSectionFromTechnique` for legacy fallback; legacy-skill banner; per-technique red `×` remove buttons + `removeTechnique` mutation; `trackCall` plumbed through |
+

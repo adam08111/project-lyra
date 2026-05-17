@@ -1217,6 +1217,10 @@ export function saveStyleSkill(authorName, profileSections) {
       signatureStyle: sigParts.keyIdea || "",
       techniques: analysedTechniques.map(t => t.technique),
       analysedTechniques,
+      // Full sections (raw title + content) so the saved skill can be re-rendered
+      // via SectionCard later — gives the same rich X-Ray-style detail view as the
+      // post-analysis page.
+      sections: validSections.map(s => ({ title: s.title, content: s.content })),
       savedAt: new Date().toISOString(),
     };
 

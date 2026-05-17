@@ -396,13 +396,178 @@ function SavedConcepts() {
   );
 }
 
-export function SavedSkills({ onCountChange, onApply, onPractice }) {
+// Synthesize section.content from a legacy analysedTechnique (skill saved
+// before the `sections` field was added) so SectionCard can still render it.
+function synthSectionFromTechnique(t) {
+  const lines = [];
+  if (t.technique) lines.push(`KEY IDEA: ${t.technique}`);
+  if (t.description) lines.push(t.description);
+  if (t.example) lines.push(`FROM THE TEXT: "${t.example}"`);
+  if (t.structure) lines.push(`STRUCTURE: ${t.structure}`);
+  return { title: t.technique || "TECHNIQUE", content: lines.join("\n\n") };
+}
+
+// Compact-by-default wrapper for a technique inside SavedSkillDetail. Shows
+// only the numbered key-idea summary; click → expand inline to render the
+// full SectionCard with all the rich content (FROM THE TEXT, GIVE IT A GO,
+// breakdown, translate button, etc.). The × button removes this single
+// technique from the saved skill.
+function CollapsibleTechnique({ section, index, trackCall, onRemove }) {
+  const [expanded, setExpanded] = useState(false);
+  const parts = parseSectionContent(section.content);
+  const summary = parts.keyIdea || section.title || "Technique";
+
+  const removeBtn = onRemove ? (
+    <button
+      onClick={(e) => { e.stopPropagation(); onRemove(); }}
+      title="Remove this technique"
+      style={{ background: "none", border: "none", fontSize: 16, fontWeight: 700, color: COLORS.red || "#c44", cursor: "pointer", padding: "0 6px", lineHeight: 1, flexShrink: 0 }}
+    >×</button>
+  ) : null;
+
+  if (expanded) {
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+          <button
+            onClick={() => setExpanded(false)}
+            style={{ background: "none", border: "none", fontSize: 11, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", fontFamily: mono }}
+          >
+            ▾ Collapse
+          </button>
+          {removeBtn}
+        </div>
+        <SectionCard section={section} index={index} trackCall={trackCall} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setExpanded(true)}
+      style={{
+        background: COLORS.card,
+        border: `1px solid ${COLORS.border}`,
+        borderLeft: `3px solid ${COLORS.accent1}`,
+        borderRadius: 12,
+        marginBottom: 8,
+        padding: "12px 14px",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: 10,
+        cursor: "pointer",
+        transition: "border-color 0.15s",
+      }}
+    >
+      <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, lineHeight: 1.5 }}>
+        {index}. {summary}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        {removeBtn}
+        <span style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, lineHeight: 1.5 }}>›</span>
+      </div>
+    </div>
+  );
+}
+
+function SavedSkillDetail({ skill, onBack, onApply, onPractice, onRemove, onRemoveTechnique, trackCall }) {
+  // Prefer full saved sections (new format); fall back to synthesizing from
+  // analysedTechniques (legacy skills saved before the sections field existed).
+  const hasFullSections = skill.sections && skill.sections.length > 0;
+  const sections = hasFullSections
+    ? skill.sections
+    : (skill.analysedTechniques || []).map(synthSectionFromTechnique);
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <button
+          onClick={onBack}
+          style={{ background: "none", border: "none", color: COLORS.heading, fontFamily: mono, fontSize: 13, cursor: "pointer", padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }}
+        >
+          ← Back to skills
+        </button>
+      </div>
+      <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${COLORS.border}` }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.heading, fontFamily: mono }}>{skill.authorName}</div>
+        {skill.signatureStyle && (
+          <div style={{ fontSize: 12, color: COLORS.muted, fontFamily: mono, marginTop: 4, lineHeight: 1.5 }}>
+            {skill.signatureStyle}
+          </div>
+        )}
+      </div>
+
+      {!hasFullSections && (
+        <div style={{ background: "#FBF6E6", border: `1px solid #E8D8B4`, borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 11, color: "#6B4A20", fontFamily: mono, lineHeight: 1.5 }}>
+          <strong>Legacy skill:</strong> only the key idea + brief description were saved.
+          To see the full breakdown / why it works / watch out / writer's words sections,
+          re-analyse the source passage and save again.
+        </div>
+      )}
+
+      {skill.whenToUse?.keyIdea && (
+        <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 12, background: "#E8E3DB", borderRadius: 10, padding: "10px 14px", fontFamily: mono }}>
+          <span style={{ fontWeight: 700, color: COLORS.heading }}>When to use: </span>{skill.whenToUse.keyIdea}
+          {skill.whenToUse.bullets?.length > 0 && (
+            <div style={{ marginTop: 6, paddingLeft: 4, color: COLORS.muted, fontSize: 11 }}>
+              {skill.whenToUse.bullets.map((b, j) => <div key={j}>• {b}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {sections.length > 0 ? (
+        sections.map((s, i) => (
+          <CollapsibleTechnique
+            key={i}
+            section={s}
+            index={i + 1}
+            trackCall={trackCall}
+            onRemove={onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
+          />
+        ))
+      ) : (
+        <div style={{ fontSize: 12, color: COLORS.muted, fontStyle: "italic", padding: "20px 0", fontFamily: mono }}>
+          No detail content saved for this skill.
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 16, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+        <button
+          onClick={onRemove}
+          style={{ fontSize: 11, fontFamily: mono, padding: "6px 12px", borderRadius: 8, border: `1px solid ${COLORS.red}`, background: "transparent", color: COLORS.red, cursor: "pointer" }}
+        >
+          Remove
+        </button>
+        {onPractice && (
+          <button
+            onClick={() => onPractice(skill)}
+            style={{ fontSize: 12, fontFamily: mono, padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.green}`, background: "transparent", color: COLORS.green, cursor: "pointer", fontWeight: 700, letterSpacing: 0.3 }}
+          >
+            Practice
+          </button>
+        )}
+        {onApply && (
+          <button
+            onClick={() => onApply(skill)}
+            style={{ flex: 1, fontSize: 12, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: "none", background: COLORS.heading, color: "#fff", cursor: "pointer", fontWeight: 700, letterSpacing: 0.3 }}
+          >
+            ✦ Write with this skill
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
   const [skills, setSkills] = useState(() => {
     const s = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]");
     if (onCountChange) setTimeout(() => onCountChange(s.length), 0);
     return s;
   });
-  const [expanded, setExpanded] = useState(null);
+  const [viewingIdx, setViewingIdx] = useState(null);
   const [editingIdx, setEditingIdx] = useState(null);
   const [editName, setEditName] = useState("");
 
@@ -419,8 +584,30 @@ export function SavedSkills({ onCountChange, onApply, onPractice }) {
     const next = skills.filter((_, i) => i !== idx);
     setSkills(next);
     localStorage.setItem("lyra-style-skills", JSON.stringify(next));
-    if (expanded === idx) setExpanded(null);
+    if (viewingIdx === idx) setViewingIdx(null);
+    else if (viewingIdx !== null && viewingIdx > idx) setViewingIdx(viewingIdx - 1);
     if (onCountChange) onCountChange(next.length);
+  };
+
+  // Remove a single technique from a saved skill. Mutates both `sections`
+  // (new format) and `analysedTechniques` (legacy / parallel array) if the
+  // technique exists in both, so the list stays in sync regardless of which
+  // source the detail view was rendering from.
+  const removeTechnique = (skillIdx, techIdx, hasFullSections) => {
+    const target = skills[skillIdx];
+    if (!target) return;
+    const updated = { ...target };
+    if (hasFullSections && updated.sections) {
+      updated.sections = updated.sections.filter((_, i) => i !== techIdx);
+    } else if (updated.analysedTechniques) {
+      updated.analysedTechniques = updated.analysedTechniques.filter((_, i) => i !== techIdx);
+      if (updated.techniques) {
+        updated.techniques = updated.techniques.filter((_, i) => i !== techIdx);
+      }
+    }
+    const next = skills.map((s, i) => i === skillIdx ? updated : s);
+    setSkills(next);
+    localStorage.setItem("lyra-style-skills", JSON.stringify(next));
   };
 
   if (skills.length === 0) {
@@ -434,174 +621,69 @@ export function SavedSkills({ onCountChange, onApply, onPractice }) {
     );
   }
 
+  // Detail view — opened by clicking a skill title in the list
+  if (viewingIdx !== null && skills[viewingIdx]) {
+    return (
+      <SavedSkillDetail
+        skill={skills[viewingIdx]}
+        onBack={() => setViewingIdx(null)}
+        onApply={onApply}
+        onPractice={onPractice}
+        onRemove={() => remove(viewingIdx)}
+        onRemoveTechnique={(techIdx, hasFullSections) => removeTechnique(viewingIdx, techIdx, hasFullSections)}
+        trackCall={trackCall}
+      />
+    );
+  }
+
+  // Compact list view — title only, click to open full detail
   return (
     <div>
       <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 12, fontFamily: mono }}>
         {skills.length} skill{skills.length !== 1 ? "s" : ""} saved
       </div>
       {skills.map((sk, i) => (
-        <div key={sk.id} style={{ background: COLORS.card, borderTop: `1px solid ${expanded === i ? (sk.type === "researched" ? COLORS.blue : COLORS.accent1) : COLORS.border}`, borderRight: `1px solid ${expanded === i ? (sk.type === "researched" ? COLORS.blue : COLORS.accent1) : COLORS.border}`, borderBottom: `1px solid ${expanded === i ? (sk.type === "researched" ? COLORS.blue : COLORS.accent1) : COLORS.border}`, borderLeft: `3px solid ${sk.type === "researched" ? COLORS.blue : COLORS.accent1}`, borderRadius: 14, marginBottom: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
-          <div
-            onClick={() => setExpanded(expanded === i ? null : i)}
-            style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {editingIdx === i ? (
-                <input
-                  autoFocus
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  onBlur={() => rename(i, editName)}
-                  onKeyDown={e => { if (e.key === "Enter") rename(i, editName); if (e.key === "Escape") setEditingIdx(null); }}
-                  onClick={e => e.stopPropagation()}
-                  style={{ width: "100%", fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, border: `1.5px solid ${COLORS.heading}`, background: COLORS.bg2, padding: "3px 8px", borderRadius: 8, outline: "none", boxSizing: "border-box" }}
-                />
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono }}>{sk.authorName}</div>
-                  <button
-                    onClick={e => { e.stopPropagation(); setEditingIdx(i); setEditName(sk.authorName); }}
-                    title="Rename skill"
-                    style={{ background: "none", border: "none", fontSize: 11, color: COLORS.muted, cursor: "pointer", padding: "1px 4px", opacity: 0.5, lineHeight: 1 }}
-                  >✎</button>
-                </div>
-              )}
-              {sk.signatureStyle && (
-                <div style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono, marginTop: 2 }}>{sk.signatureStyle.slice(0, 60)}{sk.signatureStyle.length > 60 ? "..." : ""}</div>
-              )}
-            </div>
-            <span style={{ fontSize: 10, color: COLORS.muted, transform: expanded === i ? "rotate(90deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}>&#9654;</span>
-          </div>
-          {expanded === i && (
-            <div style={{ padding: "0 14px 14px", fontFamily: mono }}>
-              {sk.signatureStyle && sk.type !== "researched" && sk.type !== "analysed" && (
-                <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 8, background: "#EDE8E0", borderRadius: 8, padding: "8px 10px" }}>
-                  <span style={{ fontWeight: 700, color: COLORS.heading }}>Signature: </span>{sk.signatureStyle}
-                </div>
-              )}
-              {sk.researchedTechniques?.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
-                  {sk.researchedTechniques.map((t, j) => (
-                    <div key={j} style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 12px", borderLeft: `3px solid ${COLORS.blue}` }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading, marginBottom: 4 }}>
-                        <span style={{ color: COLORS.blue }}>✦</span> {t.technique}
-                      </div>
-                      {t.description && (
-                        <div style={{ fontSize: 11, color: COLORS.text, lineHeight: 1.5, marginBottom: t.example ? 6 : 0 }}>
-                          {t.description}
-                        </div>
-                      )}
-                      {t.example && (
-                        <div style={{ fontSize: 10, color: COLORS.muted, fontStyle: "italic", lineHeight: 1.5, borderLeft: `2px solid ${COLORS.blue}`, paddingLeft: 8, marginTop: 4 }}>
-                          {t.example}
-                        </div>
-                      )}
-                      {t.sourceUrl && (
-                        <div style={{ marginTop: 4 }}>
-                          <a href={t.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 9, color: COLORS.blue, textDecoration: "none" }}>
-                            {t.sourceName || "Source"} ↗
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : sk.analysedTechniques?.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
-                  {sk.analysedTechniques.map((t, j) => (
-                    <div key={j} style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 12px", borderLeft: `3px solid ${COLORS.accent1}` }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading, marginBottom: 4 }}>
-                        <span style={{ color: COLORS.accent1 }}>&#9998;</span> {t.technique}
-                      </div>
-                      {t.description && (
-                        <div style={{ fontSize: 11, color: COLORS.text, lineHeight: 1.5, marginBottom: 6 }}>
-                          {t.description}
-                        </div>
-                      )}
-                      {t.structure && (() => {
-                        const parsed = parseStructureContent(t.structure);
-                        if (!parsed) return null;
-                        return (
-                          <div style={{ background: "#F0EDE8", border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px", marginBottom: t.example ? 6 : 0 }}>
-                            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>Give it a go</div>
-                            {parsed.kind === "task-example" ? (
-                              <>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono, marginBottom: 5 }}>
-                                  {parsed.intro}
-                                </div>
-                                <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono, marginBottom: parsed.example ? 5 : 0 }}>
-                                  <span style={{ fontWeight: 700 }}>Task: </span>{parsed.task}
-                                </div>
-                                {parsed.example && (
-                                  <div style={{ background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 5, padding: "5px 8px", color: "#6B4A20", fontFamily: mono, fontSize: 11, lineHeight: 1.5 }}>
-                                    <span style={{ fontWeight: 700, color: "#A6701F" }}>Example: </span>{parsed.example}
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5, fontFamily: mono }}>{parsed.template}</div>
-                                {parsed.kind === "template-arrow" && parsed.example && (
-                                  <div style={{ marginTop: 5, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 5, padding: "5px 8px", color: "#6B4A20", fontFamily: mono, fontSize: 11, lineHeight: 1.5 }}>
-                                    <span style={{ fontWeight: 700, color: "#A6701F" }}>For example: </span>{parsed.example}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        );
-                      })()}
-                      {t.example && (
-                        <div style={{ fontSize: 10, color: COLORS.muted, fontStyle: "italic", lineHeight: 1.5, borderLeft: `2px solid ${COLORS.accent1}`, paddingLeft: 8, marginTop: 4 }}>
-                          {t.example}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : sk.techniques && sk.techniques.length > 0 ? (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                  {sk.techniques.map((t, j) => (
-                    <span key={j} style={{ fontSize: 10, fontFamily: mono, background: COLORS.bg2, padding: "3px 8px", borderRadius: 6, border: `1px solid ${COLORS.border}`, color: COLORS.heading }}>{t}</span>
-                  ))}
-                </div>
-              ) : null}
-              {sk.whenToUse?.keyIdea && (
-                <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 8, background: "#E8E3DB", borderRadius: 8, padding: "8px 10px" }}>
-                  <span style={{ fontWeight: 700, color: COLORS.heading }}>When to use: </span>{sk.whenToUse.keyIdea}
-                </div>
-              )}
-              {sk.whenToUse?.bullets?.length > 0 && (
-                <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.6, marginBottom: 8, paddingLeft: 8 }}>
-                  {sk.whenToUse.bullets.map((b, j) => <div key={j}>• {b}</div>)}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <div
+          key={sk.id}
+          onClick={() => editingIdx !== i && setViewingIdx(i)}
+          style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+            borderLeft: `3px solid ${sk.type === "researched" ? COLORS.blue : COLORS.accent1}`,
+            borderRadius: 12,
+            marginBottom: 8,
+            padding: "12px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            cursor: editingIdx === i ? "default" : "pointer",
+            transition: "border-color 0.15s",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+            {editingIdx === i ? (
+              <input
+                autoFocus
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                onBlur={() => rename(i, editName)}
+                onKeyDown={e => { if (e.key === "Enter") rename(i, editName); if (e.key === "Escape") setEditingIdx(null); }}
+                onClick={e => e.stopPropagation()}
+                style={{ width: "100%", fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, border: `1.5px solid ${COLORS.heading}`, background: COLORS.bg2, padding: "3px 8px", borderRadius: 8, outline: "none", boxSizing: "border-box" }}
+              />
+            ) : (
+              <>
+                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sk.authorName}</div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); remove(i); }}
-                  style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1px solid ${COLORS.red}`, background: "transparent", color: COLORS.red, cursor: "pointer" }}
-                >
-                  Remove
-                </button>
-                {onPractice && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onPractice(sk); }}
-                    style={{ fontSize: 12, fontFamily: mono, padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.green}`, background: "transparent", color: COLORS.green, cursor: "pointer", fontWeight: 700, letterSpacing: 0.3, transition: "all 0.2s" }}
-                  >
-                    Practice
-                  </button>
-                )}
-                {onApply && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onApply(sk); }}
-                    style={{ flex: 1, fontSize: 12, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: "none", background: COLORS.heading, color: "#fff", cursor: "pointer", fontWeight: 700, letterSpacing: 0.3, transition: "all 0.2s" }}
-                  >
-                    ✦ Write with this skill
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+                  onClick={e => { e.stopPropagation(); setEditingIdx(i); setEditName(sk.authorName); }}
+                  title="Rename skill"
+                  style={{ background: "none", border: "none", fontSize: 11, color: COLORS.muted, cursor: "pointer", padding: "1px 4px", opacity: 0.5, lineHeight: 1, flexShrink: 0 }}
+                >✎</button>
+              </>
+            )}
+          </div>
+          <span style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, flexShrink: 0 }}>›</span>
         </div>
       ))}
     </div>
@@ -954,7 +1036,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
         {/* SKILLS TAB */}
         {activeTab === "skills" && (
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-            <SavedSkills onCountChange={setSkillCount} onApply={onApplySkill ? (skill) => {
+            <SavedSkills onCountChange={setSkillCount} trackCall={trackCall} onApply={onApplySkill ? (skill) => {
               onApplySkill(skill);
               setShowStyleLab(false);
             } : null} onPractice={onOpenTraining ? (skill) => {
