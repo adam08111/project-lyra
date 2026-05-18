@@ -3,7 +3,7 @@ import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingHintPrompt } from "../prompts.js";
+import { buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingHintPrompt, buildHintResponsePrompt } from "../prompts.js";
 import { anonymiseSkillsForAI } from "../utils.js";
 
 const mono = "'Courier Prime', monospace";
@@ -26,6 +26,8 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   const [hintAnswer, setHintAnswer] = useState("");
   const [hintSubmitted, setHintSubmitted] = useState(false);
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintResponse, setHintResponse] = useState(null);
+  const [hintResponseLoading, setHintResponseLoading] = useState(false);
   const [progress, setProgress] = useState({});
   const [progressLoaded, setProgressLoaded] = useState(false);
   const textareaRef = useRef(null);
@@ -161,6 +163,12 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     const nextLevel = hintLevel + 1;
     if (nextLevel > 2) return; // max 2 hints
     setHintLoading(true);
+    // Reset the answer-and-response state so the new question gets a fresh
+    // card, not the previous level's locked-in answer hanging around.
+    setHintAnswer("");
+    setHintSubmitted(false);
+    setHintResponse(null);
+    setHintResponseLoading(false);
     try {
       const { anonymised } = anonymiseSkillsForAI([skill]);
       const anonSkill = anonymised[0];
@@ -201,6 +209,36 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setHintLoading(false);
   }, [hintLoading, hintLevel, activeTechIdx, exercises, skill, trackCall]);
 
+  // Respond to the student's hint answer with brief coaching feedback.
+  // Same Pro-tier model as the chat coaching — the hint dialogue IS coaching.
+  const fetchHintResponse = useCallback(async (studentThinking, hintQuestion) => {
+    if (activeTechIdx === null) return;
+    setHintResponseLoading(true);
+    try {
+      const { anonymised } = anonymiseSkillsForAI([skill]);
+      const anonSkill = anonymised[0];
+      const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
+        || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
+      const anonTech = anonTechs[activeTechIdx];
+      const exercise = exercises?.[activeTechIdx] || "";
+
+      const route = getRouteConfig("training_hint");
+      trackCall();
+      const result = await callAI(
+        buildHintResponsePrompt(anonTech, exercise, hintQuestion, studentThinking),
+        "Respond now.",
+        false, (route.thinkingBudget || 0) + 300, route.thinkingBudget, undefined, undefined, route.model
+      );
+      const cleaned = result.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      setHintResponse(parsed.response || "");
+    } catch (e) {
+      console.error("Hint response generation failed:", e);
+      setHintResponse("Nice thinking! Now have a go at the rewrite — even a small change is a win.");
+    }
+    setHintResponseLoading(false);
+  }, [activeTechIdx, exercises, skill, trackCall]);
+
   // Navigate to next unmastered technique
   const goNext = useCallback(() => {
     let next = null;
@@ -224,6 +262,8 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setHintLevel(0);
     setHintAnswer("");
     setHintSubmitted(false);
+    setHintResponse(null);
+    setHintResponseLoading(false);
     setScreen("exercise");
   }, [activeTechIdx, techniques, progress]);
 
@@ -237,6 +277,8 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setHintLevel(0);
     setHintAnswer("");
     setHintSubmitted(false);
+    setHintResponse(null);
+    setHintResponseLoading(false);
     setScreen("exercise");
   };
 
@@ -420,15 +462,37 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                 </div>
               )}
               {hintSubmitted ? (
-                <div style={{
-                  fontSize: 12, color: COLORS.heading, lineHeight: 1.5,
-                  padding: "8px 12px", background: COLORS.card,
-                  borderRadius: 8, border: `1px solid ${COLORS.border}`,
-                  whiteSpace: "pre-wrap",
-                }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Your thinking</div>
-                  {hintAnswer}
-                </div>
+                <>
+                  <div style={{
+                    fontSize: 12, color: COLORS.heading, lineHeight: 1.5,
+                    padding: "8px 12px", background: COLORS.card,
+                    borderRadius: 8, border: `1px solid ${COLORS.border}`,
+                    whiteSpace: "pre-wrap",
+                    marginBottom: 8,
+                  }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Your thinking</div>
+                    {hintAnswer}
+                  </div>
+                  {hintResponseLoading && (
+                    <div style={{
+                      fontSize: 12, color: COLORS.muted, fontStyle: "italic",
+                      padding: "8px 12px",
+                    }}>
+                      Lyra is thinking...
+                    </div>
+                  )}
+                  {hintResponse && !hintResponseLoading && (
+                    <div style={{
+                      fontSize: 12, color: COLORS.heading, lineHeight: 1.5,
+                      padding: "8px 12px", background: COLORS.bg2,
+                      borderRadius: 8, borderLeft: `2px solid ${COLORS.blue}`,
+                      whiteSpace: "pre-wrap",
+                    }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Lyra says</div>
+                      {hintResponse}
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <textarea
@@ -448,8 +512,12 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                         if (!hintAnswer.trim()) return;
                         // Save the student's thinking as context for evaluation; keep
                         // the hint card visible so they can reference it while rewriting.
-                        setStudentExplanation(hintAnswer.trim());
+                        const answer = hintAnswer.trim();
+                        setStudentExplanation(answer);
                         setHintSubmitted(true);
+                        // Fire the AI response so the student gets actual coaching
+                        // back, not just a dead read-only copy of their own words.
+                        fetchHintResponse(answer, hint?.question || "");
                       }}
                       disabled={!hintAnswer.trim()}
                       style={{
@@ -563,7 +631,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
           {/* Action buttons */}
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <button
-              onClick={() => { setStudentAttempt(""); setStudentExplanation(""); setEvaluation(null); setHint(null); setHintLevel(0); setHintAnswer(""); setHintSubmitted(false); setScreen("exercise"); }}
+              onClick={() => { setStudentAttempt(""); setStudentExplanation(""); setEvaluation(null); setHint(null); setHintLevel(0); setHintAnswer(""); setHintSubmitted(false); setHintResponse(null); setHintResponseLoading(false); setScreen("exercise"); }}
               style={{
                 ...s.chip, flex: 1, fontSize: 12, fontWeight: 600,
                 textAlign: "center", justifyContent: "center",
