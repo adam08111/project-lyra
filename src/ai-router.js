@@ -63,9 +63,11 @@ const ROUTE_CONFIG = {
   },
 
   // Training hints (Socratic questions about effect/purpose)
+  // Same thinking budget as chat_coaching — the hint IS coaching, so it
+  // deserves the same depth of reasoning as the main coaching chat.
   training_hint: {
     model: MODELS.pro,
-    thinkingBudget: 1024,
+    thinkingBudget: 4096,
     brain: true,
   },
 
