@@ -470,39 +470,65 @@ ${technique.example ? `EXAMPLE OF THE TECHNIQUE: ${technique.example}` : ""}
 
 PLAIN SENTENCE THEY NEED TO REWRITE: "${plainSentence}"
 
+SOCRATIC PHILOSOPHY (read this first, applies to BOTH hint levels):
+You are talking to a 14-year-old Hong Kong English learner. Tone is FRIENDLY, ENCOURAGING, low-pressure — like a kind older sibling, not a professor.
+
+A Socratic hint never tells the answer, but it also never feels intimidating. It asks ONE simple question that uses something the student already knows — their best friend, their favourite YouTuber, a feeling they've had. The student should think "oh, I can try that" — not "this is too clever for me."
+
+Always remind them it's okay to try and get it wrong.
+
+BAD examples (FORBIDDEN — too vague, intimidating, or fancy):
+- "Try re-reading the technique description and example above." (instruction, not a question)
+- "Think about which words you could change." (no image, no encouragement)
+- "What would make this sentence more interesting?" (no anchor)
+- "If a courtroom prosecutor said this sentence out loud, which ONE word would they swap to make it sound damning?" (way too dramatic for a teen)
+- "The example calls lateness a 'weapon.' If you had to find ONE strong word like that, where would you look — a courtroom, a battlefield, a medical chart?" (sounds like a literature exam)
+
+GOOD examples (simple, friendly, uses everyday scenes):
+- "Picture your best friend reading this out loud. What ONE word would make them grin?" (everyday scene, low stakes)
+- "Imagine your favourite YouTuber telling this story. What word would they pick instead?" (uses something they know)
+- "Try swapping just ONE word for something stronger. Which word feels weakest to you?" (small step + invites their judgement)
+- "If you said this sentence to make your little brother actually listen, what would you change?" (familiar scene)
+- "What if you just added ONE word from the example? Even a small change works." (lowers the bar)
+
+NO TEMPLATES — EVER. This is non-negotiable:
+- NO fill-in-the-blank patterns ("____ + ____", "Try X like ____")
+- NO "swap this for that" suggestions ("swap 'big' for 'massive'")
+- NO "use a word like X" instructions ("use a stronger verb")
+- NO sentence frames or skeletons of any kind
+- NO worked partial examples
+
+The student must discover their own path. Your only tools are: warm encouragement + one well-aimed question.
+
 ${isDeeper
-    ? `The student already received a basic hint and is STILL stuck. Give a STRONGER hint this time — but still do NOT write the answer for them.
-
-IMPORTANT: Do NOT give a fill-in-the-blank template. Templates teach students to match a SHAPE, not to understand the ESSENCE. Instead, help them understand the EFFECT the technique creates, and give them vocabulary ingredients they can use freely.
+    ? `The student already received a basic hint and is STILL stuck. Give a STRONGER Socratic question — sharper, more specific, but still pure question. NO templates, NO word swaps, NO worked examples, NO encouragement preamble.
 
 Return ONLY valid JSON (no markdown fences):
 {
-  "approach": "One sentence explaining what EFFECT this technique should have on the reader. Be specific about the feeling or reaction the sentence should create.",
-  "vocabulary": ["word1", "word2", "word3", "word4"],
-  "question": "One Socratic question about the PURPOSE of the technique. Example: 'If this sentence appeared in a newspaper vs a magazine column, what would feel different about it?'"
+  "question": "One STRONGER Socratic question using a simple everyday scene the student knows (a friend, a YouTuber, a parent, a sibling, a text message). Sharper than a first hint — but still pure question."
 }
 
 RULES:
-- The approach must describe the EFFECT to aim for, not the structure to copy (e.g. "The reader should feel a sudden jolt" NOT "Put a short sentence after a long one")
-- Vocabulary should be strong words they could weave in naturally — loose ingredients, not a recipe
-- The question should make the student think about WHY this technique works — what does it DO to the reader?
-- NEVER provide a template, fill-in-the-blank, or structural scaffold — the student must find their own path to the effect
-- Keep approach under 30 words
-- Keep question under 25 words`
-    : `Give a GENTLE first hint — just enough to get them started.
+- Output ONLY the question. NO approach, NO vocabulary, NO encouragement, NO instructions.
+- The question must REFERENCE the technique name "${technique.technique}" casually and put the student inside an everyday scene
+- The question should sharpen the focus from the gentle first hint — narrower scene, sharper contrast, or a more direct invitation to choose
+- ABSOLUTELY FORBIDDEN: "____", "swap X for Y", "try using", "you could", "instead of", any partial sentence with a blank, any list of words
+- ABSOLUTELY FORBIDDEN: any sentence beginning with "Try re-reading", "Think about", "Consider", "What would make", "How can you", "What part"
+- Keep question under 28 words`
+    : `Give a GENTLE first Socratic question — that's it. No encouragement, no instructions, no templates, no word lists. Just ONE pure question.
 
 Return ONLY valid JSON (no markdown fences):
 {
-  "approach": "One friendly sentence suggesting what part of the sentence to focus on and what kind of change to try. Do NOT be too specific — nudge, don't tell.",
-  "question": "One Socratic question that helps them think about the PURPOSE of the technique — what effect should it have on the reader? Example: 'What would make this sentence stop a reader in their tracks?'"
+  "question": "One simple Socratic question using a familiar everyday scene (best friend, YouTuber, sibling, text message). Pure question — no instruction baked in."
 }
 
 RULES:
-- Do NOT show vocabulary, templates, or patterns yet — this is a light nudge
-- The question should lead them toward understanding the technique's EFFECT, not its structure
-- Focus on the voice shift: "How would a columnist say this differently from a reporter?"
-- Keep approach under 25 words
-- Keep question under 20 words`}`;
+- Output ONLY the question. NO approach, NO vocabulary, NO encouragement, NO instructions.
+- The question must REFERENCE the technique name "${technique.technique}" casually (e.g. "the ${technique.technique} trick") and put them in an everyday scene
+- ABSOLUTELY FORBIDDEN: "____", "swap X for Y", "try using", "you could change", "instead of", any half-finished example, any list of words to pick from
+- ABSOLUTELY FORBIDDEN: any sentence beginning with "Try re-reading", "Think about", "Consider", "What would make", "How can you", "What part"
+- ABSOLUTELY FORBIDDEN: heavy/dramatic imagery like "courtroom", "weapon", "verdict", "punch"
+- Keep question under 22 words`}`;
 }
 
 export function styleCoachPrompt(styleProfile, authorName) {

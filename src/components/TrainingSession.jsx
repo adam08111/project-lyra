@@ -23,6 +23,8 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   const [evaluating, setEvaluating] = useState(false);
   const [hint, setHint] = useState(null);
   const [hintLevel, setHintLevel] = useState(0);
+  const [hintAnswer, setHintAnswer] = useState("");
+  const [hintSubmitted, setHintSubmitted] = useState(false);
   const [hintLoading, setHintLoading] = useState(false);
   const [progress, setProgress] = useState({});
   const [progressLoaded, setProgressLoaded] = useState(false);
@@ -169,10 +171,13 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
 
       const route = getRouteConfig("training_hint");
       trackCall();
+      // maxTokens must exceed thinkingBudget — the Pro model burns its thinking
+      // tokens out of this budget first, leaving the remainder for the actual
+      // response. With thinkingBudget=1024 we need headroom for the question.
       const result = await callAI(
         buildTrainingHintPrompt(anonTech, exercise, nextLevel),
         "Give the hint now.",
-        false, 400, route.thinkingBudget, undefined, undefined, route.model
+        false, (route.thinkingBudget || 0) + 300, route.thinkingBudget, undefined, undefined, route.model
       );
       const cleaned = result.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(cleaned);
@@ -180,7 +185,17 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
       setHintLevel(nextLevel);
     } catch (e) {
       console.error("Hint generation failed:", e);
-      setHint({ approach: "Try re-reading the technique description and example above. Think about which words in the sentence you could change or add to.", question: "What would make this sentence more interesting?" });
+      // Friendly Socratic fallback — uses everyday scenes (best friend, text
+      // message) and reminds the student that any small change is a win.
+      const anonTechs = (skill.analysedTechniques || skill.researchedTechniques || []);
+      const techName = (anonTechs[activeTechIdx]?.technique || "this trick").replace(/['"]/g, "");
+      const fallbackLevel1 = {
+        question: `If you texted this sentence to your best friend, what would feel awkward about it?`,
+      };
+      const fallbackLevel2 = {
+        question: `Imagine your favourite YouTuber telling this story — what would feel different about how they'd say it?`,
+      };
+      setHint(nextLevel >= 2 ? fallbackLevel2 : fallbackLevel1);
       setHintLevel(nextLevel);
     }
     setHintLoading(false);
@@ -207,6 +222,8 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setEvaluation(null);
     setHint(null);
     setHintLevel(0);
+    setHintAnswer("");
+    setHintSubmitted(false);
     setScreen("exercise");
   }, [activeTechIdx, techniques, progress]);
 
@@ -218,6 +235,8 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setEvaluation(null);
     setHint(null);
     setHintLevel(0);
+    setHintAnswer("");
+    setHintSubmitted(false);
     setScreen("exercise");
   };
 
@@ -383,52 +402,69 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
             />
           </div>
 
-          {/* Student explanation */}
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 6, fontWeight: 700 }}>
-              What effect were you going for? (one sentence)
-            </div>
-            <textarea
-              value={studentExplanation}
-              onChange={e => setStudentExplanation(e.target.value)}
-              placeholder="e.g. I wanted the reader to feel a sudden shock after the long buildup"
-              style={{
-                width: "100%", minHeight: 50, padding: 10, borderRadius: 10,
-                border: `1.5px solid ${COLORS.border}`, background: COLORS.bg2,
-                fontFamily: mono, fontSize: 12,
-                color: COLORS.text, resize: "none", boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          {/* Hint display */}
+          {/* Hint display \u2014 pure Socratic question + a place to answer it */}
           {hint && (
             <div style={{ background: COLORS.blue + "0A", border: `1.5px solid ${COLORS.blue}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 12, animation: "fadeIn 0.25s ease" }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
                 {hintLevel >= 2 ? "Stronger hint" : "Hint"}
               </div>
-              {hint.approach && (
-                <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, marginBottom: hint.vocabulary || hint.question ? 8 : 0 }}>{hint.approach}</div>
-              )}
-              {hint.vocabulary?.length > 0 && (
-                <div style={{ marginBottom: hint.question ? 8 : 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.heading, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Words to try</div>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {hint.vocabulary.map((w, j) => (
-                      <span key={j} style={{ fontSize: 11, padding: "3px 9px", borderRadius: 10, background: "#F0F8FF", color: COLORS.blue, fontWeight: 600, fontFamily: mono }}>{w}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
               {hint.question && (
                 <div style={{
-                  fontSize: 12, color: COLORS.heading, lineHeight: 1.5,
+                  fontSize: 13, color: COLORS.heading, lineHeight: 1.5,
                   padding: "8px 12px", background: COLORS.bg2, borderRadius: 8,
-                  borderLeft: `2px solid ${COLORS.amber}`, marginTop: 8,
+                  borderLeft: `2px solid ${COLORS.amber}`,
                   fontStyle: "italic",
+                  marginBottom: 8,
                 }}>
                   {"\uD83D\uDCAD"} {hint.question}
                 </div>
+              )}
+              {hintSubmitted ? (
+                <div style={{
+                  fontSize: 12, color: COLORS.heading, lineHeight: 1.5,
+                  padding: "8px 12px", background: COLORS.card,
+                  borderRadius: 8, border: `1px solid ${COLORS.border}`,
+                  whiteSpace: "pre-wrap",
+                }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Your thinking</div>
+                  {hintAnswer}
+                </div>
+              ) : (
+                <>
+                  <textarea
+                    value={hintAnswer}
+                    onChange={e => setHintAnswer(e.target.value)}
+                    placeholder="Your answer..."
+                    style={{
+                      width: "100%", minHeight: 44, padding: 8, borderRadius: 8,
+                      border: `1.5px solid ${COLORS.border}`, background: COLORS.card,
+                      fontFamily: mono, fontSize: 12,
+                      color: COLORS.text, resize: "vertical", boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+                    <button
+                      onClick={() => {
+                        if (!hintAnswer.trim()) return;
+                        // Save the student's thinking as context for evaluation; keep
+                        // the hint card visible so they can reference it while rewriting.
+                        setStudentExplanation(hintAnswer.trim());
+                        setHintSubmitted(true);
+                      }}
+                      disabled={!hintAnswer.trim()}
+                      style={{
+                        fontSize: 11, fontWeight: 700, fontFamily: mono,
+                        padding: "6px 14px", borderRadius: 8,
+                        border: "none",
+                        background: hintAnswer.trim() ? COLORS.blue : COLORS.bg2,
+                        color: hintAnswer.trim() ? "#fff" : COLORS.muted,
+                        cursor: hintAnswer.trim() ? "pointer" : "default",
+                      }}
+                    >
+                      Got it →
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -527,7 +563,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
           {/* Action buttons */}
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <button
-              onClick={() => { setStudentAttempt(""); setStudentExplanation(""); setEvaluation(null); setHint(null); setHintLevel(0); setScreen("exercise"); }}
+              onClick={() => { setStudentAttempt(""); setStudentExplanation(""); setEvaluation(null); setHint(null); setHintLevel(0); setHintAnswer(""); setHintSubmitted(false); setScreen("exercise"); }}
               style={{
                 ...s.chip, flex: 1, fontSize: 12, fontWeight: 600,
                 textAlign: "center", justifyContent: "center",
