@@ -3,7 +3,7 @@ import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingHintPrompt, buildHintResponsePrompt } from "../prompts.js";
+import { buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingChatPrompt } from "../prompts.js";
 import { anonymiseSkillsForAI } from "../utils.js";
 
 const mono = "'Courier Prime', monospace";
@@ -21,13 +21,12 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   const [studentExplanation, setStudentExplanation] = useState("");
   const [evaluation, setEvaluation] = useState(null);
   const [evaluating, setEvaluating] = useState(false);
-  const [hint, setHint] = useState(null);
-  const [hintLevel, setHintLevel] = useState(0);
-  const [hintAnswer, setHintAnswer] = useState("");
-  const [hintSubmitted, setHintSubmitted] = useState(false);
-  const [hintLoading, setHintLoading] = useState(false);
-  const [hintResponse, setHintResponse] = useState(null);
-  const [hintResponseLoading, setHintResponseLoading] = useState(false);
+  // Stuck-chat state — when student clicks "I'm stuck", an inline chat with
+  // Lyra opens up. Replaces the old single-question hint flow.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]); // [{role: 'lyra'|'student', text}]
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
   const [progress, setProgress] = useState({});
   const [progressLoaded, setProgressLoaded] = useState(false);
   const textareaRef = useRef(null);
@@ -157,63 +156,11 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setEvaluating(false);
   }, [studentAttempt, evaluating, activeTechIdx, exercises, skill, trackCall]);
 
-  // Get a hint when student is stuck
-  const getHint = useCallback(async () => {
-    if (hintLoading || activeTechIdx === null) return;
-    const nextLevel = hintLevel + 1;
-    if (nextLevel > 2) return; // max 2 hints
-    setHintLoading(true);
-    // Reset the answer-and-response state so the new question gets a fresh
-    // card, not the previous level's locked-in answer hanging around.
-    setHintAnswer("");
-    setHintSubmitted(false);
-    setHintResponse(null);
-    setHintResponseLoading(false);
-    try {
-      const { anonymised } = anonymiseSkillsForAI([skill]);
-      const anonSkill = anonymised[0];
-      const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
-        || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
-      const anonTech = anonTechs[activeTechIdx];
-      const exercise = exercises?.[activeTechIdx] || "";
-
-      const route = getRouteConfig("training_hint");
-      trackCall();
-      // maxTokens must exceed thinkingBudget — the Pro model burns its thinking
-      // tokens out of this budget first, leaving the remainder for the actual
-      // response. With thinkingBudget=1024 we need headroom for the question.
-      const result = await callAI(
-        buildTrainingHintPrompt(anonTech, exercise, nextLevel),
-        "Give the hint now.",
-        false, (route.thinkingBudget || 0) + 300, route.thinkingBudget, undefined, undefined, route.model
-      );
-      const cleaned = result.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
-      setHint(parsed);
-      setHintLevel(nextLevel);
-    } catch (e) {
-      console.error("Hint generation failed:", e);
-      // Friendly Socratic fallback — uses everyday scenes (best friend, text
-      // message) and reminds the student that any small change is a win.
-      const anonTechs = (skill.analysedTechniques || skill.researchedTechniques || []);
-      const techName = (anonTechs[activeTechIdx]?.technique || "this trick").replace(/['"]/g, "");
-      const fallbackLevel1 = {
-        question: `If you texted this sentence to your best friend, what would feel awkward about it?`,
-      };
-      const fallbackLevel2 = {
-        question: `Imagine your favourite YouTuber telling this story — what would feel different about how they'd say it?`,
-      };
-      setHint(nextLevel >= 2 ? fallbackLevel2 : fallbackLevel1);
-      setHintLevel(nextLevel);
-    }
-    setHintLoading(false);
-  }, [hintLoading, hintLevel, activeTechIdx, exercises, skill, trackCall]);
-
-  // Respond to the student's hint answer with brief coaching feedback.
-  // Same Pro-tier model as the chat coaching — the hint dialogue IS coaching.
-  const fetchHintResponse = useCallback(async (studentThinking, hintQuestion) => {
+  // Fetch the next Lyra turn given the current conversation.
+  // Same Pro-tier model + LYRA_BRAIN as the main coaching chat.
+  const fetchLyraTurn = useCallback(async (conversation) => {
     if (activeTechIdx === null) return;
-    setHintResponseLoading(true);
+    setChatLoading(true);
     try {
       const { anonymised } = anonymiseSkillsForAI([skill]);
       const anonSkill = anonymised[0];
@@ -225,19 +172,49 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
       const route = getRouteConfig("training_hint");
       trackCall();
       const result = await callAI(
-        buildHintResponsePrompt(anonTech, exercise, hintQuestion, studentThinking),
-        "Respond now.",
+        buildTrainingChatPrompt(anonTech, exercise, conversation),
+        "Write your next message now.",
         false, (route.thinkingBudget || 0) + 300, route.thinkingBudget, undefined, undefined, route.model
       );
       const cleaned = result.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(cleaned);
-      setHintResponse(parsed.response || "");
+      const message = parsed.message || parsed.response || parsed.question || "";
+      if (message) {
+        setChatMessages(prev => [...prev, { role: 'lyra', text: message }]);
+      }
     } catch (e) {
-      console.error("Hint response generation failed:", e);
-      setHintResponse("Nice thinking! Now have a go at the rewrite — even a small change is a win.");
+      console.error("Lyra chat turn failed:", e);
+      const fallback = conversation.length === 0
+        ? "Which word in the sentence feels the most boring to you?"
+        : "Nice thinking! Have a go at the rewrite — even a small change is a win.";
+      setChatMessages(prev => [...prev, { role: 'lyra', text: fallback }]);
     }
-    setHintResponseLoading(false);
+    setChatLoading(false);
   }, [activeTechIdx, exercises, skill, trackCall]);
+
+  // Open the stuck-chat: clear any prior conversation and let Lyra open with
+  // the first Socratic question.
+  const openStuckChat = useCallback(() => {
+    if (chatLoading || activeTechIdx === null) return;
+    setChatOpen(true);
+    setChatMessages([]);
+    setChatInput("");
+    fetchLyraTurn([]);
+  }, [chatLoading, activeTechIdx, fetchLyraTurn]);
+
+  // Send a student message and fetch Lyra's next turn.
+  const sendStudentMessage = useCallback(() => {
+    if (chatLoading) return;
+    const trimmed = chatInput.trim();
+    if (!trimmed) return;
+    const next = [...chatMessages, { role: 'student', text: trimmed }];
+    setChatMessages(next);
+    setChatInput("");
+    // Carry the student's latest thinking into studentExplanation so the
+    // evaluator has context about how they reasoned about the technique.
+    setStudentExplanation(trimmed);
+    fetchLyraTurn(next);
+  }, [chatLoading, chatInput, chatMessages, fetchLyraTurn]);
 
   // Navigate to next unmastered technique
   const goNext = useCallback(() => {
@@ -258,12 +235,10 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setStudentAttempt("");
     setStudentExplanation("");
     setEvaluation(null);
-    setHint(null);
-    setHintLevel(0);
-    setHintAnswer("");
-    setHintSubmitted(false);
-    setHintResponse(null);
-    setHintResponseLoading(false);
+    setChatOpen(false);
+    setChatMessages([]);
+    setChatInput("");
+    setChatLoading(false);
     setScreen("exercise");
   }, [activeTechIdx, techniques, progress]);
 
@@ -273,12 +248,10 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setStudentAttempt("");
     setStudentExplanation("");
     setEvaluation(null);
-    setHint(null);
-    setHintLevel(0);
-    setHintAnswer("");
-    setHintSubmitted(false);
-    setHintResponse(null);
-    setHintResponseLoading(false);
+    setChatOpen(false);
+    setChatMessages([]);
+    setChatInput("");
+    setChatLoading(false);
     setScreen("exercise");
   };
 
@@ -444,113 +417,112 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
             />
           </div>
 
-          {/* Hint display \u2014 pure Socratic question + a place to answer it */}
-          {hint && (
+          {/* Stuck-chat \u2014 multi-turn conversation with Lyra. Replaces the
+              old single-question hint card so students can ask follow-ups. */}
+          {chatOpen && (
             <div style={{ background: COLORS.blue + "0A", border: `1.5px solid ${COLORS.blue}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 12, animation: "fadeIn 0.25s ease" }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-                {hintLevel >= 2 ? "Stronger hint" : "Hint"}
-              </div>
-              {hint.question && (
-                <div style={{
-                  fontSize: 13, color: COLORS.heading, lineHeight: 1.5,
-                  padding: "8px 12px", background: COLORS.bg2, borderRadius: 8,
-                  borderLeft: `2px solid ${COLORS.amber}`,
-                  fontStyle: "italic",
-                  marginBottom: 8,
-                }}>
-                  {"\uD83D\uDCAD"} {hint.question}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1 }}>
+                  {"\uD83D\uDCAC"} Chat with Lyra
                 </div>
-              )}
-              {hintSubmitted ? (
-                <>
-                  <div style={{
-                    fontSize: 12, color: COLORS.heading, lineHeight: 1.5,
-                    padding: "8px 12px", background: COLORS.card,
-                    borderRadius: 8, border: `1px solid ${COLORS.border}`,
+                <button
+                  onClick={() => setChatOpen(false)}
+                  style={{ background: "transparent", border: "none", color: COLORS.muted, fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }}
+                  title="Close chat"
+                >
+                  {"\u2715"}
+                </button>
+              </div>
+
+              {/* Chat message thread */}
+              <div style={{
+                maxHeight: 320, overflowY: "auto", padding: "4px 2px",
+                display: "flex", flexDirection: "column", gap: 8,
+                marginBottom: 10,
+              }}>
+                {chatMessages.map((m, i) => (
+                  <div key={i} style={{
+                    alignSelf: m.role === "student" ? "flex-end" : "flex-start",
+                    maxWidth: "85%",
+                    background: m.role === "student" ? COLORS.blue : COLORS.bg2,
+                    color: m.role === "student" ? "#fff" : COLORS.heading,
+                    border: m.role === "lyra" ? `1px solid ${COLORS.border}` : "none",
+                    borderRadius: m.role === "student" ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
+                    padding: "8px 12px",
+                    fontSize: 13, lineHeight: 1.5,
                     whiteSpace: "pre-wrap",
-                    marginBottom: 8,
+                    animation: "fadeIn 0.2s ease",
                   }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Your thinking</div>
-                    {hintAnswer}
+                    {m.text}
                   </div>
-                  {hintResponseLoading && (
-                    <div style={{
-                      fontSize: 12, color: COLORS.muted, fontStyle: "italic",
-                      padding: "8px 12px",
-                    }}>
-                      Lyra is thinking...
-                    </div>
-                  )}
-                  {hintResponse && !hintResponseLoading && (
-                    <div style={{
-                      fontSize: 12, color: COLORS.heading, lineHeight: 1.5,
-                      padding: "8px 12px", background: COLORS.bg2,
-                      borderRadius: 8, borderLeft: `2px solid ${COLORS.blue}`,
-                      whiteSpace: "pre-wrap",
-                    }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Lyra says</div>
-                      {hintResponse}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <textarea
-                    value={hintAnswer}
-                    onChange={e => setHintAnswer(e.target.value)}
-                    placeholder="Your answer..."
-                    style={{
-                      width: "100%", minHeight: 44, padding: 8, borderRadius: 8,
-                      border: `1.5px solid ${COLORS.border}`, background: COLORS.card,
-                      fontFamily: mono, fontSize: 12,
-                      color: COLORS.text, resize: "vertical", boxSizing: "border-box",
-                    }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                    <button
-                      onClick={() => {
-                        if (!hintAnswer.trim()) return;
-                        // Save the student's thinking as context for evaluation; keep
-                        // the hint card visible so they can reference it while rewriting.
-                        const answer = hintAnswer.trim();
-                        setStudentExplanation(answer);
-                        setHintSubmitted(true);
-                        // Fire the AI response so the student gets actual coaching
-                        // back, not just a dead read-only copy of their own words.
-                        fetchHintResponse(answer, hint?.question || "");
-                      }}
-                      disabled={!hintAnswer.trim()}
-                      style={{
-                        fontSize: 11, fontWeight: 700, fontFamily: mono,
-                        padding: "6px 14px", borderRadius: 8,
-                        border: "none",
-                        background: hintAnswer.trim() ? COLORS.blue : COLORS.bg2,
-                        color: hintAnswer.trim() ? "#fff" : COLORS.muted,
-                        cursor: hintAnswer.trim() ? "pointer" : "default",
-                      }}
-                    >
-                      Got it →
-                    </button>
+                ))}
+                {chatLoading && (
+                  <div style={{
+                    alignSelf: "flex-start", maxWidth: "85%",
+                    background: COLORS.bg2, color: COLORS.muted,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: "4px 14px 14px 14px",
+                    padding: "8px 12px",
+                    fontSize: 12, fontStyle: "italic",
+                  }}>
+                    Lyra is thinking...
                   </div>
-                </>
-              )}
+                )}
+              </div>
+
+              {/* Input row */}
+              <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+                <textarea
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendStudentMessage();
+                    }
+                  }}
+                  placeholder="Reply to Lyra..."
+                  disabled={chatLoading}
+                  style={{
+                    flex: 1, minHeight: 38, maxHeight: 100, padding: 8, borderRadius: 8,
+                    border: `1.5px solid ${COLORS.border}`, background: COLORS.card,
+                    fontFamily: mono, fontSize: 12,
+                    color: COLORS.text, resize: "none", boxSizing: "border-box",
+                    opacity: chatLoading ? 0.6 : 1,
+                  }}
+                />
+                <button
+                  onClick={sendStudentMessage}
+                  disabled={!chatInput.trim() || chatLoading}
+                  style={{
+                    fontSize: 12, fontWeight: 700, fontFamily: mono,
+                    padding: "8px 14px", borderRadius: 8,
+                    border: "none",
+                    background: (chatInput.trim() && !chatLoading) ? COLORS.blue : COLORS.bg2,
+                    color: (chatInput.trim() && !chatLoading) ? "#fff" : COLORS.muted,
+                    cursor: (chatInput.trim() && !chatLoading) ? "pointer" : "default",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Send
+                </button>
+              </div>
             </div>
           )}
 
           {/* Action buttons */}
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            {hintLevel < 2 && (
+            {!chatOpen && (
               <button
-                onClick={getHint}
-                disabled={hintLoading}
+                onClick={openStuckChat}
+                disabled={chatLoading}
                 style={{
                   ...s.chip, fontSize: 12, fontWeight: 600,
                   border: `1.5px solid ${COLORS.blue}`, background: "transparent",
-                  color: COLORS.blue, opacity: hintLoading ? 0.5 : 1,
-                  flex: hintLevel === 0 ? "none" : "none",
+                  color: COLORS.blue, opacity: chatLoading ? 0.5 : 1,
                 }}
               >
-                {hintLoading ? "Thinking..." : hintLevel === 0 ? "I'm stuck" : "More help"}
+                {chatLoading ? "Thinking..." : "I'm stuck — chat with Lyra"}
               </button>
             )}
             <button
@@ -631,7 +603,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
           {/* Action buttons */}
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <button
-              onClick={() => { setStudentAttempt(""); setStudentExplanation(""); setEvaluation(null); setHint(null); setHintLevel(0); setHintAnswer(""); setHintSubmitted(false); setHintResponse(null); setHintResponseLoading(false); setScreen("exercise"); }}
+              onClick={() => { setStudentAttempt(""); setStudentExplanation(""); setEvaluation(null); setChatOpen(false); setChatMessages([]); setChatInput(""); setChatLoading(false); setScreen("exercise"); }}
               style={{
                 ...s.chip, flex: 1, fontSize: 12, fontWeight: 600,
                 textAlign: "center", justifyContent: "center",
