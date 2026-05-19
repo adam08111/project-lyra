@@ -31,6 +31,14 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   const [progressLoaded, setProgressLoaded] = useState(false);
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
+  const chatScrollRef = useRef(null);
+
+  // Auto-scroll the chat thread to the bottom whenever a new message arrives
+  // or the loading indicator appears.
+  useEffect(() => {
+    if (!chatScrollRef.current) return;
+    chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+  }, [chatMessages, chatLoading]);
 
   // Extract techniques from skill
   const techniques = skill?.analysedTechniques || skill?.researchedTechniques
@@ -85,7 +93,10 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
         "Generate the exercise sentences now.",
         false, 1000, route.thinkingBudget, undefined, undefined, route.model
       );
-      const cleaned = result.replace(/```json|```/g, "").trim();
+      const cleaned = result
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/```json|```/g, "")
+        .trim();
       const parsed = JSON.parse(cleaned);
       const exerciseArr = new Array(techniques.length).fill(null);
       for (const item of parsed) {
@@ -128,7 +139,10 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
         "Evaluate this attempt now.",
         false, 600, route.thinkingBudget, undefined, undefined, route.model
       );
-      const cleaned = result.replace(/```json|```/g, "").trim();
+      const cleaned = result
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/```json|```/g, "")
+        .trim();
       const parsed = JSON.parse(cleaned);
       setEvaluation(parsed);
 
@@ -176,7 +190,13 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
         "Write your next message now.",
         false, (route.thinkingBudget || 0) + 300, route.thinkingBudget, undefined, undefined, route.model
       );
-      const cleaned = result.replace(/```json|```/g, "").trim();
+      // LYRA_BRAIN emits a trailing <!--LYRA_LEARNING_DATA ... --> HTML
+      // comment after the JSON; strip those out (and any ```json fences) so
+      // JSON.parse sees clean JSON.
+      const cleaned = result
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/```json|```/g, "")
+        .trim();
       const parsed = JSON.parse(cleaned);
       const message = parsed.message || parsed.response || parsed.question || "";
       if (message) {
@@ -435,7 +455,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
               </div>
 
               {/* Chat message thread */}
-              <div style={{
+              <div ref={chatScrollRef} style={{
                 maxHeight: 320, overflowY: "auto", padding: "4px 2px",
                 display: "flex", flexDirection: "column", gap: 8,
                 marginBottom: 10,
