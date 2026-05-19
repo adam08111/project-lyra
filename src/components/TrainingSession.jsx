@@ -11,6 +11,25 @@ const mono = "'Courier Prime', monospace";
 const STAR_LABELS = { 3: "Nailed it!", 2: "Good start!", 1: "Keep practising!" };
 const STAR_COLORS = { 3: COLORS.green, 2: COLORS.amber, 1: COLORS.red };
 
+// Render **bold** and *italic* markdown for Lyra coaching turns. LYRA_BRAIN
+// emits bold for vocabulary ingredients and craft callouts; italics wrap
+// parallel-universe example sentences. Plain text otherwise. Also strips
+// markdown bullet markers ("* ") that would otherwise show as raw asterisks.
+const renderMd = (text) => {
+  if (!text) return text;
+  // First, replace line-starting "* " bullets with a bullet character.
+  const bulletFixed = text.replace(/^[ \t]*\*[ \t]+/gm, "  • ");
+  // Then split on **bold** and *italic* spans (run bold first so it wins).
+  const parts = bulletFixed.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*)/g);
+  return parts.map((part, i) => {
+    const bold = part.match(/^\*\*([^*]+)\*\*$/);
+    if (bold) return <strong key={i}>{bold[1]}</strong>;
+    const italic = part.match(/^\*([^*\n]+)\*$/);
+    if (italic) return <em key={i}>{italic[1]}</em>;
+    return part;
+  });
+};
+
 export default function TrainingSession({ skill, onClose, trackCall }) {
   // Internal state
   const [screen, setScreen] = useState("overview");
@@ -185,28 +204,31 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
 
       const route = getRouteConfig("training_hint");
       trackCall();
+      // LYRA_BRAIN coaching turns are plain text (multi-paragraph teaching with
+      // Parallel Universes, Vocabulary Ingredients, Rhythm Maps). We give the
+      // model ~1500 tokens of output budget on top of its thinking budget so
+      // it can deploy the full 4-step protocol without getting truncated.
       const result = await callAI(
         buildTrainingChatPrompt(anonTech, exercise, conversation),
-        "Write your next message now.",
-        false, (route.thinkingBudget || 0) + 300, route.thinkingBudget, undefined, undefined, route.model
+        "Write your next coaching turn now.",
+        false, (route.thinkingBudget || 0) + 1500, route.thinkingBudget, undefined, undefined, route.model
       );
-      // LYRA_BRAIN emits a trailing <!--LYRA_LEARNING_DATA ... --> HTML
-      // comment after the JSON; strip those out (and any ```json fences) so
-      // JSON.parse sees clean JSON.
-      const cleaned = result
+      // LYRA_BRAIN appends a trailing <!--LYRA_LEARNING_DATA ... --> HTML
+      // comment carrying structured learning metadata for the app to harvest.
+      // Strip it (plus any stray markdown fences) — what remains is the
+      // coaching turn itself, displayed verbatim to the student.
+      const message = result
         .replace(/<!--[\s\S]*?-->/g, "")
         .replace(/```json|```/g, "")
         .trim();
-      const parsed = JSON.parse(cleaned);
-      const message = parsed.message || parsed.response || parsed.question || "";
       if (message) {
         setChatMessages(prev => [...prev, { role: 'lyra', text: message }]);
       }
     } catch (e) {
       console.error("Lyra chat turn failed:", e);
       const fallback = conversation.length === 0
-        ? "Which word in the sentence feels the most boring to you?"
-        : "Nice thinking! Have a go at the rewrite — even a small change is a win.";
+        ? "My coaching engine sputtered. While I reboot, tell me in your own words (English or Cantonese) — what feels stuck about the plain sentence?"
+        : "Sorry — my engine just sputtered. Could you tell me again in your own words what you're trying to say? Fragments or Cantonese are fine.";
       setChatMessages(prev => [...prev, { role: 'lyra', text: fallback }]);
     }
     setChatLoading(false);
@@ -454,26 +476,28 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                 </button>
               </div>
 
-              {/* Chat message thread */}
+              {/* Chat message thread. Taller than a one-question hint card
+                  because LYRA_BRAIN coaching turns are multi-paragraph (4-step
+                  protocol with vocabulary ingredients and parallel universes). */}
               <div ref={chatScrollRef} style={{
-                maxHeight: 320, overflowY: "auto", padding: "4px 2px",
-                display: "flex", flexDirection: "column", gap: 8,
+                maxHeight: 450, overflowY: "auto", padding: "4px 2px",
+                display: "flex", flexDirection: "column", gap: 10,
                 marginBottom: 10,
               }}>
                 {chatMessages.map((m, i) => (
                   <div key={i} style={{
                     alignSelf: m.role === "student" ? "flex-end" : "flex-start",
-                    maxWidth: "85%",
+                    maxWidth: "92%",
                     background: m.role === "student" ? COLORS.blue : COLORS.bg2,
                     color: m.role === "student" ? "#fff" : COLORS.heading,
                     border: m.role === "lyra" ? `1px solid ${COLORS.border}` : "none",
                     borderRadius: m.role === "student" ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
-                    padding: "8px 12px",
-                    fontSize: 13, lineHeight: 1.5,
+                    padding: "10px 14px",
+                    fontSize: 13, lineHeight: 1.55,
                     whiteSpace: "pre-wrap",
                     animation: "fadeIn 0.2s ease",
                   }}>
-                    {m.text}
+                    {m.role === "lyra" ? renderMd(m.text) : m.text}
                   </div>
                 ))}
                 {chatLoading && (
