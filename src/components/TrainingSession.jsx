@@ -52,11 +52,28 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   const scrollRef = useRef(null);
   const chatScrollRef = useRef(null);
 
-  // Auto-scroll the chat thread to the bottom whenever a new message arrives
-  // or the loading indicator appears.
+  // Auto-scroll behaviour:
+  // - When the last message is from Lyra, position the TOP of her bubble at
+  //   the top of the visible area so the student reads from the beginning.
+  //   Multi-paragraph LYRA_BRAIN turns (source quote → effect → vocabulary →
+  //   parallel universes) would otherwise dump the reader at the closing
+  //   challenge.
+  // - When the last message is the student's own, or while Lyra is thinking,
+  //   scroll to the bottom (so they see what they just sent / the loader).
   useEffect(() => {
-    if (!chatScrollRef.current) return;
-    chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    const container = chatScrollRef.current;
+    if (!container) return;
+    const lastMsg = chatMessages[chatMessages.length - 1];
+    if (lastMsg && lastMsg.role === 'lyra' && !chatLoading) {
+      const lastBubble = container.lastElementChild;
+      if (lastBubble) {
+        const containerRect = container.getBoundingClientRect();
+        const bubbleRect = lastBubble.getBoundingClientRect();
+        container.scrollTop = bubbleRect.top - containerRect.top + container.scrollTop;
+        return;
+      }
+    }
+    container.scrollTop = container.scrollHeight;
   }, [chatMessages, chatLoading]);
 
   // Extract techniques from skill
