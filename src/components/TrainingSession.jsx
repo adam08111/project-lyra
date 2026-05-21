@@ -9,6 +9,25 @@ import { parseSectionContent, trimToSentence } from "./XRayView.jsx";
 
 const mono = "'Courier Prime', monospace";
 
+// The AI often annotates examples with internal markup like
+//   "For them, {being late is weaponised incompetence}[metaphor — comparing
+//    an action to a weapon] - see how she talks..."
+// {…} wraps a craft fragment, [...] is the labelling commentary. Students
+// don't need to see this. Strip the [...] commentary entirely and remove
+// the surrounding braces from {...} so the sentence reads as clean English.
+// The unstripped version still flows into LYRA_BRAIN via prompts.js, where
+// the annotations help Lyra teach. Render-only cleanup, no data mutation.
+const cleanExampleForDisplay = (text) => {
+  if (!text) return text;
+  return text
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\{([^{}]*)\}/g, "$1")
+    .replace(/^["“]|["”]$/g, "")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+};
+
 const STAR_LABELS = { 3: "Nailed it!", 2: "Good start!", 1: "Keep practising!" };
 const STAR_COLORS = { 3: COLORS.green, 2: COLORS.amber, 1: COLORS.red };
 
@@ -451,15 +470,25 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-          {/* Technique card — kept concise so students don't hit a wall of words.
-              Structure pattern + example sentence are NOT shown here; they are
-              piped into LYRA_BRAIN via buildTrainingChatPrompt so Lyra can
-              surface them in coaching turns when relevant. */}
+          {/* Technique card — concise but grounded. Shows the technique name, a
+              one-paragraph description, and the writer's actual sentence so
+              students have a concrete anchor before attempting the rewrite.
+              The abstract structure pattern is intentionally hidden — it's
+              piped into LYRA_BRAIN via buildTrainingChatPrompt and Lyra
+              surfaces it on demand when the student opens the stuck chat. */}
           <div style={{ background: COLORS.card, border: `1.5px solid ${COLORS.blue}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Technique</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3, marginBottom: activeTech.description ? 8 : 0 }}>{activeTech.technique}</div>
             {activeTech.description && (
               <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6 }}>{activeTech.description}</div>
+            )}
+            {activeTech.example && (
+              <div style={{ background: COLORS.bg2, borderLeft: `3px solid ${COLORS.accent1}`, borderRadius: 6, padding: "8px 12px", marginTop: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Like this</div>
+                <div style={{ fontSize: 12, color: COLORS.heading, fontStyle: "italic", lineHeight: 1.55 }}>
+                  {"“"}{cleanExampleForDisplay(activeTech.example)}{"”"}
+                </div>
+              </div>
             )}
           </div>
 
@@ -478,7 +507,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
               ref={textareaRef}
               value={studentAttempt}
               onChange={e => setStudentAttempt(e.target.value)}
-              placeholder={`Apply "${activeTech.technique}" to rewrite the sentence above...`}
+              placeholder={"Write your rewrite here..."}
               style={{
                 width: "100%", minHeight: 100, padding: "12px 14px", borderRadius: 10,
                 border: `1.5px solid ${COLORS.border}`, background: COLORS.card,
@@ -486,6 +515,9 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                 resize: "vertical", boxSizing: "border-box",
               }}
             />
+            <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 6, lineHeight: 1.45 }}>
+              Lyra will read your rewrite and tell you what's working.
+            </div>
           </div>
 
           {/* Stuck-chat \u2014 multi-turn conversation with Lyra. Replaces the
