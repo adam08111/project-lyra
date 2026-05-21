@@ -5,6 +5,7 @@ import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
 import { buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingChatPrompt } from "../prompts.js";
 import { anonymiseSkillsForAI } from "../utils.js";
+import { parseSectionContent, trimToSentence } from "./XRayView.jsx";
 
 const mono = "'Courier Prime', monospace";
 
@@ -76,9 +77,28 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     container.scrollTop = container.scrollHeight;
   }, [chatMessages, chatLoading]);
 
-  // Extract techniques from skill
-  const techniques = skill?.analysedTechniques || skill?.researchedTechniques
-    || (skill?.techniques || []).map(t => typeof t === "string" ? { technique: t, description: "", example: "" } : t);
+  // Extract techniques from skill.
+  // For analysed skills, prefer freshly re-parsing from skill.sections[].content
+  // when available — the raw section text is the source of truth, while older
+  // analysedTechniques in localStorage may carry descriptions that were hard-
+  // sliced mid-word by an earlier save bug (e.g. "...late people a"). This
+  // heals legacy data without requiring the student to re-analyse the writer.
+  const techniques = (() => {
+    if (Array.isArray(skill?.sections) && skill.sections.length) {
+      const fromSections = skill.sections.map(sec => {
+        const parts = parseSectionContent(sec.content || "");
+        return {
+          technique: parts.keyIdea || sec.title,
+          description: trimToSentence(parts.body || "", 350),
+          structure: parts.structure || "",
+          example: trimToSentence((parts.example || "").replace(/^["“]|["”]$/g, ""), 250),
+        };
+      }).filter(t => t.technique);
+      if (fromSections.length) return fromSections;
+    }
+    return skill?.analysedTechniques || skill?.researchedTechniques
+      || (skill?.techniques || []).map(t => typeof t === "string" ? { technique: t, description: "", example: "" } : t);
+  })();
 
   const masteredCount = Object.values(progress).filter(p => p.stars >= 3).length;
 
@@ -431,23 +451,15 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-          {/* Technique card */}
+          {/* Technique card — kept concise so students don't hit a wall of words.
+              Structure pattern + example sentence are NOT shown here; they are
+              piped into LYRA_BRAIN via buildTrainingChatPrompt so Lyra can
+              surface them in coaching turns when relevant. */}
           <div style={{ background: COLORS.card, border: `1.5px solid ${COLORS.blue}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Technique</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3, marginBottom: 8 }}>{activeTech.technique}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3, marginBottom: activeTech.description ? 8 : 0 }}>{activeTech.technique}</div>
             {activeTech.description && (
-              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, marginBottom: 6 }}>{activeTech.description}</div>
-            )}
-            {activeTech.structure && (
-              <div style={{ background: COLORS.bg2, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px", marginTop: 8 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Pattern</div>
-                <div style={{ fontSize: 11, color: COLORS.heading, lineHeight: 1.5 }}>{activeTech.structure}</div>
-              </div>
-            )}
-            {activeTech.example && (
-              <div style={{ fontSize: 11, color: COLORS.muted, fontStyle: "italic", lineHeight: 1.5, borderLeft: `2px solid ${COLORS.accent1}`, paddingLeft: 8, marginTop: 8 }}>
-                {activeTech.example}
-              </div>
+              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6 }}>{activeTech.description}</div>
             )}
           </div>
 

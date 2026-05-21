@@ -40,6 +40,21 @@ export function parseProfileSections(text) {
   return sections;
 }
 
+// Trim a description to ~max chars but always end on a complete sentence.
+// Prefers a full sentence boundary (. ! ?) before max. Falls back to the last
+// word boundary + ellipsis if no sentence punctuation fits. Returns text
+// unchanged if it already fits within max. Used by saveStyleSkill so saved
+// technique cards never end mid-word (e.g. "...late people a").
+export function trimToSentence(text, max) {
+  const t = (text || "").trim();
+  if (!t || t.length <= max) return t;
+  const slice = t.slice(0, max);
+  const lastSentence = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
+  if (lastSentence > max * 0.5) return t.slice(0, lastSentence + 1);
+  const wordCut = slice.replace(/\s+\S*$/, "");
+  return (wordCut || slice) + "…";
+}
+
 export function parseSectionContent(content) {
   const parts = { keyIdea: "", body: "", example: "", breakdown: "", whyItWorks: "", structure: "", watchOut: "", vocabUpgrade: "" };
   const lines = content.split("\n");
@@ -1203,9 +1218,9 @@ export function saveStyleSkill(authorName, profileSections) {
       const parts = parseSectionContent(s.content);
       return {
         technique: parts.keyIdea || s.title,
-        description: (parts.body || "").slice(0, 250),
+        description: trimToSentence(parts.body || "", 350),
         structure: parts.structure || "",
-        example: (parts.example || "").replace(/^["\u201C]|["\u201D]$/g, "").slice(0, 200),
+        example: trimToSentence((parts.example || "").replace(/^["\u201C]|["\u201D]$/g, ""), 250),
       };
     }).filter(t => t.technique);
 
