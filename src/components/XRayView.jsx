@@ -730,11 +730,11 @@ export function SectionCard({ section, onSave, trackCall, index }) {
     if (zhLines.length === 0) return null;
     return (
       <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 14px", marginTop: 6, marginBottom: 12, borderLeft: `3px solid ${COLORS.accent1}`, fontFamily: mono }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.muted, marginBottom: 8, letterSpacing: 1 }}>
-          譯文
+        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
+          譯文 · Translation
         </div>
         {zhLines.map((zh, i) => (
-          <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 4.5, fontStyle: "italic", marginBottom: 4 }}>
+          <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.1, fontStyle: "italic", marginBottom: 4 }}>
             <AnnotatedQuote text={zh} />
           </div>
         ))}
