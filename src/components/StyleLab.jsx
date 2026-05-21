@@ -9,7 +9,8 @@ import { useTypewriter } from "../hooks.js";
 import XRayView, {
   parseProfileSections, parseSectionContent, parseAnnotations,
   labelColorIndex, ANNOTATION_COLORS, AnnotatedQuote, SectionCard,
-  extractAuthor, saveStyleSkill, mono, parseStructureContent
+  extractAuthor, saveStyleSkill, mono, parseStructureContent,
+  deriveShortTitle
 } from "./XRayView.jsx";
 
 function CoachMessage({ text, profileSections }) {
@@ -400,6 +401,10 @@ function SavedConcepts() {
 // before the `sections` field was added) so SectionCard can still render it.
 function synthSectionFromTechnique(t) {
   const lines = [];
+  // Encode the short title into the synthesized content so CollapsibleTechnique
+  // and TrainingSession's section re-derive path both pick it up the same way.
+  const titleSource = t.title || deriveShortTitle(t.technique || "");
+  if (titleSource) lines.push(`SHORT TITLE: ${titleSource}`);
   if (t.technique) lines.push(`KEY IDEA: ${t.technique}`);
   if (t.description) lines.push(t.description);
   if (t.example) lines.push(`FROM THE TEXT: "${t.example}"`);
@@ -407,15 +412,26 @@ function synthSectionFromTechnique(t) {
   return { title: t.technique || "TECHNIQUE", content: lines.join("\n\n") };
 }
 
-// Compact-by-default wrapper for a technique inside SavedSkillDetail. Shows
-// only the numbered key-idea summary; click → expand inline to render the
-// full SectionCard with all the rich content (FROM THE TEXT, GIVE IT A GO,
-// breakdown, translate button, etc.). The × button removes this single
-// technique from the saved skill.
-function CollapsibleTechnique({ section, index, trackCall, onRemove }) {
+// Compact-by-default wrapper for a technique inside SavedSkillDetail. The
+// collapsed row shows the short title (2-4 word skill name) as the big bold
+// heading, with the long KEY IDEA sentence underneath as a smaller subtitle.
+// Click → expand inline to render the full SectionCard. The ✎ button puts
+// the title into inline-edit mode (Enter saves, Escape cancels); the × button
+// removes the technique entirely from the saved skill.
+function CollapsibleTechnique({ section, index, trackCall, onRemove, onRename }) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
   const parts = parseSectionContent(section.content);
-  const summary = parts.keyIdea || section.title || "Technique";
+  const longSentence = parts.keyIdea || section.title || "";
+  const title = parts.shortTitle || deriveShortTitle(longSentence) || longSentence || "Technique";
+
+  const commitRename = (nextValue) => {
+    const trimmed = (nextValue ?? "").trim();
+    setEditing(false);
+    if (!trimmed || trimmed === title) return;
+    if (onRename) onRename(trimmed);
+  };
 
   const removeBtn = onRemove ? (
     <button
@@ -444,7 +460,7 @@ function CollapsibleTechnique({ section, index, trackCall, onRemove }) {
 
   return (
     <div
-      onClick={() => setExpanded(true)}
+      onClick={() => { if (!editing) setExpanded(true); }}
       style={{
         background: COLORS.card,
         border: `1px solid ${COLORS.border}`,
@@ -456,12 +472,43 @@ function CollapsibleTechnique({ section, index, trackCall, onRemove }) {
         alignItems: "flex-start",
         justifyContent: "space-between",
         gap: 10,
-        cursor: "pointer",
+        cursor: editing ? "default" : "pointer",
         transition: "border-color 0.15s",
       }}
     >
-      <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, lineHeight: 1.5 }}>
-        {index}. {summary}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {editing ? (
+          <input
+            autoFocus
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={() => commitRename(editValue)}
+            onKeyDown={e => {
+              if (e.key === "Enter") { e.preventDefault(); commitRename(editValue); }
+              if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+            }}
+            onClick={e => e.stopPropagation()}
+            style={{ width: "100%", fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, border: `1.5px solid ${COLORS.heading}`, background: COLORS.bg2, padding: "3px 8px", borderRadius: 8, outline: "none", boxSizing: "border-box" }}
+          />
+        ) : (
+          <>
+            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, lineHeight: 1.5, display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{index}. {title}</span>
+              {onRename && (
+                <button
+                  onClick={e => { e.stopPropagation(); setEditValue(title); setEditing(true); }}
+                  title="Rename this technique"
+                  style={{ background: "none", border: "none", fontSize: 11, color: COLORS.muted, cursor: "pointer", padding: "1px 4px", opacity: 0.5, lineHeight: 1, flexShrink: 0 }}
+                >✎</button>
+              )}
+            </div>
+            {longSentence && longSentence !== title && (
+              <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, lineHeight: 1.5, marginTop: 4, fontWeight: 400 }}>
+                {longSentence}
+              </div>
+            )}
+          </>
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
         {removeBtn}
@@ -471,7 +518,7 @@ function CollapsibleTechnique({ section, index, trackCall, onRemove }) {
   );
 }
 
-function SavedSkillDetail({ skill, onBack, onApply, onPractice, onRemove, onRemoveTechnique, trackCall }) {
+function SavedSkillDetail({ skill, onBack, onApply, onPractice, onRemove, onRemoveTechnique, onRenameTechnique, trackCall }) {
   // Prefer full saved sections (new format); fall back to synthesizing from
   // analysedTechniques (legacy skills saved before the sections field existed).
   const hasFullSections = skill.sections && skill.sections.length > 0;
@@ -525,6 +572,7 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onRemove, onRemo
             index={i + 1}
             trackCall={trackCall}
             onRemove={onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
+            onRename={onRenameTechnique ? (newTitle) => onRenameTechnique(i, newTitle, hasFullSections) : null}
           />
         ))
       ) : (
@@ -610,6 +658,42 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
     localStorage.setItem("lyra-style-skills", JSON.stringify(next));
   };
 
+  // Rename a single technique's short title. Persists in BOTH places so the
+  // TrainingSession's re-derive-from-sections path and any code path that
+  // reads analysedTechniques[i].title see the same value:
+  //   - skill.analysedTechniques[i].title  (parallel array)
+  //   - skill.sections[i].content          (rewritten SHORT TITLE: line, or
+  //                                         inserted if the section was saved
+  //                                         before the SHORT TITLE field
+  //                                         existed)
+  const renameTechnique = (skillIdx, techIdx, newTitle, hasFullSections) => {
+    const target = skills[skillIdx];
+    if (!target || !newTitle) return;
+    const updated = { ...target };
+
+    if (updated.analysedTechniques && updated.analysedTechniques[techIdx]) {
+      updated.analysedTechniques = updated.analysedTechniques.map((t, i) =>
+        i === techIdx ? { ...t, title: newTitle } : t
+      );
+    }
+
+    if (hasFullSections && updated.sections && updated.sections[techIdx]) {
+      updated.sections = updated.sections.map((sec, i) => {
+        if (i !== techIdx) return sec;
+        const content = sec.content || "";
+        const hasShortTitle = /^SHORT TITLE:\s*.+$/m.test(content);
+        const newContent = hasShortTitle
+          ? content.replace(/^SHORT TITLE:\s*.+$/m, `SHORT TITLE: ${newTitle}`)
+          : `SHORT TITLE: ${newTitle}\n${content}`;
+        return { ...sec, content: newContent };
+      });
+    }
+
+    const next = skills.map((s, i) => i === skillIdx ? updated : s);
+    setSkills(next);
+    localStorage.setItem("lyra-style-skills", JSON.stringify(next));
+  };
+
   if (skills.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px 20px" }}>
@@ -631,6 +715,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
         onPractice={onPractice}
         onRemove={() => remove(viewingIdx)}
         onRemoveTechnique={(techIdx, hasFullSections) => removeTechnique(viewingIdx, techIdx, hasFullSections)}
+        onRenameTechnique={(techIdx, newTitle, hasFullSections) => renameTechnique(viewingIdx, techIdx, newTitle, hasFullSections)}
         trackCall={trackCall}
       />
     );

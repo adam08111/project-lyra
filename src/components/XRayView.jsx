@@ -40,6 +40,63 @@ export function parseProfileSections(text) {
   return sections;
 }
 
+// Derive a short title for a technique when the AI omitted SHORT TITLE
+// (legacy skills) AND the student hasn't manually renamed it yet. Picks the
+// first content-bearing phrase from the long KEY IDEA sentence — strips
+// generic leading subjects ("The writer", "Hudson", "She") and trailing
+// function words ("to", "as", "of") so we don't stop mid-prepositional
+// phrase. Title-cases each word, taking care to ignore leading quotes when
+// finding the first letter. This is a heuristic — students who don't like
+// the result can rename via the pencil affordance in SavedSkillDetail.
+const SHORT_TITLE_VERB_PATTERN = "uses|describes|treats|frames|talks about|talks of|paints|builds|opens|closes|delivers|presents|sets up|sets|deploys|invokes|relies on|leans on|leans into|leans toward|positions herself|positions himself|positions|hides|reveals|admits|introduces|portrays|likens|compares|calls|labels herself|labels himself|labels|names|takes|gives|chooses|picks|connects|combines|joins|links|loves|prefers|favours|favors|sounds like|sounds|feels like|adopts|wields|exploits|drives|delivers|opens with|closes with|writes|argues|asks|points|points to";
+const SHORT_TITLE_TRAIL_WORDS = new Set(["a","an","the","to","of","by","with","for","not","just","simply","her","his","their","its","as","in","on","at","that","which","who","whom","whose","into","from","about","over","under","up","down","off","but","and","or","so","very","quite","really","really,","including","is","are","was","were","be","been","being","do","does","did","has","have","had","can","could","will","would","should","may","might","must"]);
+
+export function deriveShortTitle(longSentence) {
+  if (!longSentence) return "";
+  let s = longSentence.trim();
+  // Drop wrapping quotes and trailing punctuation
+  s = s.replace(/^["“'']+|["”'']+$/g, "").replace(/[.!?,;:]+$/g, "");
+  // Drop generic-subject + verb prefixes ("The writer uses...", "Hudson connects...")
+  const verbAlt = SHORT_TITLE_VERB_PATTERN;
+  s = s.replace(new RegExp(`^(the writer|the author|the columnist|the speaker|the narrator|she|he|they|it|this writer|this author)\\s+(${verbAlt})\\s+`, "i"), "");
+  s = s.replace(new RegExp(`^[A-Z][a-z]+\\s+(${verbAlt})\\s+`), "");
+  // Strip articles and filler at the head of the remaining phrase
+  s = s.replace(/^(a|an|the|to|of|by|with|for|not|just|simply|her|his|their|its)\s+/i, "");
+  // Take first 4 meaningful words
+  let words = s.split(/\s+/).filter(Boolean).slice(0, 4);
+  // Drop trailing infinitive phrases ("...to make", "...to look") — these are
+  // structurally orphan verb-phrases when sliced at word 4 of the parent
+  // sentence, and rarely add clarity to the label.
+  while (words.length >= 2) {
+    const tail = words[words.length - 1].toLowerCase().replace(/[.,;:!?'"“”]+$/g, "");
+    const prev = words[words.length - 2].toLowerCase().replace(/[.,;:!?'"“”]+$/g, "");
+    if (prev === "to" && tail.length > 0) { words.splice(-2); continue; }
+    break;
+  }
+  // Iteratively trim trailing function/filler words ("...to look", "...not as")
+  while (words.length > 1) {
+    const last = words[words.length - 1].toLowerCase().replace(/[.,;:!?'"“”]+$/g, "");
+    if (SHORT_TITLE_TRAIL_WORDS.has(last)) words.pop();
+    else break;
+  }
+  let label = words.join(" ");
+  // Strip trailing terminal punctuation (.,;:!?) — but keep closing quotes
+  // when they balance a leading quote so we don't eat the close of a quoted
+  // phrase like `"Concession Clauses"`.
+  label = label.replace(/[.,;:!?]+$/g, "").trim();
+  const opensWithQuote = /^["“'']/.test(label);
+  if (!opensWithQuote) label = label.replace(/["”'']+$/g, "").trim();
+  if (!label) return "";
+  // Title Case each word — first ALPHA char goes upper, the rest of the
+  // word goes lower. Leading quotes/punctuation stay where they are.
+  return label.split(/\s+/).map(w => {
+    if (!w) return w;
+    const m = w.match(/^([^a-zA-Z]*)([a-zA-Z])(.*)$/);
+    if (!m) return w;
+    return m[1] + m[2].toUpperCase() + m[3].toLowerCase();
+  }).join(" ");
+}
+
 // Trim a description to ~max chars but always end on a complete sentence.
 // Prefers a full sentence boundary (. ! ?) before max. Falls back to the last
 // word boundary + ellipsis if no sentence punctuation fits. Returns text
@@ -56,7 +113,7 @@ export function trimToSentence(text, max) {
 }
 
 export function parseSectionContent(content) {
-  const parts = { keyIdea: "", body: "", example: "", breakdown: "", whyItWorks: "", structure: "", watchOut: "", vocabUpgrade: "" };
+  const parts = { shortTitle: "", keyIdea: "", body: "", example: "", breakdown: "", whyItWorks: "", structure: "", watchOut: "", vocabUpgrade: "" };
   const lines = content.split("\n");
   let current = "body";
 
@@ -64,7 +121,10 @@ export function parseSectionContent(content) {
     const trimmed = line.trim();
     // Skip DIFFICULTY lines entirely — students don't need this label
     if (trimmed.startsWith("DIFFICULTY:")) continue;
-    if (trimmed.startsWith("KEY IDEA:")) {
+    if (trimmed.startsWith("SHORT TITLE:")) {
+      parts.shortTitle = trimmed.replace("SHORT TITLE:", "").trim();
+      current = "body";
+    } else if (trimmed.startsWith("KEY IDEA:")) {
       parts.keyIdea = trimmed.replace("KEY IDEA:", "").trim();
       current = "body";
     } else if (trimmed.startsWith("FROM THE TEXT:") || trimmed.startsWith("EXAMPLE:")) {
@@ -1216,8 +1276,10 @@ export function saveStyleSkill(authorName, profileSections) {
 
     const analysedTechniques = validSections.map(s => {
       const parts = parseSectionContent(s.content);
+      const keyIdea = parts.keyIdea || s.title;
       return {
-        technique: parts.keyIdea || s.title,
+        title: parts.shortTitle || deriveShortTitle(keyIdea),
+        technique: keyIdea,
         description: trimToSentence(parts.body || "", 350),
         structure: parts.structure || "",
         example: trimToSentence((parts.example || "").replace(/^["\u201C]|["\u201D]$/g, ""), 250),

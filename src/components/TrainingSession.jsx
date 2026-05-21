@@ -5,7 +5,7 @@ import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
 import { buildTrainingExercisesPrompt, buildTrainingChatPrompt } from "../prompts.js";
 import { anonymiseSkillsForAI } from "../utils.js";
-import { parseSectionContent, trimToSentence } from "./XRayView.jsx";
+import { parseSectionContent, trimToSentence, deriveShortTitle } from "./XRayView.jsx";
 
 const mono = "'Courier Prime', monospace";
 
@@ -97,12 +97,23 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   // analysedTechniques in localStorage may carry descriptions that were hard-
   // sliced mid-word by an earlier save bug (e.g. "...late people a"). This
   // heals legacy data without requiring the student to re-analyse the writer.
+  //
+  // `title` (2-4 word short heading) is taken from:
+  //   1. parts.shortTitle parsed from section content (set by new analyses
+  //      and by SavedSkills.renameTechnique when a student edits it)
+  //   2. skill.analysedTechniques[i].title (parallel array; covers any code
+  //      path that writes only to analysedTechniques)
+  //   3. deriveShortTitle(keyIdea) — heuristic fallback for legacy skills
+  //      saved before SHORT TITLE existed and never renamed
   const techniques = (() => {
     if (Array.isArray(skill?.sections) && skill.sections.length) {
-      const fromSections = skill.sections.map(sec => {
+      const fromSections = skill.sections.map((sec, i) => {
         const parts = parseSectionContent(sec.content || "");
+        const keyIdea = parts.keyIdea || sec.title;
+        const overrideTitle = skill?.analysedTechniques?.[i]?.title;
         return {
-          technique: parts.keyIdea || sec.title,
+          title: parts.shortTitle || overrideTitle || deriveShortTitle(keyIdea),
+          technique: keyIdea,
           description: trimToSentence(parts.body || "", 350),
           structure: parts.structure || "",
           example: trimToSentence((parts.example || "").replace(/^["“]|["”]$/g, ""), 250),
@@ -371,9 +382,14 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3 }}>
-                    {t.technique}
+                  <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3 }}>
+                    {t.title || t.technique}
                   </div>
+                  {t.title && t.technique && t.title !== t.technique && (
+                    <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 4, lineHeight: 1.4, fontWeight: 400 }}>
+                      {t.technique}
+                    </div>
+                  )}
                   {tried && (
                     <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 3 }}>{p.attempts} attempt{p.attempts !== 1 ? "s" : ""}</div>
                   )}
@@ -412,7 +428,12 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
               surfaces it on demand when the student opens the stuck chat. */}
           <div style={{ background: COLORS.card, border: `1.5px solid ${COLORS.blue}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Technique</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3, marginBottom: activeTech.description ? 8 : 0 }}>{activeTech.technique}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3, marginBottom: 6 }}>{activeTech.title || activeTech.technique}</div>
+            {activeTech.title && activeTech.technique && activeTech.title !== activeTech.technique && (
+              <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.5, marginBottom: activeTech.description ? 6 : 0, fontWeight: 600 }}>
+                {activeTech.technique}
+              </div>
+            )}
             {activeTech.description && (
               <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6 }}>{activeTech.description}</div>
             )}

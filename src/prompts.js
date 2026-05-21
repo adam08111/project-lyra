@@ -244,6 +244,8 @@ CRITICAL ORDERING RULE: Work through the original text from the FIRST word to th
 
 Cover ALL 9 sections below. Sections 1-7 follow this EXACT structure:
 
+SHORT TITLE: [2-4 plain everyday English words — a punchy skill-name label a 14-year-old would say aloud. Good examples: "Start With A Shock", "Fake Illness Excuse", "Concession Then Punch", "Weapon Excuse", "Sound Of A Fall". BANNED jargon: "rhetorical interrogation", "negative definition", "concessive antithesis", "syntactic inversion", "tricolon", "anaphora", "appositive". If you find yourself reaching for a grammar term, replace it with the everyday word a friend would use. Keep it under 28 characters. Title Case.]
+
 KEY IDEA: [One sentence that captures the main point of this section]
 
 [2-3 sentences explaining this aspect of the writing style in simple words. Explain WHAT the writer does, then HOW they do it, then WHY it makes the writing better. Always connect the technique to how it makes the reader feel.]
@@ -268,6 +270,7 @@ AUTHOR: [Name or "Unknown Author"]
 
 COMPARING AND DESCRIBING
 
+SHORT TITLE: [2-4 everyday words, Title Case, no grammar jargon]
 KEY IDEA: [One-sentence summary]
 
 [Explain how the writer paints pictures with words. Do they compare things? Describe feelings as objects?]
@@ -280,6 +283,7 @@ WRITER'S WORDS: rich → "in possession of a good fortune" | wants → "is in wa
 
 SENTENCE PATTERNS
 
+SHORT TITLE: [2-4 everyday words, Title Case, no grammar jargon]
 KEY IDEA: [One-sentence summary]
 
 [Are sentences long or short? Mixed? What rhythm? How many clauses per sentence? Pick a sentence with the MOST interesting structure — one that uses multiple clauses (time, purpose, reason, condition, etc.) or flips the normal word order. Name every clause in the BREAKDOWN.]
@@ -292,6 +296,7 @@ WRITER'S WORDS: [3 pairs of simple word → writer's fancier word]
 
 HOW IDEAS ARE CONNECTED
 
+SHORT TITLE: [2-4 everyday words, Title Case, no grammar jargon]
 KEY IDEA: [One-sentence summary]
 
 [How does the writer join ideas? Add details mid-sentence? Build from one idea to the next?]
@@ -304,6 +309,7 @@ WRITER'S WORDS: [3 pairs]
 
 WORD CHOICES
 
+SHORT TITLE: [2-4 everyday words, Title Case, no grammar jargon]
 KEY IDEA: [One-sentence summary]
 
 [Simple or fancy words? Old-fashioned or modern? What kinds of words does this writer love?]
@@ -316,6 +322,7 @@ WRITER'S WORDS: [3 pairs — this section should have the BEST vocabulary upgrad
 
 GRAMMAR TRICKS
 
+SHORT TITLE: [2-4 everyday words, Title Case, no grammar jargon]
 KEY IDEA: [One-sentence summary]
 
 [This section is about ALL types of clauses and grammar structures. Look for: time clauses (when, while, as), purpose clauses (to, in order to, so that), reason clauses (because, since), result clauses (so...that), condition clauses (if, unless), concession clauses (although, however), relative clauses (who, which, that), inverted clauses, fronted adverbials, participial phrases (-ing/-ed descriptions), appositives, passive constructions, conditional inversions. Pick the most interesting grammar trick that was NOT already covered in other sections.]
@@ -328,6 +335,7 @@ WRITER'S WORDS: [3 pairs]
 
 HOW THE WRITER PERSUADES
 
+SHORT TITLE: [2-4 everyday words, Title Case, no grammar jargon]
 KEY IDEA: [One-sentence summary]
 
 [How do they convince you? Humour? Irony (saying the opposite)? Questions to make you think?]
@@ -340,6 +348,7 @@ WRITER'S WORDS: [3 pairs]
 
 FEELING AND PERSONALITY
 
+SHORT TITLE: [2-4 everyday words, Title Case, no grammar jargon]
 KEY IDEA: [One-sentence summary]
 
 [Serious, funny, angry, gentle? Formal or casual? Does the writer like or dislike the topic?]
@@ -370,6 +379,7 @@ KEY IDEA: [One-sentence summary]
 
 RULES:
 - Use SIMPLE English — imagine explaining to a 14-year-old learning English
+- SHORT TITLE must be 2-4 everyday English words in Title Case, under 28 characters total, with NO grammar jargon. A 14-year-old should read it and instantly know what the skill is. "Concession Then Punch" ✓ — "Concessive Antithesis" ✗. "Fake Illness Excuse" ✓ — "Hyperbolic Self-Pathologisation" ✗. Every section 1-7 must include a SHORT TITLE line BEFORE the KEY IDEA line. Each SHORT TITLE must be different — no duplicates across the 7 sections.
 - When you use a writing term, ALWAYS explain it in brackets
 - Explain WHAT the writer does, HOW they do it, and WHY it makes the reader feel something
 - STRUCTURE must be ADAPTIVE — choose Type 1 (fill-in-blank), Type 2 (rewrite prompt), or Type 3 (hybrid) based on what fits the technique best. If the technique has a repeatable grammatical pattern → Type 1. If the technique is about tone, attitude, or voice → Type 2. If it's a persuasion technique → Type 3.
