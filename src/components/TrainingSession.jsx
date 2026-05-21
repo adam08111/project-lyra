@@ -3,7 +3,7 @@ import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingChatPrompt } from "../prompts.js";
+import { buildTrainingExercisesPrompt, buildTrainingChatPrompt } from "../prompts.js";
 import { anonymiseSkillsForAI } from "../utils.js";
 import { parseSectionContent, trimToSentence } from "./XRayView.jsx";
 
@@ -27,9 +27,6 @@ const cleanExampleForDisplay = (text) => {
     .replace(/\s{2,}/g, " ")
     .trim();
 };
-
-const STAR_LABELS = { 3: "Nailed it!", 2: "Good start!", 1: "Keep practising!" };
-const STAR_COLORS = { 3: COLORS.green, 2: COLORS.amber, 1: COLORS.red };
 
 // Render **bold** and *italic* markdown for Lyra coaching turns. LYRA_BRAIN
 // emits bold for vocabulary ingredients and craft callouts; italics wrap
@@ -58,8 +55,6 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   const [generating, setGenerating] = useState(false);
   const [studentAttempt, setStudentAttempt] = useState("");
   const [studentExplanation, setStudentExplanation] = useState("");
-  const [evaluation, setEvaluation] = useState(null);
-  const [evaluating, setEvaluating] = useState(false);
   // Stuck-chat state — when student clicks "I'm stuck", an inline chat with
   // Lyra opens up. Replaces the old single-question hint flow.
   const [chatOpen, setChatOpen] = useState(false);
@@ -118,8 +113,6 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     return skill?.analysedTechniques || skill?.researchedTechniques
       || (skill?.techniques || []).map(t => typeof t === "string" ? { technique: t, description: "", example: "" } : t);
   })();
-
-  const masteredCount = Object.values(progress).filter(p => p.stars >= 3).length;
 
   // Load progress from localStorage
   useEffect(() => {
@@ -195,56 +188,6 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     }
   }, [skill]);
 
-  // Evaluate student's attempt
-  const evaluateAttempt = useCallback(async () => {
-    if (!studentAttempt.trim() || evaluating || activeTechIdx === null) return;
-    setEvaluating(true);
-    try {
-      const { anonymised } = anonymiseSkillsForAI([skill]);
-      const anonSkill = anonymised[0];
-      const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
-        || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
-      const anonTech = anonTechs[activeTechIdx];
-      const exercise = exercises?.[activeTechIdx] || "";
-
-      const route = getRouteConfig("training_eval");
-      trackCall();
-      const result = await callAI(
-        buildTrainingEvalPrompt(anonTech, exercise, studentAttempt.trim(), studentExplanation || undefined),
-        "Evaluate this attempt now.",
-        false, 600, route.thinkingBudget, undefined, undefined, route.model
-      );
-      const cleaned = result
-        .replace(/<!--[\s\S]*?-->/g, "")
-        .replace(/```json|```/g, "")
-        .trim();
-      const parsed = JSON.parse(cleaned);
-      setEvaluation(parsed);
-
-      // Update progress
-      const techKey = String(activeTechIdx);
-      setProgress(prev => {
-        const existing = prev[techKey] || { stars: 0, attempts: 0, bestAttempt: "" };
-        const newStars = Math.max(existing.stars, parsed.stars || 0);
-        return {
-          ...prev,
-          [techKey]: {
-            stars: newStars,
-            attempts: existing.attempts + 1,
-            bestAttempt: (parsed.stars || 0) > existing.stars ? studentAttempt.trim() : existing.bestAttempt,
-          },
-        };
-      });
-
-      setScreen("feedback");
-    } catch (e) {
-      console.error("Evaluation failed:", e);
-      setEvaluation({ stars: 0, feedback: "Couldn't evaluate your attempt. Please try again!", strengths: "", improvement: "" });
-      setScreen("feedback");
-    }
-    setEvaluating(false);
-  }, [studentAttempt, evaluating, activeTechIdx, exercises, skill, trackCall]);
-
   // Fetch the next Lyra turn given the current conversation.
   // Same Pro-tier model + LYRA_BRAIN as the main coaching chat.
   const fetchLyraTurn = useCallback(async (conversation) => {
@@ -290,15 +233,46 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setChatLoading(false);
   }, [activeTechIdx, exercises, skill, trackCall]);
 
-  // Open the stuck-chat: clear any prior conversation and let Lyra open with
-  // the first Socratic question.
+  // Bump the attempts counter for the active technique. The shared progress
+  // store is what the overview screen reads to show "N attempts" under each
+  // technique title.
+  const bumpAttempts = useCallback(() => {
+    if (activeTechIdx === null) return;
+    const techKey = String(activeTechIdx);
+    setProgress(prev => {
+      const existing = prev[techKey] || { attempts: 0 };
+      return { ...prev, [techKey]: { ...existing, attempts: (existing.attempts || 0) + 1 } };
+    });
+  }, [activeTechIdx]);
+
+  // Open the chat in "stuck" mode: no prior conversation, Lyra opens with the
+  // Socratic 4-step coaching protocol.
   const openStuckChat = useCallback(() => {
     if (chatLoading || activeTechIdx === null) return;
     setChatOpen(true);
     setChatMessages([]);
     setChatInput("");
+    bumpAttempts();
     fetchLyraTurn([]);
-  }, [chatLoading, activeTechIdx, fetchLyraTurn]);
+  }, [chatLoading, activeTechIdx, bumpAttempts, fetchLyraTurn]);
+
+  // Open the chat in "review" mode: the student's rewrite seeds the
+  // conversation as their first turn, and Lyra evaluates it conversationally
+  // (no separate stars/feedback/strengths/improvement panels). buildTraining-
+  // ChatPrompt's follow-up branch already knows how to celebrate landed craft
+  // and surface a sharper word when the student produces a draft.
+  const openReviewChat = useCallback(() => {
+    if (chatLoading || activeTechIdx === null) return;
+    const rewrite = studentAttempt.trim();
+    if (!rewrite) return;
+    const opening = [{ role: 'student', text: rewrite }];
+    setChatOpen(true);
+    setChatMessages(opening);
+    setChatInput("");
+    setStudentExplanation(rewrite);
+    bumpAttempts();
+    fetchLyraTurn(opening);
+  }, [chatLoading, activeTechIdx, studentAttempt, bumpAttempts, fetchLyraTurn]);
 
   // Send a student message and fetch Lyra's next turn.
   const sendStudentMessage = useCallback(() => {
@@ -314,56 +288,31 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     fetchLyraTurn(next);
   }, [chatLoading, chatInput, chatMessages, fetchLyraTurn]);
 
-  // Navigate to next unmastered technique
+  // Step linearly to the next technique, wrapping back to the start. The old
+  // "skip already-mastered" logic is gone now that there is no scoring path.
   const goNext = useCallback(() => {
-    let next = null;
-    // Try to find next unmastered technique after current
-    for (let i = (activeTechIdx || 0) + 1; i < techniques.length; i++) {
-      if ((progress[String(i)]?.stars || 0) < 3) { next = i; break; }
-    }
-    // Wrap around from beginning
-    if (next === null) {
-      for (let i = 0; i < techniques.length; i++) {
-        if ((progress[String(i)]?.stars || 0) < 3) { next = i; break; }
-      }
-    }
-    // All mastered — go back to overview
-    if (next === null) { setScreen("overview"); return; }
+    if (!techniques.length) { setScreen("overview"); return; }
+    const next = ((activeTechIdx ?? -1) + 1) % techniques.length;
     setActiveTechIdx(next);
     setStudentAttempt("");
     setStudentExplanation("");
-    setEvaluation(null);
     setChatOpen(false);
     setChatMessages([]);
     setChatInput("");
     setChatLoading(false);
     setScreen("exercise");
-  }, [activeTechIdx, techniques, progress]);
+  }, [activeTechIdx, techniques]);
 
   // Start practising a technique
   const startTechnique = (idx) => {
     setActiveTechIdx(idx);
     setStudentAttempt("");
     setStudentExplanation("");
-    setEvaluation(null);
     setChatOpen(false);
     setChatMessages([]);
     setChatInput("");
     setChatLoading(false);
     setScreen("exercise");
-  };
-
-  const renderStars = (count, size = 16) => {
-    const filled = Math.min(Math.max(count || 0, 0), 3);
-    return (
-      <span style={{ letterSpacing: 2, fontSize: size }}>
-        {[0, 1, 2].map(i => (
-          <span key={i} style={{ color: i < filled ? "#F5A623" : COLORS.border }}>
-            {i < filled ? "\u2605" : "\u2606"}
-          </span>
-        ))}
-      </span>
-    );
   };
 
   if (!skill) return null;
@@ -381,17 +330,11 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
           </div>
         </div>
 
-        {/* Progress summary */}
-        <div style={{ padding: "14px 18px", background: COLORS.card, borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 12, color: COLORS.muted }}>{masteredCount} of {techniques.length} mastered</span>
-            {masteredCount === techniques.length && techniques.length > 0 && (
-              <span style={{ fontSize: 10, fontWeight: 700, color: COLORS.green, textTransform: "uppercase", letterSpacing: 1 }}>All mastered!</span>
-            )}
-          </div>
-          <div style={{ height: 6, borderRadius: 3, background: COLORS.bg3, overflow: "hidden" }}>
-            <div style={{ height: "100%", borderRadius: 3, background: masteredCount === techniques.length ? COLORS.green : COLORS.blue, width: `${techniques.length > 0 ? (masteredCount / techniques.length) * 100 : 0}%`, transition: "width 0.4s ease" }} />
-          </div>
+        {/* Subhead — explains the flow now that there is no scoring */}
+        <div style={{ padding: "12px 18px", background: COLORS.card, borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.5 }}>
+            {techniques.length} {techniques.length === 1 ? "technique" : "techniques"} — tap one, write your rewrite, then chat with Lyra.
+          </span>
         </div>
 
         {/* Loading state */}
@@ -410,8 +353,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
         <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "12px 18px" }}>
           {techniques.map((t, i) => {
             const p = progress[String(i)];
-            const stars = p?.stars || 0;
-            const isMastered = stars >= 3;
+            const tried = (p?.attempts || 0) > 0;
             const exerciseReady = exercises && exercises[i];
             return (
               <button
@@ -421,8 +363,8 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                 style={{
                   width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10,
                   padding: "12px 14px", marginBottom: 8, borderRadius: 10,
-                  border: `1.5px solid ${isMastered ? COLORS.green : COLORS.border}`,
-                  background: isMastered ? COLORS.green + "0A" : COLORS.card,
+                  border: `1.5px solid ${tried ? COLORS.blue + "60" : COLORS.border}`,
+                  background: COLORS.card,
                   cursor: exerciseReady ? "pointer" : "default",
                   opacity: exerciseReady ? 1 : 0.5,
                   fontFamily: mono, transition: "all 0.2s",
@@ -432,18 +374,11 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                   <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3 }}>
                     {t.technique}
                   </div>
-                  {p?.attempts > 0 && (
+                  {tried && (
                     <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 3 }}>{p.attempts} attempt{p.attempts !== 1 ? "s" : ""}</div>
                   )}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  {renderStars(stars, 14)}
-                  {isMastered && (
-                    <span style={{ fontSize: 9, fontWeight: 700, color: COLORS.green, textTransform: "uppercase", letterSpacing: 0.5, padding: "2px 6px", background: COLORS.green + "18", borderRadius: 6 }}>
-                      Mastered
-                    </span>
-                  )}
-                </div>
+                <span style={{ fontSize: 18, color: COLORS.muted, flexShrink: 0 }}>{"›"}</span>
               </button>
             );
           })}
@@ -466,7 +401,6 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading }}>Technique {activeTechIdx + 1} of {techniques.length}</div>
             <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 1 }}>{skill.authorName}</div>
           </div>
-          {renderStars(progress[String(activeTechIdx)]?.stars || 0, 14)}
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
@@ -630,103 +564,19 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                 {chatLoading ? "Thinking..." : "I'm stuck — chat with Lyra"}
               </button>
             )}
-            <button
-              onClick={evaluateAttempt}
-              disabled={!studentAttempt.trim() || evaluating}
-              style={{
-                ...s.btn, flex: 1, fontSize: 14, padding: "12px 24px",
-                opacity: (!studentAttempt.trim() || evaluating) ? 0.5 : 1,
-                background: COLORS.heading,
-              }}
-            >
-              {evaluating ? "Checking..." : "Check my rewrite \u2192"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // === FEEDBACK SCREEN ===
-  if (screen === "feedback" && evaluation) {
-    const stars = evaluation.stars || 0;
-    const isMastered = stars >= 3;
-    return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 90, background: COLORS.bg1, display: "flex", flexDirection: "column", maxWidth: 430, margin: "0 auto", fontFamily: mono, animation: "fadeIn 0.2s ease" }}>
-        {/* Header */}
-        <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
-          <button onClick={() => setScreen("overview")} style={{ background: "none", border: "none", fontSize: 20, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}>{"\u2190"}</button>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading }}>{activeTech?.technique}</div>
-          </div>
-        </div>
-
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-          {/* Stars + label */}
-          <div style={{ textAlign: "center", padding: "20px 0 16px", animation: "fadeUp 0.3s ease" }}>
-            <div style={{ marginBottom: 8 }}>{renderStars(stars, 32)}</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: STAR_COLORS[stars] || COLORS.muted }}>
-              {STAR_LABELS[stars] || "Try again!"}
-            </div>
-            {isMastered && (
-              <div style={{ fontSize: 11, color: COLORS.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginTop: 8, padding: "4px 12px", background: COLORS.green + "15", borderRadius: 8, display: "inline-block" }}>
-                Technique mastered!
-              </div>
+            {!chatOpen && (
+              <button
+                onClick={openReviewChat}
+                disabled={!studentAttempt.trim() || chatLoading}
+                style={{
+                  ...s.btn, flex: 1, fontSize: 14, padding: "12px 24px",
+                  opacity: (!studentAttempt.trim() || chatLoading) ? 0.5 : 1,
+                  background: COLORS.heading,
+                }}
+              >
+                {chatLoading ? "Sending..." : "Check my rewrite \u2192"}
+              </button>
             )}
-          </div>
-
-          {/* Student's attempt */}
-          <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Your rewrite</div>
-            <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.6, fontStyle: "italic" }}>{studentAttempt}</div>
-          </div>
-
-          {/* Feedback */}
-          {evaluation.feedback && (
-            <div style={{ ...s.card, marginBottom: 10, padding: "12px 14px" }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Feedback</div>
-              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{evaluation.feedback}</div>
-            </div>
-          )}
-
-          {/* Strengths */}
-          {evaluation.strengths && (
-            <div style={{ background: COLORS.green + "0D", border: `1px solid ${COLORS.green}30`, borderRadius: 10, padding: "10px 14px", marginBottom: 10 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.green, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>What worked</div>
-              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6 }}>{evaluation.strengths}</div>
-            </div>
-          )}
-
-          {/* Improvement */}
-          {evaluation.improvement && stars < 3 && (
-            <div style={{ background: COLORS.amber + "0D", border: `1px solid ${COLORS.amber}30`, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.amber, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>To improve</div>
-              <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6 }}>{evaluation.improvement}</div>
-            </div>
-          )}
-
-          {/* Action buttons */}
-          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-            <button
-              onClick={() => { setStudentAttempt(""); setStudentExplanation(""); setEvaluation(null); setChatOpen(false); setChatMessages([]); setChatInput(""); setChatLoading(false); setScreen("exercise"); }}
-              style={{
-                ...s.chip, flex: 1, fontSize: 12, fontWeight: 600,
-                textAlign: "center", justifyContent: "center",
-                border: `1.5px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading,
-              }}
-            >
-              Try again
-            </button>
-            <button
-              onClick={goNext}
-              style={{
-                ...s.chip, flex: 1, fontSize: 12, fontWeight: 700,
-                textAlign: "center", justifyContent: "center",
-                background: COLORS.heading, color: "#fff", borderColor: COLORS.heading,
-              }}
-            >
-              Next technique {"\u2192"}
-            </button>
           </div>
         </div>
       </div>
