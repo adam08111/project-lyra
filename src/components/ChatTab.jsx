@@ -31,9 +31,31 @@ export default function ChatTab({
 
   const tw = useTypewriter(welcomeText, 18);
 
+  // Auto-scroll: when Lyra just replied (last message is AI, nothing is
+  // pending), anchor on the student's MOST RECENT message so they read
+  // their own question first, then Lyra's reply below it. Long LYRA_BRAIN
+  // multi-paragraph turns otherwise dump the reader at the very bottom of
+  // the response with no context for what was asked. Mirrors the same
+  // anchoring behaviour as the training-session chat.
+  // - While Lyra is typing / thinking, or after the student just sent a
+  //   message, fall back to scrolling to the bottom (so they see the
+  //   loader / their own latest message).
   useEffect(() => {
+    const container = chatScrollRef.current;
+    if (!container) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.role === "ai" && !typingMsg && !chatLoading) {
+      const userBubbles = container.querySelectorAll('[data-msg-role="user"]');
+      const anchor = userBubbles[userBubbles.length - 1];
+      if (anchor) {
+        const containerRect = container.getBoundingClientRect();
+        const anchorRect = anchor.getBoundingClientRect();
+        container.scrollTop = anchorRect.top - containerRect.top + container.scrollTop;
+        return;
+      }
+    }
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typingMsg, tw.displayed]);
+  }, [messages, typingMsg, chatLoading, tw.displayed]);
 
   // Auto-resize textarea as user types
   useEffect(() => {
@@ -59,7 +81,7 @@ export default function ChatTab({
 
         {/* Messages */}
         {messages.map((m, i) => (
-          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 14, justifyContent: m.role === "user" ? "flex-end" : "flex-start", animation: "fadeUp 0.25s ease", position: "relative" }}>
+          <div key={i} data-msg-role={m.role} style={{ display: "flex", gap: 8, marginBottom: 14, justifyContent: m.role === "user" ? "flex-end" : "flex-start", animation: "fadeUp 0.25s ease", position: "relative" }}>
             {m.role === "ai" && <div style={{ marginTop: 4 }}><FeatherIcon size={16} /></div>}
             <div style={{ maxWidth: "85%", position: "relative" }}>
               {editingMsgIdx === i ? (
