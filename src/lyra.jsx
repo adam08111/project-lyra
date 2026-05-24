@@ -841,7 +841,7 @@ Rules:
         <div style={{ display: "flex", background: COLORS.bg3, borderRadius: 20, padding: 3, position: "relative" }}>
           {["chat", "preview"].map(t => (
             <button key={t} onClick={() => setTab(t)} style={{ padding: "7px 16px", borderRadius: 17, border: "none", background: tab === t ? COLORS.card : "transparent", fontFamily: "'Courier Prime', monospace", fontSize: 13, color: tab === t ? COLORS.heading : COLORS.muted, fontWeight: tab === t ? 700 : 400, cursor: "pointer", position: "relative", boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.06)" : "none", transition: "all 0.2s" }}>
-              {t === "chat" ? "Chat" : "Preview"}
+              {t === "chat" ? "Chat" : "My Writing"}
               {t === "preview" && draft.trim() && tab !== "preview" && (
                 <div style={{ position: "absolute", top: 5, right: 8, width: 7, height: 7, borderRadius: "50%", background: COLORS.blue }} />
               )}
