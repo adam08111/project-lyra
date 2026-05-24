@@ -165,8 +165,15 @@ export default function Lyra() {
 
   // === AUTO-SAVE ===
 
+  // Auto-save the active writing. We DO NOT require `draft.trim()` to be
+  // non-empty — students often chat with Lyra (brainstorming, asking for an
+  // outline, vocabulary, parallel-universe examples) before they've written
+  // a single word in the draft. Those chat messages must persist so the
+  // student can reload the writing later and review what Lyra taught them.
+  // Skipping when the draft is empty would silently drop the entire pre-draft
+  // coaching conversation.
   const autoSave = useCallback(() => {
-    if (!activeWritingId || !draft.trim() || screen !== "app") return;
+    if (!activeWritingId || screen !== "app") return;
     setProjects(prev => prev.map(p => ({
       ...p,
       writings: p.writings.map(w => w.id === activeWritingId ? {
