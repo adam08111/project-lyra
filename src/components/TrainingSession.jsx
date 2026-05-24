@@ -58,14 +58,39 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   // Stuck-chat state — when student clicks "I'm stuck", an inline chat with
   // Lyra opens up. Replaces the old single-question hint flow.
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState([]); // [{role: 'lyra'|'student', text}]
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [progress, setProgress] = useState({});
   const [progressLoaded, setProgressLoaded] = useState(false);
+  // chatThreads: per-technique chat history persisted to localStorage.
+  // Shape: { [techIdx: string]: [{ role: 'lyra'|'student', text: string }] }
+  // One bag per skill, keyed by skill.id under "lyra-training-chats".
+  // Hydrated alongside progress; chatMessages mirrors the active thread.
+  const [chatThreads, setChatThreads] = useState({});
+  const [chatHydrated, setChatHydrated] = useState(false);
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
   const chatScrollRef = useRef(null);
+
+  // chatMessages is a DERIVED view of chatThreads[activeTechIdx] — single
+  // source of truth, no separate state to sync. Declared early so downstream
+  // effects (auto-scroll) can reference it in their dep arrays without
+  // hitting a Temporal Dead Zone.
+  const activeTechKey = activeTechIdx !== null ? String(activeTechIdx) : null;
+  const chatMessages = activeTechKey ? (chatThreads[activeTechKey] || []) : [];
+
+  // Drop-in replacement for the old chatMessages state setter. Accepts both
+  // a fresh array and an updater function (prev => next), matching React's
+  // useState API so existing call sites don't need rewriting beyond the
+  // identifier name.
+  const setChatMessages = useCallback((updater) => {
+    if (!activeTechKey) return;
+    setChatThreads(prev => {
+      const current = prev[activeTechKey] || [];
+      const next = typeof updater === 'function' ? updater(current) : updater;
+      return { ...prev, [activeTechKey]: next };
+    });
+  }, [activeTechKey]);
 
   // Auto-scroll behaviour:
   // - When Lyra has just replied, anchor the scroll on the student's MOST
@@ -158,6 +183,45 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
       localStorage.setItem("lyra-training-progress", JSON.stringify(all));
     } catch (e) { /* silent */ }
   }, [progress, progressLoaded, skill?.id]);
+
+  // Load saved chat threads for this skill on mount.
+  useEffect(() => {
+    if (!skill?.id) return;
+    try {
+      const raw = localStorage.getItem("lyra-training-chats");
+      if (raw) {
+        const all = JSON.parse(raw);
+        setChatThreads(all[skill.id] || {});
+      }
+    } catch (e) { /* first time */ }
+    setChatHydrated(true);
+  }, [skill?.id]);
+
+  // Save chat threads to localStorage when they change.
+  useEffect(() => {
+    if (!chatHydrated || !skill?.id) return;
+    try {
+      const all = JSON.parse(localStorage.getItem("lyra-training-chats") || "{}");
+      all[skill.id] = chatThreads;
+      localStorage.setItem("lyra-training-chats", JSON.stringify(all));
+    } catch (e) { /* silent */ }
+  }, [chatThreads, chatHydrated, skill?.id]);
+
+  // When the student arrives on a technique, auto-open the chat panel if
+  // there's already a saved thread (they're returning to a conversation).
+  // If no thread, leave the panel closed — they'll click "I'm stuck" or
+  // "Resume" to start one.
+  useEffect(() => {
+    if (!chatHydrated || activeTechIdx === null) return;
+    const stored = chatThreads[String(activeTechIdx)] || [];
+    setChatOpen(stored.length > 0);
+    setChatInput("");
+    setChatLoading(false);
+    // Intentionally NOT in dep list: chatThreads — we only react to
+    // technique switches, not to every chatThreads write (which would
+    // re-toggle the panel every time a message lands).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTechIdx, chatHydrated]);
 
   // Focus textarea when exercise screen opens
   useEffect(() => {
@@ -272,34 +336,35 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     });
   }, [activeTechIdx]);
 
-  // Open the chat in "stuck" mode: no prior conversation, Lyra opens with the
-  // Socratic 4-step coaching protocol.
+  // Open the chat. If there's a saved thread for this technique, reopen it
+  // (preserving everything the student & Lyra have already said). If the
+  // thread is empty, this is a fresh "I'm stuck" — kick off Lyra's opening
+  // Socratic 4-step turn and bump the attempts counter.
   const openStuckChat = useCallback(() => {
     if (chatLoading || activeTechIdx === null) return;
     setChatOpen(true);
-    setChatMessages([]);
+    if (chatMessages.length > 0) return; // returning to an existing chat
     setChatInput("");
     bumpAttempts();
     fetchLyraTurn([]);
-  }, [chatLoading, activeTechIdx, bumpAttempts, fetchLyraTurn]);
+  }, [chatLoading, activeTechIdx, chatMessages, bumpAttempts, fetchLyraTurn]);
 
-  // Open the chat in "review" mode: the student's rewrite seeds the
-  // conversation as their first turn, and Lyra evaluates it conversationally
-  // (no separate stars/feedback/strengths/improvement panels). buildTraining-
-  // ChatPrompt's follow-up branch already knows how to celebrate landed craft
-  // and surface a sharper word when the student produces a draft.
+  // Open the chat in "review" mode: the student's rewrite gets added as a
+  // student turn and Lyra evaluates it conversationally. If a saved thread
+  // already exists for this technique, the rewrite gets APPENDED to it
+  // (preserving the previous coaching) rather than replacing.
   const openReviewChat = useCallback(() => {
     if (chatLoading || activeTechIdx === null) return;
     const rewrite = studentAttempt.trim();
     if (!rewrite) return;
-    const opening = [{ role: 'student', text: rewrite }];
+    const next = [...chatMessages, { role: 'student', text: rewrite }];
     setChatOpen(true);
-    setChatMessages(opening);
+    setChatMessages(next);
     setChatInput("");
     setStudentExplanation(rewrite);
     bumpAttempts();
-    fetchLyraTurn(opening);
-  }, [chatLoading, activeTechIdx, studentAttempt, bumpAttempts, fetchLyraTurn]);
+    fetchLyraTurn(next);
+  }, [chatLoading, activeTechIdx, studentAttempt, chatMessages, bumpAttempts, fetchLyraTurn]);
 
   // Send a student message and fetch Lyra's next turn.
   const sendStudentMessage = useCallback(() => {
@@ -317,28 +382,24 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
 
   // Step linearly to the next technique, wrapping back to the start. The old
   // "skip already-mastered" logic is gone now that there is no scoring path.
+  // Chat state is NOT reset here — the hydration effect (keyed on
+  // activeTechIdx) will swap chatMessages to the saved thread for the next
+  // technique, or to [] if that technique has never been chatted with.
   const goNext = useCallback(() => {
     if (!techniques.length) { setScreen("overview"); return; }
     const next = ((activeTechIdx ?? -1) + 1) % techniques.length;
     setActiveTechIdx(next);
     setStudentAttempt("");
     setStudentExplanation("");
-    setChatOpen(false);
-    setChatMessages([]);
-    setChatInput("");
-    setChatLoading(false);
     setScreen("exercise");
   }, [activeTechIdx, techniques]);
 
-  // Start practising a technique
+  // Start practising a technique. Chat state is NOT reset — the hydration
+  // effect restores any saved thread for this technique.
   const startTechnique = (idx) => {
     setActiveTechIdx(idx);
     setStudentAttempt("");
     setStudentExplanation("");
-    setChatOpen(false);
-    setChatMessages([]);
-    setChatInput("");
-    setChatLoading(false);
     setScreen("exercise");
   };
 
@@ -598,7 +659,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                   color: COLORS.blue, opacity: chatLoading ? 0.5 : 1,
                 }}
               >
-                {chatLoading ? "Thinking..." : "I'm stuck — chat with Lyra"}
+                {chatLoading ? "Thinking..." : (chatMessages.length > 0 ? "Resume chat with Lyra" : "I'm stuck — chat with Lyra")}
               </button>
             )}
             {!chatOpen && (
