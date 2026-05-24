@@ -4,7 +4,7 @@ import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
 import { buildTrainingExercisesPrompt, buildTrainingChatPrompt } from "../prompts.js";
-import { anonymiseSkillsForAI } from "../utils.js";
+import { anonymiseSkillsForAI, restoreAuthorNames } from "../utils.js";
 import { parseSectionContent, trimToSentence, deriveShortTitle } from "./XRayView.jsx";
 
 const mono = "'Courier Prime', monospace";
@@ -205,7 +205,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     if (activeTechIdx === null) return;
     setChatLoading(true);
     try {
-      const { anonymised } = anonymiseSkillsForAI([skill]);
+      const { anonymised, mapping } = anonymiseSkillsForAI([skill]);
       const anonSkill = anonymised[0];
       const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
         || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
@@ -218,11 +218,16 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
       // Parallel Universes, Vocabulary Ingredients, Rhythm Maps). We give the
       // model ~1500 tokens of output budget on top of its thinking budget so
       // it can deploy the full 4-step protocol without getting truncated.
-      const result = await callAI(
+      const rawResult = await callAI(
         buildTrainingChatPrompt(anonTech, exercise, conversation),
         "Write your next coaching turn now.",
         false, (route.thinkingBudget || 0) + 1500, route.thinkingBudget, undefined, undefined, route.model
       );
+      // === ANTI-BIAS: Restore real author names ("Writer A" → "Polly Hudson")
+      // in the AI response BEFORE display. Without this the Masterclass Report
+      // and any other author-references the AI produces stay anonymised, which
+      // reads like jargon to students who know the writer by name.
+      const result = restoreAuthorNames(rawResult, mapping);
       // LYRA_BRAIN appends a trailing <!--LYRA_LEARNING_DATA ... --> HTML
       // comment carrying structured learning metadata for the app to harvest.
       // Strip it (plus any stray markdown fences) — what remains is the
