@@ -68,23 +68,34 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   const chatScrollRef = useRef(null);
 
   // Auto-scroll behaviour:
-  // - When the last message is from Lyra, position the TOP of her bubble at
-  //   the top of the visible area so the student reads from the beginning.
-  //   Multi-paragraph LYRA_BRAIN turns (source quote → effect → vocabulary →
-  //   parallel universes) would otherwise dump the reader at the closing
-  //   challenge.
-  // - When the last message is the student's own, or while Lyra is thinking,
-  //   scroll to the bottom (so they see what they just sent / the loader).
+  // - When Lyra has just replied, anchor the scroll on the student's MOST
+  //   RECENT message — the student reads their own question first, then
+  //   Lyra's response below it. This keeps the conversational context
+  //   visible (the multi-paragraph LYRA_BRAIN reply is still scrollable
+  //   downward) instead of pushing the student's question off-screen.
+  // - If there's no student message yet (chat opens with Lyra's opening
+  //   turn, no question typed), fall back to anchoring Lyra's bubble at
+  //   the top so the reader starts at the beginning of her teaching.
+  // - When the last message is the student's own, or while Lyra is
+  //   thinking, scroll to the bottom (so they see what they just sent /
+  //   the loader).
   useEffect(() => {
     const container = chatScrollRef.current;
     if (!container) return;
     const lastMsg = chatMessages[chatMessages.length - 1];
     if (lastMsg && lastMsg.role === 'lyra' && !chatLoading) {
-      const lastBubble = container.lastElementChild;
-      if (lastBubble) {
+      // Find the most recent student bubble (the question being answered).
+      let anchorIdx = -1;
+      for (let i = chatMessages.length - 1; i >= 0; i--) {
+        if (chatMessages[i].role === 'student') { anchorIdx = i; break; }
+      }
+      // No student message yet → anchor on Lyra's bubble (opening turn).
+      if (anchorIdx < 0) anchorIdx = chatMessages.length - 1;
+      const anchor = container.children[anchorIdx];
+      if (anchor) {
         const containerRect = container.getBoundingClientRect();
-        const bubbleRect = lastBubble.getBoundingClientRect();
-        container.scrollTop = bubbleRect.top - containerRect.top + container.scrollTop;
+        const anchorRect = anchor.getBoundingClientRect();
+        container.scrollTop = anchorRect.top - containerRect.top + container.scrollTop;
         return;
       }
     }
