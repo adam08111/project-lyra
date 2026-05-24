@@ -60,6 +60,13 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  // Two-step confirmation for the Delete button. First click flips this to
+  // true and the button label morphs to "Tap again to delete"; a second
+  // click within ~3.5s wipes the thread. A timer (managed in the click
+  // handler) resets the flag if the student doesn't follow through —
+  // protects long coaching sessions from a single accidental tap.
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const deleteResetTimerRef = useRef(null);
   const [progress, setProgress] = useState({});
   const [progressLoaded, setProgressLoaded] = useState(false);
   // chatThreads: per-technique chat history persisted to localStorage.
@@ -349,16 +356,39 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     fetchLyraTurn([]);
   }, [chatLoading, activeTechIdx, chatMessages, bumpAttempts, fetchLyraTurn]);
 
-  // Delete the saved chat thread for the current technique. Closes the
-  // panel and removes the thread from chatThreads (persisted on the next
-  // render via the chatThreads save effect). The student can start fresh
-  // by clicking "I'm stuck — chat with Lyra" afterwards. Confirms first
-  // so an accidental tap doesn't wipe a long coaching session.
+  // Delete the saved chat thread for the current technique using a
+  // two-step inline confirmation:
+  //   - 1st click: flips deleteConfirming → button morphs to
+  //     "Tap again to delete" + a Cancel chip appears. A 3.5s timer
+  //     resets the flag if the student walks away.
+  //   - 2nd click (while deleteConfirming is true): actually wipes the
+  //     thread, closes the panel, and resets all chat state.
+  // Native confirm() was rejected — students on mobile can dismiss it
+  // by reflex; an inline two-step is impossible to miss and impossible
+  // to bypass with muscle memory.
   const clearChatThread = useCallback(() => {
     if (activeTechIdx === null) return;
-    if (chatMessages.length === 0) { setChatOpen(false); return; }
-    const ok = confirm("Delete this chat with Lyra? You can start a new one anytime.");
-    if (!ok) return;
+    // Nothing to delete on an empty thread — just close the panel and
+    // reset the confirmation flag in case it was hanging from before.
+    if (chatMessages.length === 0) {
+      setDeleteConfirming(false);
+      if (deleteResetTimerRef.current) { clearTimeout(deleteResetTimerRef.current); deleteResetTimerRef.current = null; }
+      setChatOpen(false);
+      return;
+    }
+    if (!deleteConfirming) {
+      // First click — arm the confirmation and start the auto-reset timer.
+      setDeleteConfirming(true);
+      if (deleteResetTimerRef.current) clearTimeout(deleteResetTimerRef.current);
+      deleteResetTimerRef.current = setTimeout(() => {
+        setDeleteConfirming(false);
+        deleteResetTimerRef.current = null;
+      }, 3500);
+      return;
+    }
+    // Second click — actually delete.
+    if (deleteResetTimerRef.current) { clearTimeout(deleteResetTimerRef.current); deleteResetTimerRef.current = null; }
+    setDeleteConfirming(false);
     const techKey = String(activeTechIdx);
     setChatThreads(prev => {
       if (!(techKey in prev)) return prev;
@@ -369,7 +399,32 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setChatOpen(false);
     setChatInput("");
     setChatLoading(false);
-  }, [activeTechIdx, chatMessages]);
+  }, [activeTechIdx, chatMessages, deleteConfirming]);
+
+  // Cancel a pending delete confirmation explicitly (Cancel chip click) or
+  // implicitly (panel closed, technique switched). Single source of truth
+  // for "abandon the half-confirmed delete".
+  const cancelDeleteConfirm = useCallback(() => {
+    if (deleteResetTimerRef.current) { clearTimeout(deleteResetTimerRef.current); deleteResetTimerRef.current = null; }
+    setDeleteConfirming(false);
+  }, []);
+
+  // Reset the pending-confirmation flag whenever the chat panel closes or
+  // the active technique changes — so the next time the panel opens it
+  // doesn't show a stale "Tap again to delete" state.
+  useEffect(() => {
+    if (!chatOpen) cancelDeleteConfirm();
+  }, [chatOpen, cancelDeleteConfirm]);
+  useEffect(() => {
+    cancelDeleteConfirm();
+  }, [activeTechIdx, cancelDeleteConfirm]);
+
+  // Clean up the timer on unmount so we don't fire setState on a dead
+  // component (e.g. when the student closes the whole training session
+  // mid-confirmation).
+  useEffect(() => () => {
+    if (deleteResetTimerRef.current) clearTimeout(deleteResetTimerRef.current);
+  }, []);
 
   // Open the chat in "review" mode: the student's rewrite gets added as a
   // student turn and Lyra evaluates it conversationally. If a saved thread
@@ -582,15 +637,34 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                 <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1 }}>
                   {"\uD83D\uDCAC"} Chat with Lyra
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {chatMessages.length > 0 && (
-                    <button
-                      onClick={clearChatThread}
-                      style={{ background: "transparent", border: "none", color: COLORS.red || "#c44", fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "2px 6px", fontFamily: mono, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
-                      title="Delete this chat \u2014 starts fresh next time"
-                    >
-                      Delete
-                    </button>
+                    deleteConfirming ? (
+                      <>
+                        <button
+                          onClick={cancelDeleteConfirm}
+                          style={{ background: "transparent", border: `1px solid ${COLORS.border}`, color: COLORS.muted, fontSize: 10, fontWeight: 600, cursor: "pointer", padding: "3px 8px", fontFamily: mono, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.2, borderRadius: 6 }}
+                          title="Keep the chat"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={clearChatThread}
+                          style={{ background: COLORS.red || "#c44", border: `1px solid ${COLORS.red || "#c44"}`, color: "#fff", fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "3px 8px", fontFamily: mono, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.2, borderRadius: 6 }}
+                          title="Tap again to confirm deletion"
+                        >
+                          Tap again to delete
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={clearChatThread}
+                        style={{ background: "transparent", border: "none", color: COLORS.red || "#c44", fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "2px 6px", fontFamily: mono, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
+                        title="Delete this chat \u2014 starts fresh next time"
+                      >
+                        Delete
+                      </button>
+                    )
                   )}
                   <button
                     onClick={() => setChatOpen(false)}
