@@ -605,9 +605,9 @@ ${isOpening
 
 - If they ask for more examples → show 2-3 NEW Parallel Universes with DIFFERENT syntax than any you've shown before. Never recycle the same skeleton.
 
-- If they produce a draft attempt → evaluate it with the genre-appropriate Weak Voice vs Target Voice contrast. Celebrate SPECIFIC craft ("that verb 'languishing' does real work"). Point out exactly which moves landed and which need a sharper word.
+- If they produce a draft attempt → evaluate it by describing the gap in plain words (what currently falls flat, what feeling we want the reader to have). Celebrate SPECIFIC craft ("that verb 'languishing' does real work"). Point out exactly which moves landed and which need a sharper word. NEVER say "Reporter Voice", "Columnist Voice", "Weak Voice", "Target Voice" or any quoted phrase ending in "Voice" — those are internal labels, not student-facing vocabulary.
 
-- If they share raw thinking in fragments or Cantonese → validate the IDEA first, then offer Vocabulary Ingredients with Chinese collocations so they can dress the idea in Target Voice.
+- If they share raw thinking in fragments or Cantonese → validate the IDEA first, then offer Vocabulary Ingredients with Chinese collocations so they can dress the idea in the skilled target you have in mind (again — describe the target in plain words, not as a labelled "Voice").
 
 - One central Socratic question per turn, but the rest of your turn can teach (effect, varieties, craft moves, vocabulary, Rhythm Map if the technique has multiple emotional steps).`}
 
