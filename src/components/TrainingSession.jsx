@@ -349,6 +349,28 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     fetchLyraTurn([]);
   }, [chatLoading, activeTechIdx, chatMessages, bumpAttempts, fetchLyraTurn]);
 
+  // Delete the saved chat thread for the current technique. Closes the
+  // panel and removes the thread from chatThreads (persisted on the next
+  // render via the chatThreads save effect). The student can start fresh
+  // by clicking "I'm stuck — chat with Lyra" afterwards. Confirms first
+  // so an accidental tap doesn't wipe a long coaching session.
+  const clearChatThread = useCallback(() => {
+    if (activeTechIdx === null) return;
+    if (chatMessages.length === 0) { setChatOpen(false); return; }
+    const ok = confirm("Delete this chat with Lyra? You can start a new one anytime.");
+    if (!ok) return;
+    const techKey = String(activeTechIdx);
+    setChatThreads(prev => {
+      if (!(techKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[techKey];
+      return next;
+    });
+    setChatOpen(false);
+    setChatInput("");
+    setChatLoading(false);
+  }, [activeTechIdx, chatMessages]);
+
   // Open the chat in "review" mode: the student's rewrite gets added as a
   // student turn and Lyra evaluates it conversationally. If a saved thread
   // already exists for this technique, the rewrite gets APPENDED to it
@@ -556,17 +578,28 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
               old single-question hint card so students can ask follow-ups. */}
           {chatOpen && (
             <div style={{ background: COLORS.blue + "0A", border: `1.5px solid ${COLORS.blue}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 12, animation: "fadeIn 0.25s ease" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, textTransform: "uppercase", letterSpacing: 1 }}>
                   {"\uD83D\uDCAC"} Chat with Lyra
                 </div>
-                <button
-                  onClick={() => setChatOpen(false)}
-                  style={{ background: "transparent", border: "none", color: COLORS.muted, fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }}
-                  title="Close chat"
-                >
-                  {"\u2715"}
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {chatMessages.length > 0 && (
+                    <button
+                      onClick={clearChatThread}
+                      style={{ background: "transparent", border: "none", color: COLORS.red || "#c44", fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "2px 6px", fontFamily: mono, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
+                      title="Delete this chat \u2014 starts fresh next time"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setChatOpen(false)}
+                    style={{ background: "transparent", border: "none", color: COLORS.muted, fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }}
+                    title="Close chat (keeps history)"
+                  >
+                    {"\u2715"}
+                  </button>
+                </div>
               </div>
 
               {/* Chat message thread. Taller than a one-question hint card
