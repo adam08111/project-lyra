@@ -115,6 +115,29 @@ export default function ChatTab({
                   }}>{renderMd(m.text)}</div>
               )}
 
+              {/* Sources from web-search grounding (only on AI bubbles
+                  that were generated with useSearch). Click-through opens
+                  the actual article — empowers the student to read it
+                  themselves and use it as a verifiable example. */}
+              {m.role === "ai" && Array.isArray(m.sources) && m.sources.length > 0 && editingMsgIdx !== i && (
+                <div style={{ marginTop: 6, paddingLeft: 4, fontSize: 11, color: COLORS.muted, fontFamily: "'Courier Prime', monospace", lineHeight: 1.5 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5, fontSize: 10 }}>Sources</div>
+                  {m.sources.map((src, si) => (
+                    <div key={si} style={{ display: "flex", gap: 6, marginBottom: 2 }}>
+                      <span style={{ color: COLORS.muted, flexShrink: 0 }}>{si + 1}.</span>
+                      <a
+                        href={src.uri}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: COLORS.blue || COLORS.heading, textDecoration: "underline", wordBreak: "break-word", overflowWrap: "anywhere" }}
+                      >
+                        {src.title || src.uri}
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Action buttons */}
               {activeMsgIdx === i && editingMsgIdx !== i && (
                 <div style={{ display: "flex", gap: 4, marginTop: 4, justifyContent: m.role === "user" ? "flex-end" : "flex-start", animation: "fadeIn 0.15s ease" }}>

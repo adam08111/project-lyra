@@ -25,7 +25,9 @@
 const MODELS = {
   pro: "gemini-3-flash-preview",
   flash: "gemini-flash-latest",
-  lite: "gemini-3.1-flash-lite-preview",
+  // Google promoted the lite model from preview to GA: the old
+  // gemini-3.1-flash-lite-preview now 404s; the new name drops -preview.
+  lite: "gemini-3.1-flash-lite",
 };
 
 const ROUTE_CONFIG = {

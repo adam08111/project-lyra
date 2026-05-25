@@ -28,6 +28,10 @@ if (!GEMINI_KEY) {
 const DEFAULT_MODEL = "gemini-flash-latest";
 const ALLOWED_MODELS = new Set([
   "gemini-flash-latest",
+  "gemini-3.1-flash-lite",
+  // Kept for backwards compat in case a stale tab is still cached on the
+  // old name — proxy will accept it but the Google API now 404s it. Drop
+  // after a week or two.
   "gemini-3.1-flash-lite-preview",
   "gemini-3-flash-preview",
 ]);
@@ -183,7 +187,7 @@ const server = http.createServer((req, res) => {
             const utf8Decoder = new StringDecoder("utf8");
             // DEBUG: accumulate raw model text for translate-tier responses so we can
             // inspect what the LITE model actually returned (pair structure, missing labels).
-            const isLiteTranslate = MODEL === "gemini-3.1-flash-lite-preview";
+            const isLiteTranslate = MODEL === "gemini-3.1-flash-lite" || MODEL === "gemini-3.1-flash-lite-preview";
             let debugAccum = "";
             proxyRes.on("data", (chunk) => {
               // Use StringDecoder so multi-byte UTF-8 chars (Chinese, em-dashes, emoji)
@@ -284,7 +288,7 @@ const server = http.createServer((req, res) => {
               try {
                 const geminiData = JSON.parse(responseBody);
                 const text = geminiData.candidates?.[0]?.content?.parts?.map(p => p.text || "").filter(Boolean).join("\n") || "";
-                if (MODEL === "gemini-3.1-flash-lite-preview") {
+                if (MODEL === "gemini-3.1-flash-lite" || MODEL === "gemini-3.1-flash-lite-preview") {
                   console.log("[DEBUG translate response]", JSON.stringify(text.slice(0, 2000)));
                 }
                 const usage = geminiData.usageMetadata;

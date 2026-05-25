@@ -369,7 +369,9 @@ Rules:
   // Prevents the animation restarting from scratch when switching back
   useEffect(() => {
     if (tab !== "chat" && typingMsg) {
-      setMessages(prev => [...prev, { role: "ai", text: typingMsg.text }]);
+      const entry = { role: "ai", text: typingMsg.text };
+      if (Array.isArray(typingMsg.sources) && typingMsg.sources.length) entry.sources = typingMsg.sources;
+      setMessages(prev => [...prev, entry]);
       setTypingMsg(null);
     }
   }, [tab, typingMsg]);
@@ -487,6 +489,17 @@ Rules:
       const sysPrompt = antiBiasPrefix ? baseSysPrompt + antiBiasPrefix : baseSysPrompt;
       let result = await callAI(sysPrompt, fullMsg, useSearch, 4096, chatRoute.thinkingBudget, undefined, abortCtrl.signal, chatRoute.model);
 
+      // When useSearch=true, callAI returns { text, sources } instead of a
+      // raw string. Unpack here so downstream helpers (restoreAuthorNames,
+      // extractLearningData) which expect a string don't blow up on the
+      // object. Stash sources so the message bubble can render them as
+      // attribution links.
+      let sources = [];
+      if (result && typeof result === "object" && typeof result.text === "string") {
+        sources = Array.isArray(result.sources) ? result.sources : [];
+        result = result.text;
+      }
+
       // === ANTI-BIAS: Restore real author names in the AI response for display ===
       result = restoreAuthorNames(result, nameMapping);
 
@@ -498,7 +511,7 @@ Rules:
 
       setChatLoading(false);
       chatAbortRef.current = null;
-      setTypingMsg({ role: "ai", text: displayText, id: Date.now() });
+      setTypingMsg({ role: "ai", text: displayText, sources, id: Date.now() });
     } catch (e) {
       setChatLoading(false);
       chatAbortRef.current = null;
@@ -517,7 +530,9 @@ Rules:
     setChatLoading(false);
     // If there's a typing message in progress, finish it immediately
     if (typingMsg) {
-      setMessages(prev => [...prev, { role: "ai", text: typingMsg.text }]);
+      const entry = { role: "ai", text: typingMsg.text };
+      if (Array.isArray(typingMsg.sources) && typingMsg.sources.length) entry.sources = typingMsg.sources;
+      setMessages(prev => [...prev, entry]);
       setTypingMsg(null);
     }
   }, [typingMsg]);
@@ -597,7 +612,11 @@ Rules:
   }, [topic, typeLabel]);
 
   const handleTypewriterDone = useCallback((msg) => {
-    setMessages(prev => [...prev, { role: "ai", text: msg.text }]);
+    // Carry sources (web-search grounding attributions) from typingMsg
+    // into the saved message so they persist on re-render / reload.
+    const entry = { role: "ai", text: msg.text };
+    if (Array.isArray(msg.sources) && msg.sources.length) entry.sources = msg.sources;
+    setMessages(prev => [...prev, entry]);
     setTypingMsg(null);
   }, []);
 
