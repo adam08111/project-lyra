@@ -885,3 +885,105 @@ Each `CollapsibleTechnique` card now has a red `×` button (fontSize 16, fontWei
 | `src/components/XRayView.jsx` | UPDATED | `saveStyleSkill` now also stores `sections: [{title, content}]` array for full re-render fidelity |
 | `src/components/StyleLab.jsx` | UPDATED | `SavedSkills` rewritten as list-then-detail navigation; new `SavedSkillDetail` and `CollapsibleTechnique` components; `synthSectionFromTechnique` for legacy fallback; legacy-skill banner; per-technique red `×` remove buttons + `removeTechnique` mutation; `trackCall` plumbed through |
 
+---
+
+## 16. UPDATE — 22–26 May 2026 — Branch `claude/objective-ramanujan-974c10`
+
+**Branch:** `claude/objective-ramanujan-974c10` (16 commits, +730 lines net across `lyra-brain.js`, `prompts.js`, `lyra.jsx`, `components/StyleLab.jsx`, `components/TrainingSession.jsx`, `components/ChatTab.jsx`, `components/XRayView.jsx`, `ai-router.js`, `constants.js`, `hooks.js`, `server/proxy.js`).
+
+This session focused on three themes: (a) tightening Lyra's coaching tone and pedagogy so she stops sounding mechanical, (b) plumbing chat persistence + scroll anchoring + source attribution into both chat surfaces (writing chat + training-session chat), and (c) emergency repair after Google deprecated the Lite-tier model name.
+
+### 16.1 Coaching tone and pedagogy — LYRA_BRAIN rewrites
+
+**Match the response to the question (commit `e5d4bbf`).** Lyra was reflexively deploying the full 4-Step Coaching Protocol on every chat turn, including casual `"??"` questions, with branded section headings like `## 1. THE SOURCE SKILL` printed into student-facing output. Added a new `MATCH THE RESPONSE TO THE QUESTION` block at the top of LYRA_BRAIN that gates protocol use by question type:
+
+- Quick `"??"` / `"I don't understand"` → 1-3 sentences, no headings, no jargon
+- Specific narrow question ("is this okay?") → under 60 words
+- Draft attempt that already uses the technique → diagnose the tactical mistake, don't re-teach
+- Draft attempt that doesn't yet use the technique → celebrate one move + name one thing to sharpen
+- Genuinely stuck OR explicit "how do I do X" → THEN deploy the full protocol
+
+Plus a banlist of the printable headers (`## 1. THE SOURCE SKILL`, `## 2. THE EFFECT ON THE READER`, etc.) — these are internal scaffolding, never section labels the student sees.
+
+**Diagnose tactical mistakes, don't re-teach (commit `e1bfaa4`).** Follow-up to the previous fix: when the student's draft sentence already uses the craft move and just has a tactical bug (missing verb, awkward collocation, trailing fragment), Lyra was still printing a `COACHING MOMENT: THE POWER PIVOT` block re-explaining the source skill from scratch. New rule: if the student demonstrably understands the technique, your job is to diagnose the mistake in plain words ("you forgot a verb here") under 80 words, NOT to re-teach.
+
+**Voice labels are internal-only + drop "scary good" (commit `08b3ac4`).** Lyra was quoting voice labels mid-coaching — `"give it that final 'Columnist' bite"`, `"shift from Reporter Voice to Columnist Voice"`, `(Weak Voice)` / `(Target Voice)` parentheticals in Before/After examples. To a 14-year-old reader these are jargon. Section renamed to `GENRE-AWARE VOICE FRAMEWORK (INTERNAL ONLY — DO NOT NAME TO STUDENTS)`. Added a "SAY THIS, NOT THAT" block with explicit ✗ / ✓ pairs. Also removed the `"scary good"` brand catchphrase from the LYRA_BRAIN opener and banned it from coaching output (it kept leaking into Socratic questions).
+
+**Parallel Universe topic-separation banlist (commit `ac9796a`).** When teaching by varieties, Lyra was producing examples on the student's own essay topic (cashless payment essay → all three "different topic" examples still mentioned cash / coins / paper notes / senior citizens). That hands the student a finished sentence on their actual topic. Strengthened the rule with concrete ✗ WRONG / ✓ RIGHT pairs using the exact case from the wild — cashless-payment essay vs. the same technique applied to alarms, ramen queues, and goalkeeper gloves. Closing line: "Reusing any noun from the essay topic = writing the student's essay for them."
+
+**Body paragraph 4-element structure + fabrication ban (commit `53e2c49`).** PEEL (Point-Evidence-Explanation-Link) was too thin for HKDSE — it collapsed elaboration and example-analysis into one slot, so Lyra accepted shallow paragraphs as complete. Replaced with the fuller four-element model that's now enforced in LYRA_BRAIN, `buildCoachPrompt`, `buildScaffoldingPrompt`, AND `constants.js` HKDSE essay/persuasive exam rules:
+
+1. **Topic Sentence** — one clear sentence supporting the thesis
+2. **Elaboration** — 2-3 sentences unpacking WHY, developing the cause-and-effect logic
+3. **Example + Explanation of HOW it proves the point** — ONE strong well-developed example (depth, not count: one unshakable example beats two thin ones) IMMEDIATELY followed by 1-2 sentences explicitly linking it back ("What this shows is…", "This proves that…") — example without explanation is a quote-drop
+4. **Closing Sentence** — tie back to thesis
+
+An earlier draft of this rule taught Lyra to model fabricated citations (fake "2015 LSE study, 91 schools, 6.4%" precision and an invented "Diocesan Boys' School phone-locker policy") as ✓ good specifics. Caught and removed — the fabricated stat was inexcusable, and the citation style itself is unrealistic for a 14-year-old in a 90-minute exam. Replaced with HK-realistic examples (MTR carriages after school, TikTok / Instagram named, phone-pouch policies, SCMP soft attribution, classroom anecdotes) and an explicit ban: NEVER fabricate exact percentages, study names with years, or precise survey numbers in coaching output OR in what's asked of the student. Soft attribution ("according to a recent SCMP report") is fine; fake numbers are not.
+
+### 16.2 Training Session chat — persistence, scroll, delete
+
+**Anti-bias restore in training chat (commit `6012d84`).** The Masterclass Report was rendering "stolen from Writer A" instead of "learned from Polly Hudson" (or whatever the student has on the name card). Two bugs combined: LYRA_BRAIN literally instructed the model to say `"we stole from"`, and `TrainingSession.fetchLyraTurn` was calling `anonymiseSkillsForAI` but discarding the mapping and never calling `restoreAuthorNames` on the response. Fixed both. Now anti-bias stays in force (the model still sees only Writer A/B/C labels), but the display-time substitution honours whatever the student currently has on the name card — including nicknames like "applezz" or "xyz".
+
+**Scroll anchors on the student's last question (commits `5e9437a` for training, `448a718` for writing chat).** When Lyra replied, the auto-scroll positioned the TOP of her bubble at the top of the viewport, pushing the student's question off-screen above. Student opens the chat and sees Lyra's monologue first, with no visible context for what they asked. Mirrored the fix in both chat surfaces: when Lyra has just replied, anchor the scroll on the student's MOST RECENT message. ChatTab.jsx now tags each message wrapper with `data-msg-role={m.role}` so the effect can find the last user bubble via `querySelectorAll`.
+
+**Persist threads per technique (commit `504a9de`).** Every time a student returned to a Practice Session technique they'd already chatted with, the chat wiped — they lost the entire coaching conversation (4-step protocol turns, vocabulary ingredients, parallel-universe examples). New per-skill bag in localStorage under `lyra-training-chats`: `{ [skillId]: { [techIdx]: messages[] } }`. `chatMessages` was refactored from a separate `useState` to a derived view of `chatThreads[activeTechIdx]` — single source of truth, no mirror-effect race. When the student arrives on a technique, the saved thread is restored and the chat panel auto-opens; when they return after closing the × the button reads "Resume chat with Lyra" instead of "I'm stuck — chat with Lyra".
+
+**Delete button with two-step inline confirmation (commits `766d923` + `c23f364`).** Once a chat thread persisted, students needed a way to delete one without going through `localStorage.removeItem` manually. Initial commit used native `confirm()` — replaced in the follow-up commit with an inline two-step confirmation that's impossible to dismiss by reflex: first click on Delete morphs the button into a muted "Cancel" outline + a filled-red "Tap again to delete"; 3.5-second timer auto-reverts if the student walks away. Matches the destructive-action idiom Sidebar / GrammarLog already use, but more visible than a browser modal.
+
+### 16.3 Writing chat — persistence + animation removal
+
+**Save chat history even when draft is empty (commit `0a6471c`).** The writing chat was already hooked into the per-writing autoSave pipeline (messages stored under `lyra-projects` localStorage), but autoSave had an early return: `if (!activeWritingId || !draft.trim() || screen !== "app") return;`. If the student chatted with Lyra (brainstorming, asking for an outline, vocabulary ingredients) BEFORE typing anything in the draft pane, the whole save was skipped. Removed the `draft.trim()` guard. Chat history now survives across sessions even when the draft is still blank.
+
+**Drop the typewriter animation (commit `3ee1bdc`).** The character-by-character reveal at 18ms / char produced 5-6 second waits on multi-paragraph LYRA_BRAIN turns. Rewrote `useTypewriter` to return the full text synchronously with `done: true`. API is preserved (TypewriterBubble, PracticeTypingBubble, ChatTab welcome banner all still call it), but the gradual reveal and the blinking caret are gone — messages now appear instantly, matching the TrainingSession chat behaviour.
+
+### 16.4 Saved skills — short titles + rename pencil (commit `720519f`)
+
+Saved-skill technique cards used the AI's long `KEY IDEA` sentence as the heading on the Practice overview, the exercise card, and the SavedSkillDetail list ("The writer describes being late not as a mistake, but as a 'weapon' or a fake medical condition."). Wall of words before students even read the technique.
+
+Added a `SHORT TITLE:` line to each of the 7 sections in `styleProfilerPrompt` requiring 2-4 plain everyday words in Title Case ("Weapon Excuse", "Concession Then Punch", "Sound Of A Fall") with an explicit jargon banlist ("syntactic inversion", "rhetorical interrogation", "anaphora"). `parseSectionContent` learns the new field. `saveStyleSkill` writes `title` onto `analysedTechniques[i]`. New exported `deriveShortTitle()` heals legacy skills (strips generic "The writer / Hudson uses..." prefixes, trims trailing `to <verb>` infinitives, balances quoted phrases) so existing saved skills get reasonable auto-titles without a backfill AI call.
+
+Students who don't like the AI's short title can rename via a ✎ pencil on the `CollapsibleTechnique` row in `SavedSkillDetail` — mirrors the existing author-rename pencil pattern. Edits persist to BOTH `analysedTechniques[i].title` AND `sections[i].content` (the SHORT TITLE line is rewritten or injected), so the TrainingSession re-derive-from-sections path picks up renames immediately. Verified end-to-end: rename "Being Late" → "Weapon Excuse" on Polly Hudson's first technique → propagates to Practice overview list AND exercise card header.
+
+The exercise card now shows a three-tier hierarchy: TECHNIQUE label → **Short Title** (16px bold) → long KEY IDEA sentence as the "what this means" subtitle → body paragraph below. Practice overview shows title big-bold with long sentence as a muted small-text subtitle.
+
+### 16.5 Bottom tab rename — "Preview" → "My Writing" (commit `dd47447`)
+
+`Preview` was jargon for the 14-year-old HK English learners Lyra is built for — they tapped the tab and weren't sure what it was. Renamed to "My Writing" (works for every writing type — essay, letter, story, report). Internal tab key stays `"preview"` (no state-machinery changes), so this is a single user-facing string swap with no behavioural risk.
+
+### 16.6 Infrastructure repair (commit `9144660`)
+
+Two unrelated breakages surfaced in the proxy log on the same session:
+
+1. **Lite model 404.** Google promoted the Lite model from preview to GA — `gemini-3.1-flash-lite-preview` now returns 404 NOT_FOUND from the Gemini API, so every Lite-tier route was silently broken: translate (X-Ray translation), proofread, structural_suggest (vocabulary chips), training_exercise (Practice Session sentence generation), grammar_lesson (mini-lesson cards). `ai-router.js MODELS.lite` updated to `gemini-3.1-flash-lite`; `server/proxy.js ALLOWED_MODELS` adds the new name and keeps the old `-preview` name temporarily for stale-tab compat.
+
+2. **Web-search response shape mismatch.** The "Search for facts" chip in ChatTab passes `useSearch=true` to `sendChat`. Proxy + Gemini did the search successfully (`[Grounding] 6 sources found` in the log), but `callAI`'s contract when `useSearch=true` is to return `{ text, sources }` instead of a raw string. `sendChat` then handed the object straight to `restoreAuthorNames` and `extractLearningData`, both of which call string methods (`.replace` / `.match`) on it and throw — catch block fired and the student saw "I'm having trouble connecting" even though the search itself had worked. Fix: unpack `result.text` for downstream string-expecting helpers, stash `result.sources` on `typingMsg`. All three `typingMsg → messages` handoff paths (`handleTypewriterDone`, tab-switch finalisation, `stopChat`) now carry sources along so attribution survives across re-renders. New "Sources" footer block in ChatTab renders numbered clickable links under any AI bubble that has them — students can click through to read the actual article and use it as a verifiable example.
+
+### 16.7 Token cost audit (no code change yet)
+
+User raised concern about API token cost mid-session. Sampled `lyra-proxy [Tokens]` log over 85 API calls captured since the proxy was last started (~2 days). Totals:
+
+- Prompt tokens: 1,284,452 (avg ~15,100 per call)
+- Response tokens: 54,736 (avg ~640 per call)
+- Thinking tokens: 73,721 (avg ~860 per call)
+- Total: 1,412,909
+
+Prompt is 91% of all tokens. The bloat is dominated by LYRA_BRAIN (~9,000 tokens, 36 KB) prepended to every Pro-tier call, plus conversation history that grows unboundedly with each turn, plus the full draft echoed every turn, plus all saved skill cards embedded every turn, plus the source X-Ray analysis when present.
+
+User decided to defer the LYRA_BRAIN modularisation work and prompt the work via Opus 4.7 in a follow-up session. Documented in a self-contained problem brief for Opus.
+
+### 16.8 Files changed (this session)
+
+| File | Status | Purpose |
+|---|---|---|
+| `src/lyra-brain.js` | UPDATED | MATCH THE RESPONSE block, diagnose-don't-re-teach sub-rule, voice-labels-internal-only refactor, "scary good" ban, body-paragraph 4-element non-negotiable rule with HK-realistic example illustrations and explicit anti-fabrication block |
+| `src/prompts.js` | UPDATED | `styleProfilerPrompt` adds SHORT TITLE field to each of the 7 sections; `buildCoachPrompt` adds response-length tiers + banned-printable-headers + parallel-universe topic-separation rule + body-paragraph toolkit line; `buildScaffoldingPrompt` STEP 4 replaced PEEL with the four-element walk-through and parallel-universe rule |
+| `src/constants.js` | UPDATED | HKDSE essay + persuasive rule blocks updated with non-negotiable body-paragraph 4-element requirement including the example-explanation pair and anti-fabrication clause |
+| `src/lyra.jsx` | UPDATED | `sendChat` unpacks `{text, sources}` shape when useSearch=true; all three `typingMsg → messages` handoff paths carry sources along; autoSave guard relaxed so chat persists when draft is empty; bottom tab label "Preview" → "My Writing" |
+| `src/components/StyleLab.jsx` | UPDATED | `CollapsibleTechnique` renders short title + long-sentence subtitle + pencil rename UI; `SavedSkillDetail` accepts `onRenameTechnique`; `SavedSkills.renameTechnique` persists to both `analysedTechniques[i].title` AND `sections[i].content`; `synthSectionFromTechnique` injects SHORT TITLE for legacy skills |
+| `src/components/XRayView.jsx` | UPDATED | `parseSectionContent` learns `shortTitle`; new exported `deriveShortTitle()` heuristic for legacy skills; `saveStyleSkill` writes `title` onto analysedTechniques entries |
+| `src/components/TrainingSession.jsx` | UPDATED | Chat thread persistence (per-skill / per-technique localStorage bag); `chatMessages` refactored to derived view of `chatThreads`; scroll anchored on student's most-recent message; Delete button with two-step inline confirmation; `restoreAuthorNames` call added; short-title rendering in overview list + exercise card |
+| `src/components/ChatTab.jsx` | UPDATED | Auto-scroll anchors on `[data-msg-role="user"]` last student message instead of bottom; new Sources footer renders web-search attribution links; each message wrapper now has `data-msg-role={m.role}` attribute |
+| `src/hooks.js` | UPDATED | `useTypewriter` rewritten to return full text synchronously with `done: true` — dropped the gradual character-by-character reveal across all three call sites |
+| `src/ai-router.js` | UPDATED | `MODELS.lite` updated from deprecated `gemini-3.1-flash-lite-preview` to `gemini-3.1-flash-lite` (Google promoted to GA) |
+| `server/proxy.js` | UPDATED | `ALLOWED_MODELS` adds `gemini-3.1-flash-lite`; both `isLiteTranslate` checks and the DEBUG-translate-response log condition accept either name |
+
