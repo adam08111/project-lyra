@@ -1400,7 +1400,7 @@ export default function XRayView({ profileSections, authorName, referenceText, s
               disabled={translating}
               style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: translating ? COLORS.bg2 : COLORS.card, color: COLORS.heading, cursor: translating ? "default" : "pointer", textTransform: "none", letterSpacing: 0, fontWeight: 600 }}
             >
-              {translating ? "翻譯中..." : showTranslation ? "隱藏翻譯 · Hide" : "翻譯成中文 · Translate to traditional chinese"}
+              {translating ? "翻譯中..." : showTranslation ? "隱藏翻譯" : "翻譯成中文"}
             </button>
           </summary>
           <div style={{ padding: "0 14px 12px", fontSize: 12, color: COLORS.text, lineHeight: 1.8, fontFamily: mono, fontStyle: "italic", borderTop: `1px solid ${COLORS.border}`, marginTop: 0, paddingTop: 10 }}>
