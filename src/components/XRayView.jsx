@@ -451,6 +451,36 @@ function groupPairsBySource(pairs, sources) {
     groups[bucket].push(pair);
   }
 
+  // Dedupe body-bucket orphan fragments that already appear inside a
+  // non-body bucket pair's ZH content. Root cause: the LITE translate
+  // model sometimes splits a compound USE IT or STRUCTURE template
+  // ("Would they X? Exactly.") into TWO pairs — the question pair, then
+  // a standalone "Exactly. → 沒錯。" pair for the punchline answer. The
+  // orphan has no recognisable English label so it falls to the body
+  // bucket and renders as a duplicate line below the FROM THE TEXT
+  // translation (where 沒錯。 already lives inside {沒錯。}[加強語氣的
+  // 單字句]). Strip annotation braces + whitespace from every non-body
+  // ZH, then drop body pairs whose normalised ZH is a substring of any
+  // other bucket's normalised ZH. Conservative: only short fragments
+  // (under 20 chars) are eligible so genuine body content survives.
+  if (groups.body && groups.body.length > 0) {
+    const normalise = (s) => (s || "").replace(/[{}[\]【】]/g, "").replace(/\s+/g, "").trim();
+    const otherContent = Object.entries(groups)
+      .filter(([name]) => name !== "body")
+      .flatMap(([, list]) => list.map(p => normalise(p.zh)))
+      .filter(Boolean)
+      .join("|");
+    if (otherContent) {
+      groups.body = groups.body.filter(p => {
+        const zhClean = normalise(p.zh);
+        if (!zhClean) return true;
+        if (zhClean.length > 20) return true; // long enough to be real body content
+        return !otherContent.includes(zhClean);
+      });
+      if (groups.body.length === 0) delete groups.body;
+    }
+  }
+
   // Fallback: if keyIdea bucket is still empty but we have a keyIdea source,
   // find any pair whose EN contains a chunk of the keyIdea text and route it there.
   // This rescues cases where the AI omits the "KEY IDEA:" label in output.
