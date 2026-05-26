@@ -189,11 +189,11 @@ export function parseAnnotations(text) {
 }
 
 export const ANNOTATION_COLORS = [
-  { text: "#8B5E3C", bg: "rgba(139, 94, 60, 0.10)", border: "#8B5E3C" },
-  { text: "#5A7E8B", bg: "rgba(90, 126, 139, 0.10)", border: "#5A7E8B" },
-  { text: "#7B6B8A", bg: "rgba(123, 107, 138, 0.10)", border: "#7B6B8A" },
-  { text: "#6B8A5A", bg: "rgba(107, 138, 90, 0.10)", border: "#6B8A5A" },
-  { text: "#8A6B6B", bg: "rgba(138, 107, 107, 0.10)", border: "#8A6B6B" },
+  { text: "#8B5E3C", bg: "rgba(139, 94, 60, 0.24)", border: "#8B5E3C" },
+  { text: "#5A7E8B", bg: "rgba(90, 126, 139, 0.24)", border: "#5A7E8B" },
+  { text: "#7B6B8A", bg: "rgba(123, 107, 138, 0.24)", border: "#7B6B8A" },
+  { text: "#6B8A5A", bg: "rgba(107, 138, 90, 0.24)", border: "#6B8A5A" },
+  { text: "#8A6B6B", bg: "rgba(138, 107, 107, 0.24)", border: "#8A6B6B" },
 ];
 
 export function labelColorIndex(label) {
@@ -220,6 +220,41 @@ export function AnnotatedQuote({ text }) {
         if (!seg.label) return <span key={i}>{seg.text}</span>;
         const c = ANNOTATION_COLORS[labelColorIndex(seg.label)];
         const isCJK = /[一-龥]/.test(seg.label);
+        // CJK ruby labels don't have room to live: ruby with a label wider
+        // than the base text spreads the base characters apart (e.g. base
+        // "沒錯。" gets stretched to match "加強語氣的單字句"), and the
+        // tall ruby label crowds the lines above. English labels are
+        // space-separated so they wrap naturally above the base text, but
+        // CJK labels with wordBreak: keep-all stay on one over-wide line.
+        // Mixing the two styles (ruby for short CJK labels, inline for
+        // long CJK labels) reads as inconsistent — one quote with labels
+        // above the text AND labels beside the text. So render ALL CJK
+        // labels inline parenthetically — "沒錯。(加強語氣的單字句)" —
+        // consistent across short and long, no layout collisions. Ruby
+        // stays in use for English labels (they're space-separated and
+        // wrap cleanly above the base).
+        if (isCJK) {
+          return (
+            <span key={i} style={{
+              background: c.bg,
+              borderBottom: `2.5px solid ${c.border}`,
+              borderRadius: 3,
+              padding: "1px 4px",
+            }}>
+              {seg.text}
+              <span style={{
+                marginLeft: 4,
+                fontSize: 11,
+                fontWeight: 700,
+                color: c.text,
+                fontFamily: mono,
+                whiteSpace: "nowrap",
+              }}>
+                ({seg.label})
+              </span>
+            </span>
+          );
+        }
         return (
           <ruby key={i} style={{
             background: c.bg,
@@ -231,7 +266,7 @@ export function AnnotatedQuote({ text }) {
             {seg.text}
             <rp>(</rp>
             <rt style={{
-              fontSize: isCJK ? 13 : 11,
+              fontSize: isCJK ? 11 : 11,
               fontWeight: 700,
               color: c.text,
               textTransform: isCJK ? "none" : "lowercase",
@@ -824,7 +859,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
           譯文 · Translation
         </div>
         {zhLines.map((zh, i) => (
-          <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.1, fontStyle: "italic", marginBottom: 4 }}>
+          <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.4, fontStyle: "italic", marginBottom: 6 }}>
             <AnnotatedQuote text={zh} />
           </div>
         ))}
