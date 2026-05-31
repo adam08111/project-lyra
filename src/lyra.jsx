@@ -6,6 +6,7 @@ import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt } from "./prompts.js";
 import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
+import { snapshotBackup } from "./backup.js";
 import { LyraAvatar } from "./components/Icons.jsx";
 import Onboarding from "./components/Onboarding.jsx";
 import SourceSetup from "./components/SourceSetup.jsx";
@@ -134,6 +135,27 @@ export default function Lyra() {
       } catch (e) { /* first time */ }
       setProjectsLoaded(true);
     })();
+  }, []);
+
+  // === LOCAL BACKUP SAFETY NET ===
+  // Snapshot all critical localStorage keys to lyra-backup-v1 so a stray
+  // wipe is recoverable on next load (autoRestoreFromBackup runs in main.jsx
+  // before mount). The snapshot reads localStorage directly, so it captures
+  // writes from every component (skills, training chats, achievements), not
+  // just this one's React state. Triggers: an initial snapshot a few seconds
+  // after load, a light 30s interval, on tab-hide, and on unload.
+  useEffect(() => {
+    const initial = setTimeout(snapshotBackup, 3000);
+    const interval = setInterval(snapshotBackup, 30000);
+    const onHide = () => { if (document.visibilityState === "hidden") snapshotBackup(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("beforeunload", snapshotBackup);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("beforeunload", snapshotBackup);
+    };
   }, []);
 
   // Save projects
