@@ -541,6 +541,13 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
     ? skill.sections
     : (skill.analysedTechniques || []).map(synthSectionFromTechnique);
 
+  // The "PERFECT FOR" bullet parser greedily captured the trailing
+  // "NOT SUITABLE FOR:" label into the last bullet; drop it here so older
+  // saved skills display cleanly without re-analysing.
+  const whenBullets = (skill.whenToUse?.bullets || [])
+    .map(b => b.replace(/\s*NOT\s+SUITABLE\s+FOR[\s\S]*$/i, "").trim())
+    .filter(Boolean);
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -571,9 +578,9 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
       {skill.whenToUse?.keyIdea && (
         <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, marginBottom: 12, background: "#E8E3DB", borderRadius: 10, padding: "10px 14px", fontFamily: mono }}>
           <span style={{ fontWeight: 700, color: COLORS.heading }}>When to use: </span>{skill.whenToUse.keyIdea}
-          {skill.whenToUse.bullets?.length > 0 && (
+          {whenBullets.length > 0 && (
             <div style={{ marginTop: 6, paddingLeft: 4, color: COLORS.muted, fontSize: 11 }}>
-              {skill.whenToUse.bullets.map((b, j) => <div key={j}>• {b}</div>)}
+              {whenBullets.map((b, j) => <div key={j}>• {b}</div>)}
             </div>
           )}
         </div>
@@ -1262,8 +1269,9 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
               const useItSection = profileSections.find(s => s.title === "WHEN TO USE THIS STYLE");
               if (!useItSection) return <div style={{ textAlign: "center", padding: 40, color: COLORS.muted, fontFamily: mono, fontSize: 12 }}>Run an analysis first to see when to use this style.</div>;
               const parts = parseSectionContent(useItSection.content);
-              // Parse bullet points from body text
-              const bodyText = (parts.body || "") + "\n" + (useItSection.content || "");
+              // Parse bullet points from body text — cut at NOT SUITABLE FOR so
+              // its label doesn't bleed into the last PERFECT FOR bullet.
+              const bodyText = ((parts.body || "") + "\n" + (useItSection.content || "")).split(/NOT\s+SUITABLE\s+FOR/i)[0];
               const bullets = bodyText.match(/•[^•]+/g) || [];
               return (
                 <>

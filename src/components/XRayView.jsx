@@ -1335,7 +1335,7 @@ export function saveStyleSkill(authorName, profileSections) {
     const sigParts = sigSection ? parseSectionContent(sigSection.content) : {};
 
     const rawBullets = whenSection
-      ? ((whenSection.content || "").match(/\u2022[^\u2022]+/g) || []).map(b => b.replace(/^\u2022\s*/, "").trim()).filter(b => b && !b.startsWith("KEY IDEA"))
+      ? ((whenSection.content || "").split(/NOT\s+SUITABLE\s+FOR/i)[0].match(/\u2022[^\u2022]+/g) || []).map(b => b.replace(/^\u2022\s*/, "").trim()).filter(b => b && !b.startsWith("KEY IDEA"))
       : [];
     const bullets = [...new Set(rawBullets)].slice(0, 4);
 
