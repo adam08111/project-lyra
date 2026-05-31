@@ -609,6 +609,165 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onRemove, onRemo
   );
 }
 
+// Minimal markdown for freeform Masterclass reports — bold + bullets.
+function renderReportMd(text) {
+  if (!text) return null;
+  const bulletFixed = text.replace(/^[ \t]*[*•]\s+/gm, "  • ");
+  const parts = bulletFixed.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    const bold = part.match(/^\*\*([^*]+)\*\*$/);
+    return bold ? <strong key={i}>{bold[1]}</strong> : <span key={i}>{part}</span>;
+  });
+}
+
+// One Masterclass Report card. Collapsed: technique + the student's polished
+// sentence. Expanded: the 4-section structured view (auto reports) OR the
+// verbatim Lyra report text (manual "Save this turn" reports). Delete uses
+// the same two-step inline confirmation as the training-chat delete.
+function AchievementCard({ report, index, onRemove }) {
+  const [expanded, setExpanded] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const isStructured = !report.reportText;
+  const dateLabel = (() => {
+    try { return new Date(report.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+    catch (e) { return ""; }
+  })();
+  const headline = report.technique || (report.skills && report.skills[0] && report.skills[0].skillName) || "Writing win";
+  const sentence = report.after || "";
+
+  const sectionTitle = { fontSize: 10, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginTop: 12, marginBottom: 4, fontFamily: mono };
+  const bodyText = { fontSize: 12, color: COLORS.text, lineHeight: 1.6, fontFamily: mono };
+
+  return (
+    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderLeft: `3px solid ${COLORS.green || COLORS.accent1}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{ padding: "12px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, cursor: "pointer" }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, lineHeight: 1.4 }}>
+            {index}. {headline}
+          </div>
+          {sentence && (
+            <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, lineHeight: 1.5, marginTop: 4, fontStyle: "italic", overflow: expanded ? "visible" : "hidden", textOverflow: "ellipsis", whiteSpace: expanded ? "normal" : "nowrap" }}>
+              "{sentence}"
+            </div>
+          )}
+          {dateLabel && <div style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono, marginTop: 4 }}>{dateLabel}{report.source === "manual" ? " · saved by you" : ""}</div>}
+        </div>
+        <span style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, flexShrink: 0 }}>{expanded ? "▾" : "›"}</span>
+      </div>
+
+      {expanded && (
+        <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${COLORS.border}` }}>
+          {isStructured ? (
+            <>
+              {report.skills?.length > 0 && (
+                <>
+                  <div style={sectionTitle}>1 · Skills Deployed</div>
+                  {report.skills.map((sk, i) => (
+                    <div key={i} style={bodyText}>
+                      <strong>{sk.skillName}</strong>{sk.sourceAuthor ? ` — learned from ${sk.sourceAuthor}` : ""}{sk.studentApplication ? `. ${sk.studentApplication}` : ""}
+                    </div>
+                  ))}
+                </>
+              )}
+              {report.structures?.length > 0 && (
+                <>
+                  <div style={sectionTitle}>2 · Sentence Structures & Rhythm Maps</div>
+                  {report.structures.map((st, i) => (
+                    <div key={i} style={{ ...bodyText, marginBottom: 4 }}>
+                      <strong>{st.name}</strong>{st.description ? ` — ${st.description}` : ""}{st.effect ? ` (${st.effect})` : ""}
+                      {st.chinese ? <div style={{ fontSize: 11, color: COLORS.muted }}>{st.chinese}</div> : null}
+                    </div>
+                  ))}
+                </>
+              )}
+              {(report.before || report.after) && (
+                <>
+                  <div style={sectionTitle}>3 · Before & After Evolution</div>
+                  {report.before && <div style={{ ...bodyText, marginBottom: 4 }}><strong>Before:</strong> {report.before}</div>}
+                  {report.after && <div style={{ ...bodyText, marginBottom: 4 }}><strong>After:</strong> {report.after}</div>}
+                  {report.why_better && <div style={{ ...bodyText, color: COLORS.muted }}><strong>Why it's better:</strong> {report.why_better}</div>}
+                </>
+              )}
+              {report.vocabulary?.length > 0 && (
+                <>
+                  <div style={sectionTitle}>Vocabulary Gained</div>
+                  {report.vocabulary.map((v, i) => (
+                    <div key={i} style={bodyText}>{v.weak} → <strong>{v.strong}</strong>{v.chinese ? ` (${v.chinese})` : ""}</div>
+                  ))}
+                </>
+              )}
+              {report.grammar?.length > 0 && (
+                <>
+                  <div style={sectionTitle}>4 · Grammar & Proofreading</div>
+                  {report.grammar.map((gr, i) => (
+                    <div key={i} style={{ ...bodyText, marginBottom: 4 }}>
+                      <strong>{gr.phrase} → {gr.correction}</strong>{gr.explanation ? ` — ${gr.explanation}` : ""}
+                      {gr.chinese ? <div style={{ fontSize: 11, color: COLORS.muted }}>{gr.chinese}</div> : null}
+                    </div>
+                  ))}
+                </>
+              )}
+            </>
+          ) : (
+            <div style={{ ...bodyText, whiteSpace: "pre-wrap", marginTop: 12 }}>{renderReportMd(report.reportText)}</div>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 14 }}>
+            {confirming ? (
+              <>
+                <button onClick={() => setConfirming(false)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, color: COLORS.muted, fontSize: 10, fontWeight: 600, cursor: "pointer", padding: "4px 10px", fontFamily: mono, borderRadius: 6 }}>Cancel</button>
+                <button onClick={onRemove} style={{ background: COLORS.red || "#c44", border: `1px solid ${COLORS.red || "#c44"}`, color: "#fff", fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "4px 10px", fontFamily: mono, borderRadius: 6 }}>Tap again to delete</button>
+              </>
+            ) : (
+              <button onClick={() => setConfirming(true)} style={{ background: "transparent", border: "none", color: COLORS.red || "#c44", fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "2px 6px", fontFamily: mono, textTransform: "uppercase", letterSpacing: 0.5 }}>Delete</button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Achievements({ onCountChange }) {
+  const [reports, setReports] = useState(() => {
+    const r = JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]");
+    if (onCountChange) setTimeout(() => onCountChange(r.length), 0);
+    return r;
+  });
+
+  const remove = (idx) => {
+    const next = reports.filter((_, i) => i !== idx);
+    setReports(next);
+    localStorage.setItem("lyra-masterclass-reports", JSON.stringify(next));
+    if (onCountChange) onCountChange(next.length);
+  };
+
+  if (reports.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "40px 20px" }}>
+        <FeatherIcon size={24} color={COLORS.accent2} />
+        <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 12, lineHeight: 1.5, fontFamily: mono }}>
+          No achievements yet. When you nail a technique in a writing session, Lyra saves a Masterclass Report here — or tap "Save this turn" under any of Lyra's replies to keep it.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 12, fontFamily: mono }}>
+        {reports.length} achievement{reports.length !== 1 ? "s" : ""} saved
+      </div>
+      {reports.map((r, i) => (
+        <AchievementCard key={r.id || i} report={r} index={i + 1} onRemove={() => remove(i)} />
+      ))}
+    </div>
+  );
+}
+
 export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
   const [skills, setSkills] = useState(() => {
     const s = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]");
@@ -798,6 +957,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
   const [savedCount, setSavedCount] = useState(() => JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]").length);
   const [skillSaved, setSkillSaved] = useState(null); // null | "saved" | "too-short"
   const [skillCount, setSkillCount] = useState(() => JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);
+  const [achievementCount, setAchievementCount] = useState(() => JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]").length);
 
   const practiceEndRef = useRef(null);
   const analyseEndRef = useRef(null);
@@ -943,6 +1103,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
             { key: "useit", label: "Use It", needsProfile: true },
             { key: "saved", label: savedCount > 0 ? `Saved (${savedCount})` : "Saved" },
             { key: "skills", label: skillCount > 0 ? `Skills (${skillCount})` : "Skills" },
+            { key: "achievements", label: achievementCount > 0 ? `Achievements (${achievementCount})` : "Achievements" },
           ].map(t => {
             const disabled = t.needsProfile && !hasProfile;
             return (
@@ -1128,6 +1289,13 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
               setShowStyleLab(false);
               onOpenTraining(skill);
             } : null} />
+          </div>
+        )}
+
+        {/* ACHIEVEMENTS TAB */}
+        {activeTab === "achievements" && (
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
+            <Achievements onCountChange={setAchievementCount} />
           </div>
         )}
 

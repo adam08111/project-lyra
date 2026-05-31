@@ -5,7 +5,7 @@ import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt } from "./prompts.js";
 import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK } from "./utils.js";
-import { extractLearningData, syncLearningData } from "./learning-sync.js";
+import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import { LyraAvatar } from "./components/Icons.jsx";
 import Onboarding from "./components/Onboarding.jsx";
 import SourceSetup from "./components/SourceSetup.jsx";
@@ -505,8 +505,18 @@ Rules:
 
       // === LEARNING SYNC: Extract hidden learning data before display ===
       const { displayText, learningData } = extractLearningData(result);
+      let savedReport = false;
       if (learningData) {
-        syncLearningData(learningData, { setGrammarLog, topic });
+        const syncResult = syncLearningData(learningData, { setGrammarLog, topic });
+        savedReport = !!(syncResult && syncResult.savedReport);
+      }
+      // Fallback: if the structured learning-data path didn't save an
+      // Achievements card but Lyra printed a visible MASTERCLASS REPORT in
+      // the chat, capture it as a freeform card so the milestone isn't lost
+      // (the model often prints the report but omits/partial-emits the
+      // hidden JSON block).
+      if (!savedReport) {
+        maybeSaveVisibleReport(displayText, { topic });
       }
 
       setChatLoading(false);
@@ -795,6 +805,23 @@ Rules:
             welcomeText={welcomeText} typeLabel={typeLabel}
             topic={topic} draft={draft} currentWords={currentWords}
             addToDraft={addToDraft}
+            onSaveAchievement={(lyraText, studentSentence) => {
+              // Backstop for when the AI forgets the hidden LYRA_LEARNING_DATA
+              // block: save the student's sentence + Lyra's verbatim reply as a
+              // freeform Masterclass Report card. Try to lift the polished
+              // sentence out of an "After:" line in Lyra's report if present,
+              // else fall back to the student's most recent message.
+              const afterMatch = lyraText.match(/After:\s*([^\n]+)/i);
+              const after = (afterMatch ? afterMatch[1].trim().replace(/^["“]|["”]$/g, "") : studentSentence || "").trim();
+              const techMatch = lyraText.match(/(?:You used|deployed|technique)\s+(?:the\s+)?["'“]?([A-Z][\w '\-]{2,40})["'”]?/);
+              saveMasterclassReport({
+                source: "manual",
+                topic: topic?.slice(0, 80) || "",
+                after,
+                technique: techMatch ? techMatch[1].trim() : "",
+                reportText: lyraText,
+              });
+            }}
             onHelpMeStart={() => sendChat("I'm stuck and don't know how to start. Help me begin writing.", false, true)}
             onDeploySkills={() => {
               let saved = [];

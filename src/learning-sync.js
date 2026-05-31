@@ -139,4 +139,120 @@ export function syncLearningData(data, ctx) {
       }
     } catch (e) { /* silent */ }
   }
+
+  // 6. Masterclass Report (auto) — when there's a growth before/after pair
+  //    (a real sentence upgrade), bundle the whole learning moment into a
+  //    single self-contained Achievements card. We trigger on ANY growth
+  //    event, not only mastery "achieved" — during coaching the AI usually
+  //    marks mastery "partial" while the student is still learning, so an
+  //    "achieved"-only gate almost never fired and the Achievements tab
+  //    stayed empty. A growth before/after pair is itself the milestone:
+  //    the student improved a real sentence. The individual logs above
+  //    still record everything; this is the curated trophy view. Returns
+  //    true so the caller knows a structured report was saved and can skip
+  //    the visible-report fallback.
+  if (data.growth?.length) {
+    const g = data.growth[0];
+    saveMasterclassReport({
+      source: "auto",
+      topic: topic?.slice(0, 80) || "",
+      before: g.before || "",
+      after: g.after || "",
+      technique: g.technique_used || (data.skills_deployed?.[0] && data.skills_deployed[0].skill_name) || "",
+      why_better: g.why_better || "",
+      skills: (data.skills_deployed || []).map(s => ({
+        skillName: s.skill_name || "",
+        sourceAuthor: s.source_author || "",
+        studentApplication: s.student_application || "",
+        mastery: s.mastery_signal || "",
+      })),
+      structures: (data.structures_learned || []).map(s => ({
+        name: s.name || "",
+        description: s.description || "",
+        example: s.student_example || "",
+        effect: s.effect || "",
+        chinese: s.chinese || "",
+      })),
+      vocabulary: (data.vocabulary_acquired || []).map(v => ({
+        weak: v.weak || "",
+        strong: v.strong || "",
+        chinese: v.chinese || "",
+        collocation: v.collocation || "",
+      })),
+      grammar: (data.grammar || []).map(gr => ({
+        phrase: gr.phrase || "",
+        correction: gr.correction || "",
+        rule: gr.rule || "",
+        explanation: gr.explanation || "",
+        chinese: gr.chinese || "",
+      })),
+    });
+    return { savedReport: true };
+  }
+  return { savedReport: false };
+}
+
+/**
+ * Detect a visible MASTERCLASS REPORT in a Lyra coaching message and save it
+ * as a freeform Achievements card. This is the robust fallback for when the
+ * AI prints a full report in the chat (numbered SKILLS DEPLOYED / SENTENCE
+ * STRUCTURES / BEFORE & AFTER / GRAMMAR sections) but forgets — or only
+ * partially emits — the hidden LYRA_LEARNING_DATA JSON block. Without this,
+ * a clearly report-shaped turn would never reach the Achievements tab.
+ *
+ * @param {string} displayText - the cleaned (JSON-stripped) Lyra message
+ * @param {object} ctx - { topic }
+ * @returns {object|null} the saved entry or null if no report detected
+ */
+export function maybeSaveVisibleReport(displayText, ctx) {
+  if (!displayText) return null;
+  // Require the unmistakable report header OR at least two of the four
+  // numbered section labels, so ordinary coaching turns don't get saved.
+  const hasHeader = /MASTERCLASS\s+REPORT/i.test(displayText);
+  const sectionHits = [
+    /SKILLS\s+DEPLOYED/i,
+    /SENTENCE\s+STRUCTURES|RHYTHM\s+MAP/i,
+    /BEFORE\s*&?\s*AFTER/i,
+    /GRAMMAR\s*&?\s*PROOFREAD/i,
+  ].filter(re => re.test(displayText)).length;
+  if (!hasHeader && sectionHits < 2) return null;
+
+  const afterMatch = displayText.match(/After:\s*([^\n]+)/i);
+  const after = afterMatch ? afterMatch[1].trim().replace(/^["“]|["”]$/g, "") : "";
+  const techMatch = displayText.match(/(?:You used|deployed|technique)\s+(?:the\s+)?["'“]?([A-Z][\w '\-]{2,40})["'”]?/);
+  return saveMasterclassReport({
+    source: "auto-visible",
+    topic: ctx?.topic?.slice(0, 80) || "",
+    after,
+    technique: techMatch ? techMatch[1].trim() : "",
+    reportText: displayText,
+  });
+}
+
+/**
+ * Save a Masterclass Report card to localStorage (key: lyra-masterclass-reports).
+ * Two shapes are supported:
+ *   - STRUCTURED (source "auto"): before/after/technique/why_better + skills/
+ *     structures/vocabulary/grammar arrays, harvested from LYRA_LEARNING_DATA.
+ *   - FREEFORM (source "manual"): `reportText` = verbatim Lyra message + `after`
+ *     = the student's sentence, captured when the student clicks "Save this
+ *     turn" (backstop for when the AI forgets the hidden JSON block).
+ * The Achievements tab renders whichever shape is present.
+ *
+ * @param {object} report
+ * @returns {object|null} the saved entry (with id+date) or null on failure
+ */
+export function saveMasterclassReport(report) {
+  try {
+    const existing = JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]");
+    const entry = {
+      id: "report_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      date: new Date().toISOString(),
+      ...report,
+    };
+    localStorage.setItem("lyra-masterclass-reports", JSON.stringify([entry, ...existing]));
+    return entry;
+  } catch (e) {
+    return null;
+  }
 }

@@ -5,6 +5,7 @@ import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
 import { buildTrainingExercisesPrompt, buildTrainingChatPrompt } from "../prompts.js";
 import { anonymiseSkillsForAI, restoreAuthorNames } from "../utils.js";
+import { extractLearningData, syncLearningData, maybeSaveVisibleReport } from "../learning-sync.js";
 import { parseSectionContent, trimToSentence, deriveShortTitle } from "./XRayView.jsx";
 
 const mono = "'Courier Prime', monospace";
@@ -314,10 +315,26 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
       // comment carrying structured learning metadata for the app to harvest.
       // Strip it (plus any stray markdown fences) — what remains is the
       // coaching turn itself, displayed verbatim to the student.
-      const message = result
+      // Harvest hidden learning data (grammar log, growth, structures, vocab)
+      // and auto-save an Achievements card the same way the writing chat
+      // does — without this, practising a technique to mastery in the
+      // Practice Session never produced an Achievement. Then strip the JSON
+      // comment + fences for display. If no structured report was saved but
+      // Lyra printed a visible MASTERCLASS REPORT, the visible-report
+      // fallback captures it.
+      const { displayText: synced, learningData } = extractLearningData(result);
+      let savedReport = false;
+      if (learningData) {
+        const syncResult = syncLearningData(learningData, { topic: skill?.authorName || "" });
+        savedReport = !!(syncResult && syncResult.savedReport);
+      }
+      const message = synced
         .replace(/<!--[\s\S]*?-->/g, "")
         .replace(/```json|```/g, "")
         .trim();
+      if (!savedReport) {
+        maybeSaveVisibleReport(message, { topic: skill?.authorName || "" });
+      }
       if (message) {
         setChatMessages(prev => [...prev, { role: 'lyra', text: message }]);
       }

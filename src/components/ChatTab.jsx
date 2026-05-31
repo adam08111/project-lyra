@@ -19,7 +19,7 @@ export default function ChatTab({
   messages, setMessages, typingMsg, setTypingMsg,
   chatLoading, sendChat, stopChat, handleTypewriterDone,
   welcomeText, typeLabel, topic, draft, currentWords,
-  onHelpMeStart, onDeploySkills, addToDraft,
+  onHelpMeStart, onDeploySkills, addToDraft, onSaveAchievement,
 }) {
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef(null);
@@ -143,6 +143,20 @@ export default function ChatTab({
                 <div style={{ display: "flex", gap: 4, marginTop: 4, justifyContent: m.role === "user" ? "flex-end" : "flex-start", animation: "fadeIn 0.15s ease" }}>
                   <button onClick={(e) => { e.stopPropagation(); setEditingMsgIdx(i); setEditingMsgText(m.text); setActiveMsgIdx(null); }} style={{ padding: "4px 12px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 11, cursor: "pointer", color: COLORS.muted }}>Edit</button>
                   <button onClick={(e) => { e.stopPropagation(); setMessages(prev => prev.filter((_, idx) => idx !== i)); setActiveMsgIdx(null); }} style={{ padding: "4px 12px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 11, cursor: "pointer", color: COLORS.red }}>Delete</button>
+                  {m.role === "ai" && onSaveAchievement && (
+                    <button onClick={(e) => {
+                      e.stopPropagation();
+                      // Find the student's most recent message before this Lyra
+                      // reply — that's the sentence the report is celebrating.
+                      let priorUser = "";
+                      for (let j = i - 1; j >= 0; j--) { if (messages[j].role === "user") { priorUser = messages[j].text; break; } }
+                      onSaveAchievement(m.text, priorUser);
+                      setMessages(prev => prev.map((msg, idx) => idx === i ? { ...msg, savedAchievement: true } : msg));
+                      setActiveMsgIdx(null);
+                    }} style={{ padding: "4px 12px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: m.savedAchievement ? COLORS.green : COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 11, cursor: "pointer", color: m.savedAchievement ? "#fff" : COLORS.green, fontWeight: m.savedAchievement ? 700 : 400, transition: "all 0.2s" }}>
+                      {m.savedAchievement ? "✓ Saved" : "★ Save this turn"}
+                    </button>
+                  )}
                   {m.role === "user" && (
                     <button onClick={(e) => { e.stopPropagation(); setActiveMsgIdx(null); sendChat(m.text); }} style={{ padding: "4px 12px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 11, cursor: "pointer", color: COLORS.heading }}>Resend</button>
                   )}
