@@ -74,7 +74,7 @@ export default function EditorTab({
             <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono }}>Deploy a Skill</div>
             <button onClick={() => setShowSkills(false)} style={{ background: "none", border: "none", fontSize: 16, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}>{"\u00d7"}</button>
           </div>
-          <SavedSkills onApply={(skill) => { onApplySkill(skill); setShowSkills(false); }} onPractice={onOpenTraining ? (skill) => { onOpenTraining(skill); setShowSkills(false); } : null} />
+          <SavedSkills onApply={(skill) => { onApplySkill(skill); setShowSkills(false); }} onPractice={onOpenTraining ? (skill, techIdx) => { onOpenTraining(skill, techIdx); if (!Number.isInteger(techIdx)) setShowSkills(false); } : null} />
         </div>
       )}
 

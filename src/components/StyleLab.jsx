@@ -418,7 +418,7 @@ function synthSectionFromTechnique(t) {
 // Click → expand inline to render the full SectionCard. The ✎ button puts
 // the title into inline-edit mode (Enter saves, Escape cancels); the × button
 // removes the technique entirely from the saved skill.
-function CollapsibleTechnique({ section, index, trackCall, onRemove, onRename }) {
+function CollapsibleTechnique({ section, index, trackCall, onRemove, onRename, onPractice }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -454,6 +454,14 @@ function CollapsibleTechnique({ section, index, trackCall, onRemove, onRename })
           {removeBtn}
         </div>
         <SectionCard section={section} index={index} trackCall={trackCall} />
+        {onPractice && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPractice(); }}
+            style={{ marginTop: 8, width: "100%", fontSize: 12, fontFamily: mono, padding: "9px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.green}`, background: "transparent", color: COLORS.green, cursor: "pointer", fontWeight: 700, letterSpacing: 0.3 }}
+          >
+            ▶ Practise this technique
+          </button>
+        )}
       </div>
     );
   }
@@ -511,6 +519,13 @@ function CollapsibleTechnique({ section, index, trackCall, onRemove, onRename })
         )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        {onPractice && !editing && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPractice(); }}
+            title="Practise this technique"
+            style={{ background: "none", border: `1px solid ${COLORS.green}`, color: COLORS.green, fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "3px 8px", borderRadius: 7, lineHeight: 1, fontFamily: mono, flexShrink: 0 }}
+          >▶ Practise</button>
+        )}
         {removeBtn}
         <span style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, lineHeight: 1.5 }}>›</span>
       </div>
@@ -518,7 +533,7 @@ function CollapsibleTechnique({ section, index, trackCall, onRemove, onRename })
   );
 }
 
-function SavedSkillDetail({ skill, onBack, onApply, onPractice, onRemove, onRemoveTechnique, onRenameTechnique, trackCall }) {
+function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechnique, onRemove, onRemoveTechnique, onRenameTechnique, trackCall }) {
   // Prefer full saved sections (new format); fall back to synthesizing from
   // analysedTechniques (legacy skills saved before the sections field existed).
   const hasFullSections = skill.sections && skill.sections.length > 0;
@@ -573,6 +588,7 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onRemove, onRemo
             trackCall={trackCall}
             onRemove={onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
             onRename={onRenameTechnique ? (newTitle) => onRenameTechnique(i, newTitle, hasFullSections) : null}
+            onPractice={onPracticeTechnique ? () => onPracticeTechnique(i) : null}
           />
         ))
       ) : (
@@ -872,6 +888,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
         onBack={() => setViewingIdx(null)}
         onApply={onApply}
         onPractice={onPractice}
+        onPracticeTechnique={onPractice ? (techIdx) => onPractice(skills[viewingIdx], techIdx) : null}
         onRemove={() => remove(viewingIdx)}
         onRemoveTechnique={(techIdx, hasFullSections) => removeTechnique(viewingIdx, techIdx, hasFullSections)}
         onRenameTechnique={(techIdx, newTitle, hasFullSections) => renameTechnique(viewingIdx, techIdx, newTitle, hasFullSections)}
@@ -1285,9 +1302,14 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
             <SavedSkills onCountChange={setSkillCount} trackCall={trackCall} onApply={onApplySkill ? (skill) => {
               onApplySkill(skill);
               setShowStyleLab(false);
-            } : null} onPractice={onOpenTraining ? (skill) => {
-              setShowStyleLab(false);
-              onOpenTraining(skill);
+            } : null} onPractice={onOpenTraining ? (skill, techIdx) => {
+              // Per-technique practice (techIdx is a number) opens the exercise
+              // as an overlay ON TOP of this skill detail and keeps StyleLab
+              // mounted underneath, so closing the exercise returns to the same
+              // skill-detail card list. Whole-skill practice (no techIdx) opens
+              // the full Practice Session overview, so we close StyleLab.
+              if (!Number.isInteger(techIdx)) setShowStyleLab(false);
+              onOpenTraining(skill, techIdx);
             } : null} />
           </div>
         )}

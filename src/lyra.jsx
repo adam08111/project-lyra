@@ -73,9 +73,19 @@ export default function Lyra() {
   const [techsEnriching, setTechsEnriching] = useState(false);
   const [pendingSkillsOpen, setPendingSkillsOpen] = useState(false);
 
-  // Training Session
+  // Training Session. trainingStartTech is the technique index to jump
+  // straight into (per-technique "Practise this technique"); null = open the
+  // overview list as before.
   const [trainingSkill, setTrainingSkill] = useState(null);
-  const openTrainingSession = useCallback((skill) => setTrainingSkill(skill), []);
+  const [trainingStartTech, setTrainingStartTech] = useState(null);
+  const openTrainingSession = useCallback((skill, techIdx) => {
+    setTrainingStartTech(Number.isInteger(techIdx) ? techIdx : null);
+    setTrainingSkill(skill);
+  }, []);
+  const closeTrainingSession = useCallback(() => {
+    setTrainingSkill(null);
+    setTrainingStartTech(null);
+  }, []);
 
   // Source text (new unified flow)
   const [sourceText, setSourceText] = useState("");
@@ -753,7 +763,7 @@ Rules:
           onOpenTraining={openTrainingSession}
         />
         <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
-        {trainingSkill && <TrainingSession skill={trainingSkill} onClose={() => setTrainingSkill(null)} trackCall={trackCall} />}
+        {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
       </>
     );
   }
@@ -775,7 +785,7 @@ Rules:
           sidebarProps={sidebarProps}
         />
         <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
-        {trainingSkill && <TrainingSession skill={trainingSkill} onClose={() => setTrainingSkill(null)} trackCall={trackCall} />}
+        {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
       </>
     );
   }
@@ -900,7 +910,7 @@ Rules:
       <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
 
       {/* Training Session Overlay */}
-      {trainingSkill && <TrainingSession skill={trainingSkill} onClose={() => setTrainingSkill(null)} trackCall={trackCall} />}
+      {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
 
       {/* Bottom Navigation */}
       <div style={{ padding: "10px 18px 16px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>

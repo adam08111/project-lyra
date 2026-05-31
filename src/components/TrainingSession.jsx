@@ -48,10 +48,14 @@ const renderMd = (text) => {
   });
 };
 
-export default function TrainingSession({ skill, onClose, trackCall }) {
-  // Internal state
-  const [screen, setScreen] = useState("overview");
-  const [activeTechIdx, setActiveTechIdx] = useState(null);
+export default function TrainingSession({ skill, onClose, trackCall, startTechIdx = null }) {
+  // Internal state. When startTechIdx is provided (per-technique "Practise
+  // this technique" launch), jump straight into that technique's exercise
+  // screen instead of the overview list. The exercise sentence shows
+  // "Loading..." until generateExercises fills it in.
+  const hasStart = Number.isInteger(startTechIdx);
+  const [screen, setScreen] = useState(hasStart ? "exercise" : "overview");
+  const [activeTechIdx, setActiveTechIdx] = useState(hasStart ? startTechIdx : null);
   const [exercises, setExercises] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [studentAttempt, setStudentAttempt] = useState("");
@@ -309,6 +313,16 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     }
   }, [skill]);
 
+  // Defensive: if launched directly into a technique that doesn't exist
+  // (out-of-range startTechIdx from malformed data), fall back to the
+  // overview instead of rendering a blank exercise screen.
+  useEffect(() => {
+    if (screen === "exercise" && activeTechIdx !== null && techniques.length && !techniques[activeTechIdx]) {
+      setActiveTechIdx(null);
+      setScreen("overview");
+    }
+  }, [screen, activeTechIdx, techniques]);
+
   // Fetch the next Lyra turn given the current conversation.
   // Same Pro-tier model + LYRA_BRAIN as the main coaching chat.
   const fetchLyraTurn = useCallback(async (conversation) => {
@@ -529,7 +543,7 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   // === OVERVIEW SCREEN ===
   if (screen === "overview") {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 90, background: COLORS.bg1, display: "flex", flexDirection: "column", maxWidth: 430, margin: "0 auto", fontFamily: mono, animation: "fadeIn 0.25s ease" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 110, background: COLORS.bg1, display: "flex", flexDirection: "column", maxWidth: 430, margin: "0 auto", fontFamily: mono, animation: "fadeIn 0.25s ease" }}>
         {/* Header */}
         <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}>{"\u2190"}</button>
@@ -607,10 +621,14 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
 
   if (screen === "exercise" && activeTech) {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 90, background: COLORS.bg1, display: "flex", flexDirection: "column", maxWidth: 430, margin: "0 auto", fontFamily: mono, animation: "fadeIn 0.2s ease" }}>
-        {/* Header */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 110, background: COLORS.bg1, display: "flex", flexDirection: "column", maxWidth: 430, margin: "0 auto", fontFamily: mono, animation: "fadeIn 0.2s ease" }}>
+        {/* Header. Back behaviour depends on how we got here: a per-technique
+            direct launch (hasStart) has no overview to return to \u2014 it sits on
+            top of the StyleLab skill detail \u2014 so back CLOSES the session and
+            reveals that detail. A launch from the overview list goes back to
+            the overview as normal. */}
         <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
-          <button onClick={() => setScreen("overview")} style={{ background: "none", border: "none", fontSize: 20, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}>{"\u2190"}</button>
+          <button onClick={() => { if (hasStart) onClose(); else setScreen("overview"); }} style={{ background: "none", border: "none", fontSize: 20, color: COLORS.muted, cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}>{"\u2190"}</button>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading }}>Technique {activeTechIdx + 1} of {techniques.length}</div>
             <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 1 }}>{skill.authorName}</div>
