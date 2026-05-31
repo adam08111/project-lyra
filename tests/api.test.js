@@ -10,97 +10,128 @@ beforeEach(() => {
 });
 
 describe("callAI", () => {
-  it("sends POST request with correct structure", async () => {
+  it("posts to the Gemini proxy with system, message, maxTokens, and stream:false", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "Hello student!" }] }),
+      json: async () => ({ text: "Hello student!" }),
     });
 
     const result = await callAI("You are a coach", "Help me write");
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe("https://api.anthropic.com/v1/messages");
+    expect(url).toBe("/api/gemini");
     expect(options.method).toBe("POST");
+    expect(options.headers["Content-Type"]).toBe("application/json");
 
     const body = JSON.parse(options.body);
-    expect(body.model).toBe("claude-sonnet-4-6");
-    expect(body.max_tokens).toBe(1000);
     expect(body.system).toBe("You are a coach");
-    expect(body.messages).toEqual([{ role: "user", content: "Help me write" }]);
+    expect(body.message).toBe("Help me write");
+    expect(body.maxTokens).toBe(1000);
+    expect(body.stream).toBe(false);
+
+    expect(result).toBe("Hello student!");
   });
 
-  it("returns text content from response", async () => {
+  it("returns the text field from a non-streaming response", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "Great work!" }] }),
+      json: async () => ({ text: "Great work!" }),
     });
 
     const result = await callAI("system", "user message");
     expect(result).toBe("Great work!");
   });
 
-  it("joins multiple text blocks", async () => {
+  it("returns an empty string when the text field is absent", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "Part 1" }, { text: "Part 2" }] }),
-    });
-
-    const result = await callAI("system", "user message");
-    expect(result).toBe("Part 1\nPart 2");
-  });
-
-  it("returns empty string if no content", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ content: [] }),
+      json: async () => ({}),
     });
 
     const result = await callAI("system", "user message");
     expect(result).toBe("");
   });
 
-  it("includes web search tool when requested", async () => {
+  it("returns { text, sources } when grounding sources are present", async () => {
+    const sources = [{ title: "Source", url: "https://example.com" }];
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "Found info" }] }),
+      json: async () => ({ text: "Found it", sources }),
     });
 
-    await callAI("system", "search this", true);
+    const result = await callAI("system", "search this", true);
+    expect(result).toEqual({ text: "Found it", sources });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.tools).toEqual([{ type: "web_search_20250305", name: "web_search" }]);
+    expect(body.useSearch).toBe(true);
   });
 
-  it("does not include tools when search is false", async () => {
+  it("omits useSearch, model, and thinkingBudget by default", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "response" }] }),
+      json: async () => ({ text: "ok" }),
     });
 
     await callAI("system", "no search");
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.tools).toBeUndefined();
+    expect(body.useSearch).toBeUndefined();
+    expect(body.model).toBeUndefined();
+    expect(body.thinkingBudget).toBeUndefined();
   });
 
-  it("throws on non-OK response", async () => {
+  it("includes model, thinkingBudget, and a custom maxTokens when provided", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: "ok" }),
+    });
+
+    await callAI("system", "msg", false, 4096, 2048, undefined, undefined, "gemini-flash-latest");
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.maxTokens).toBe(4096);
+    expect(body.thinkingBudget).toBe(2048);
+    expect(body.model).toBe("gemini-flash-latest");
+  });
+
+  it("forwards the abort signal to fetch", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: "ok" }),
+    });
+
+    const controller = new AbortController();
+    await callAI("system", "msg", false, 1000, undefined, undefined, controller.signal);
+
+    expect(mockFetch.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
+  it("throws with the status and body text on a non-OK response", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 429,
       text: async () => "Rate limited",
     });
 
-    await expect(callAI("system", "test")).rejects.toThrow("API request failed (429)");
+    await expect(callAI("system", "test")).rejects.toThrow("API request failed (429): Rate limited");
   });
 
-  it("filters out non-text blocks", async () => {
+  it("streams SSE chunks through onChunk and returns the accumulated text", async () => {
+    const sse = 'data: {"text":"Hello "}\ndata: {"text":"world"}\n';
+    const bytes = new TextEncoder().encode(sse);
+    const read = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: bytes })
+      .mockResolvedValueOnce({ done: true, value: undefined });
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ content: [{ text: "text" }, { type: "tool_use" }, { text: "" }, { text: "more" }] }),
+      body: { getReader: () => ({ read }) },
     });
 
-    const result = await callAI("system", "test");
-    expect(result).toBe("text\nmore");
+    const chunks = [];
+    const result = await callAI("system", "stream please", false, 1000, undefined, (t) => chunks.push(t));
+
+    expect(result).toBe("Hello world");
+    expect(chunks).toEqual(["Hello ", "Hello world"]);
   });
 });

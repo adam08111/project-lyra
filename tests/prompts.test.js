@@ -15,10 +15,14 @@ describe("buildCoachPrompt", () => {
     expect(result).toContain("Socratic questions");
   });
 
-  it("includes PEEL framework", () => {
+  it("includes the structure frameworks (intro, 4-element body, conclusion)", () => {
     const result = buildCoachPrompt("anything", "Essay", 200);
-    expect(result).toContain("PEEL");
-    expect(result).toContain("Point, Evidence, Explanation, Link");
+    expect(result).toContain("INTRO");
+    expect(result).toContain("BODY");
+    expect(result).toContain("Topic Sentence");
+    expect(result).toContain("Elaboration");
+    expect(result).toContain("Closing Sentence");
+    expect(result).toContain("CONCLUSION");
   });
 });
 
@@ -199,10 +203,10 @@ describe("buildTrainingEvalPrompt", () => {
 describe("buildTrainingHintPrompt", () => {
   const technique = { technique: "Short sentences for impact", description: "Use short sentences after long ones", structure: "Long sentence. Short.", example: "She waited. He didn't come." };
 
-  it("level 1 gives a gentle hint", () => {
+  it("level 1 gives the gentlest first nudge", () => {
     const result = buildTrainingHintPrompt(technique, "The dog sat on the mat.", 1);
-    expect(result).toContain("GENTLE first hint");
-    expect(result).toContain("approach");
+    expect(result).toContain("GENTLEST");
+    expect(result).toContain("PICK or POINT");
     expect(result).toContain("question");
   });
 
@@ -212,16 +216,17 @@ describe("buildTrainingHintPrompt", () => {
     expect(result).not.toContain('"template"');
   });
 
-  it("level 2 gives a stronger hint with vocabulary", () => {
+  it("level 2 gives a stronger hint anchored to the example", () => {
     const result = buildTrainingHintPrompt(technique, "The dog sat on the mat.", 2);
-    expect(result).toContain("STRONGER hint");
-    expect(result).toContain("vocabulary");
+    expect(result).toContain("STRONGER");
+    expect(result).toContain("Look at the example");
     expect(result).toContain("question");
   });
 
-  it("level 2 does NOT provide a template", () => {
+  it("level 2 forbids templates", () => {
     const result = buildTrainingHintPrompt(technique, "plain", 2);
-    expect(result).toContain("Do NOT give a fill-in-the-blank template");
+    expect(result).toContain("NO TEMPLATES");
+    expect(result).toContain("NO fill-in-the-blank patterns");
     expect(result).not.toContain('"template"');
   });
 
