@@ -5,7 +5,7 @@ import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
 import { buildTrainingExercisesPrompt, buildTrainingChatPrompt } from "../prompts.js";
 import { anonymiseSkillsForAI, restoreAuthorNames } from "../utils.js";
-import { extractLearningData, syncLearningData, maybeSaveVisibleReport } from "../learning-sync.js";
+import { extractLearningData, syncLearningData, maybeSaveVisibleReport, saveMasterclassReport } from "../learning-sync.js";
 import { parseSectionContent, trimToSentence, deriveShortTitle } from "./XRayView.jsx";
 
 const mono = "'Courier Prime', monospace";
@@ -68,6 +68,10 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
   // protects long coaching sessions from a single accidental tap.
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const deleteResetTimerRef = useRef(null);
+  // Tracks which Lyra turns the student has saved to Achievements (by index),
+  // so the "Save this turn" button can flip to "Saved". Reset when the chat
+  // thread changes (technique switch) since indices then point at new turns.
+  const [savedTurns, setSavedTurns] = useState(() => new Set());
   const [progress, setProgress] = useState({});
   const [progressLoaded, setProgressLoaded] = useState(false);
   // chatThreads: per-technique chat history persisted to localStorage.
@@ -225,11 +229,34 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
     setChatOpen(stored.length > 0);
     setChatInput("");
     setChatLoading(false);
+    setSavedTurns(new Set()); // indices point at a different thread now
     // Intentionally NOT in dep list: chatThreads — we only react to
     // technique switches, not to every chatThreads write (which would
     // re-toggle the panel every time a message lands).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTechIdx, chatHydrated]);
+
+  // Manually save a Lyra coaching turn as an Achievements card. Backstop for
+  // the Practice flow — the writing chat has the same "Save this turn"
+  // affordance. Lifts the polished sentence from an "After:" line or the
+  // student's preceding message, tags it with the current technique name.
+  const saveTrainingTurn = useCallback((lyraText, idx) => {
+    let priorStudent = "";
+    for (let j = idx - 1; j >= 0; j--) {
+      if (chatMessages[j] && chatMessages[j].role === "student") { priorStudent = chatMessages[j].text; break; }
+    }
+    const afterMatch = lyraText.match(/After:\s*([^\n]+)/i);
+    const after = (afterMatch ? afterMatch[1].trim().replace(/^["“]|["”]$/g, "") : priorStudent || "").trim();
+    const tech = (activeTechIdx !== null && techniques[activeTechIdx]) ? (techniques[activeTechIdx].title || techniques[activeTechIdx].technique) : "";
+    saveMasterclassReport({
+      source: "manual",
+      topic: skill?.authorName || "",
+      after,
+      technique: tech,
+      reportText: lyraText,
+    });
+    setSavedTurns(prev => new Set(prev).add(idx));
+  }, [chatMessages, activeTechIdx, techniques, skill]);
 
   // Focus textarea when exercise screen opens
   useEffect(() => {
@@ -702,19 +729,40 @@ export default function TrainingSession({ skill, onClose, trackCall }) {
                 marginBottom: 10,
               }}>
                 {chatMessages.map((m, i) => (
-                  <div key={i} style={{
-                    alignSelf: m.role === "student" ? "flex-end" : "flex-start",
-                    maxWidth: "92%",
-                    background: m.role === "student" ? COLORS.blue : COLORS.bg2,
-                    color: m.role === "student" ? "#fff" : COLORS.heading,
-                    border: m.role === "lyra" ? `1px solid ${COLORS.border}` : "none",
-                    borderRadius: m.role === "student" ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
-                    padding: "10px 14px",
-                    fontSize: 13, lineHeight: 1.55,
-                    whiteSpace: "pre-wrap",
-                    animation: "fadeIn 0.2s ease",
-                  }}>
-                    {m.role === "lyra" ? renderMd(m.text) : m.text}
+                  <div key={i} style={{ alignSelf: m.role === "student" ? "flex-end" : "flex-start", maxWidth: "92%", display: "flex", flexDirection: "column", alignItems: m.role === "student" ? "flex-end" : "flex-start" }}>
+                    <div style={{
+                      background: m.role === "student" ? COLORS.blue : COLORS.bg2,
+                      color: m.role === "student" ? "#fff" : COLORS.heading,
+                      border: m.role === "lyra" ? `1px solid ${COLORS.border}` : "none",
+                      borderRadius: m.role === "student" ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
+                      padding: "10px 14px",
+                      fontSize: 13, lineHeight: 1.55,
+                      whiteSpace: "pre-wrap",
+                      animation: "fadeIn 0.2s ease",
+                    }}>
+                      {m.role === "lyra" ? renderMd(m.text) : m.text}
+                    </div>
+                    {/* Save this turn — manual backstop so the student can
+                        bank any Lyra coaching turn as an Achievement, even
+                        if the AI didn't emit the hidden learning-data block. */}
+                    {m.role === "lyra" && (
+                      <button
+                        onClick={() => saveTrainingTurn(m.text, i)}
+                        disabled={savedTurns.has(i)}
+                        style={{
+                          marginTop: 4, alignSelf: "flex-start",
+                          background: savedTurns.has(i) ? (COLORS.green || "#4a8") : "transparent",
+                          border: `1px solid ${savedTurns.has(i) ? (COLORS.green || "#4a8") : COLORS.border}`,
+                          color: savedTurns.has(i) ? "#fff" : (COLORS.green || "#4a8"),
+                          fontSize: 10, fontWeight: 700, fontFamily: mono,
+                          padding: "3px 8px", borderRadius: 7,
+                          cursor: savedTurns.has(i) ? "default" : "pointer",
+                          letterSpacing: 0.3,
+                        }}
+                      >
+                        {savedTurns.has(i) ? "✓ Saved to Achievements" : "★ Save this turn"}
+                      </button>
+                    )}
                   </div>
                 ))}
                 {chatLoading && (
