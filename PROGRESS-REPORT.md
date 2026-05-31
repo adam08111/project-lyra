@@ -987,3 +987,59 @@ User decided to defer the LYRA_BRAIN modularisation work and prompt the work via
 | `src/ai-router.js` | UPDATED | `MODELS.lite` updated from deprecated `gemini-3.1-flash-lite-preview` to `gemini-3.1-flash-lite` (Google promoted to GA) |
 | `server/proxy.js` | UPDATED | `ALLOWED_MODELS` adds `gemini-3.1-flash-lite`; both `isLiteTranslate` checks and the DEBUG-translate-response log condition accept either name |
 
+---
+
+## 17. UPDATE — 26–31 May 2026 — Branch `claude/objective-ramanujan-974c10` (cont.)
+
+Seven more commits on the same branch after Section 16, plus a data-loss incident and its safety-net fix.
+
+### 17.1 X-Ray translation polish
+
+**Translate-button label cleanup (commit `11a4833`).** The "Original text" expand toggle in XRayView read `翻譯成中文 · Translate to traditional chinese` / `隱藏翻譯 · Hide`. The English suffix was noise for HK students and inconsistent with the other two translate buttons (which are Chinese-only). Dropped both English suffixes.
+
+**Duplicate translation fragments fixed (commit `9fd9dea`).** A student reported `沒錯。` ("Exactly.") appearing three times in a translated X-Ray quote. Root cause (confirmed from the proxy's `[DEBUG translate response]` log): the LITE translate model splits a compound USE IT / STRUCTURE template ("Would they X? Exactly.") into two ZH pairs — the question, then a standalone `"Exactly. → 沒錯。"` punchline pair. The orphan fragment has no recognisable English label so `groupPairsBySource` dropped it into the `body` bucket, where it rendered as a duplicate line below the FROM THE TEXT translation (which already had `沒錯。` inside its annotated quote). Fix: a post-bucketing dedupe pass drops any `body`-bucket pair whose normalised ZH (annotation braces stripped, whitespace collapsed) is under 20 chars AND appears as a substring of any non-body pair's ZH.
+
+**CJK annotation labels made consistent + visible (commit `354c204`).** Annotated translation quotes mixed two styles: short CJK labels (反問句) rendered as ruby ABOVE the text, long ones (加強語氣的單字句) rendered inline BESIDE it — because a long ruby label stretches the base characters apart and crowds the line above. The mix read as inconsistent. Now ALL CJK labels render inline parenthetically (`沒錯。(加強語氣的單字句)`); English labels keep ruby (they wrap cleanly on word boundaries). Also bumped `ANNOTATION_COLORS` background alpha 0.10 → 0.24 (the highlight was too faint to notice), border 2 → 2.5px, and the CJK ruby font 13 → 11 so even short labels don't tower over the base text.
+
+### 17.2 Achievements / Masterclass Report (commits `190af4b`, `4be4526`)
+
+A new **Achievements tab** (next to Skills in Style Lab) saves each Masterclass Report as a reviewable card. Two report shapes: structured (from the hidden `LYRA_LEARNING_DATA` block — renders the four sections Skills Deployed / Sentence Structures & Rhythm Maps / Before & After Evolution / Grammar & Proofreading) and freeform (verbatim Lyra text). Two-step inline delete per card.
+
+The first cut never produced a visible achievement — the auto-save gated on `mastery_signal === "achieved"`, but the AI marks mastery "partial" during coaching, so the gate almost never fired, and the Practice chat didn't run learning-sync at all. Fixed with defense-in-depth:
+- **LYRA_BRAIN coupling rule**: producing a Masterclass Report (or acknowledging a win) now MANDATES emitting the `LYRA_LEARNING_DATA` block with a `growth` entry + a `skills_deployed` entry marked `achieved`.
+- **Loosened gate**: structured auto-save now fires on any `growth` (before/after) event.
+- **Visible-report fallback** (`maybeSaveVisibleReport`): detects a printed MASTERCLASS REPORT (header or ≥2 section labels) and saves it even when the hidden JSON is missing/partial.
+- **Both chats wired**: writing chat (`lyra.jsx`) and Practice chat (`TrainingSession.jsx`) both harvest learning data + run the fallback.
+- **Manual "★ Save this turn" button** in BOTH the writing chat (ChatTab) and the Practice chat (TrainingSession) — the reliable, student-controlled path. This was the missing piece: the student's Masterclass Reports appeared in the Practice chat, which originally had no save button at all.
+
+### 17.3 Local backup safety net (commit `c111f90`)
+
+**Incident:** during cleanup of test data, a `localStorage.removeItem("lyra-training-chats")` wiped the student's Practice-chat threads. Only one turn survived (re-persisted from the component's in-memory state). The lost turns were unrecoverable — proxy logs hold only lengths/token counts, not text, and there was no backup layer.
+
+**Fix:** `src/backup.js` keeps a rolling snapshot of all critical keys (`lyra-style-skills`, `lyra-projects`, `lyra-training-chats`, `lyra-masterclass-reports`, progress, vocabulary, structures, deployments, growth-log, grammar-log) under `lyra-backup-v1`.
+- `autoRestoreFromBackup()` runs synchronously in `main.jsx` BEFORE React mounts, healing any key that is ENTIRELY ABSENT (the signature of a stray wipe). Present-but-empty `[]` is a legitimate user state and is never clobbered.
+- `snapshotBackup()` is STICKY PER-KEY: it never downgrades a key from has-content to empty, so a wipe-then-snapshot can't erase the backup's record. Triggered 3s after load, every 30s, on tab-hide, and on `beforeunload`.
+- Verified live: snapshot → `removeItem` → auto-restore recovers the exact value; deliberate `[]` survives; a snapshot during a wipe keeps the prior value.
+
+### 17.4 Per-technique Practise (commit `5a17bed`)
+
+Each technique in a saved skill now has a **"▶ Practise" button** — on the collapsed row (one tap) and a full-width one in the expanded card — so a student can drill ONE technique instead of only the whole skill via the overview list.
+
+Wiring threads an optional `techIdx` from the technique → `onOpenTraining(skill, techIdx)` → `TrainingSession startTechIdx`, which opens directly on that technique's exercise screen (defensive clamp falls back to the overview if out of range).
+
+**Navigation fix (user-reported):** a per-technique launch now returns to the SAME skill-detail card list on back, not the different-looking Practice Session overview. Per-technique practice keeps StyleLab mounted underneath (only whole-skill practice closes it); TrainingSession overlays raised z-index 90 → 110 so they sit above StyleLab (100); and the exercise back button calls `onClose()` when launched directly (revealing the unchanged detail) vs. `setScreen("overview")` when launched from the overview list.
+
+### 17.5 Files changed (Section 17)
+
+| File | Status | Purpose |
+|---|---|---|
+| `src/components/XRayView.jsx` | UPDATED | translate-button English suffix dropped; `groupPairsBySource` dedupe pass for orphan ZH fragments; `AnnotatedQuote` renders all CJK labels inline; brighter `ANNOTATION_COLORS` |
+| `src/learning-sync.js` | UPDATED | `saveMasterclassReport` + `maybeSaveVisibleReport`; auto-save gate loosened to any growth event; `syncLearningData` returns `{ savedReport }` |
+| `src/components/StyleLab.jsx` | UPDATED | Achievements tab + `Achievements`/`AchievementCard` components; per-technique "▶ Practise" buttons; `onPracticeTechnique` wiring; per-technique launch keeps StyleLab mounted |
+| `src/components/TrainingSession.jsx` | UPDATED | learning-sync + visible-report fallback in `fetchLyraTurn`; "★ Save this turn" button per Lyra turn; `startTechIdx` prop opens a specific technique; back-button branches on launch type; z-index 90 → 110 |
+| `src/components/ChatTab.jsx` | UPDATED | "★ Save this turn" button on each Lyra reply |
+| `src/lyra.jsx` | UPDATED | `openTrainingSession(skill, techIdx)` + `closeTrainingSession`; visible-report fallback in `sendChat`; backup snapshot effect; backup import |
+| `src/main.jsx` | UPDATED | `autoRestoreFromBackup()` before React mount |
+| `src/backup.js` | NEW | local backup safety net (snapshot + sticky-per-key + absent-key auto-restore) |
+| `src/components/EditorTab.jsx` | UPDATED | `onPractice` forwards `techIdx` (whole-skill vs per-technique) |
+
