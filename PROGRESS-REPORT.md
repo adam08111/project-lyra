@@ -1043,3 +1043,50 @@ Wiring threads an optional `techIdx` from the technique → `onOpenTraining(skil
 | `src/backup.js` | NEW | local backup safety net (snapshot + sticky-per-key + absent-key auto-restore) |
 | `src/components/EditorTab.jsx` | UPDATED | `onPractice` forwards `techIdx` (whole-skill vs per-technique) |
 
+---
+
+## 18. UPDATE — 1 June 2026 — Branch `claude/objective-ramanujan-974c10` (cont.)
+
+Three commits this session — a test-suite repair plus a run of Style Lab / X-Ray analysis fixes surfaced while previewing the app live.
+
+### 18.1 Test suite realigned to shipped behaviour (commit `0c7a6e6`)
+
+The suite had 9 stale failures asserting removed behaviour. `tests/api.test.js` still tested the OLD Anthropic `callAI` (api.anthropic.com, `claude-sonnet-4-6`, `content:[{text}]`, `web_search_20250305`) instead of the live `/api/gemini` proxy client; `tests/prompts.test.js` asserted pre-redesign wording (PEEL, "stronger hint with vocabulary", an exact "Do NOT give a fill-in-the-blank template" string). Rewrote api.test.js for the Gemini-proxy `callAI` (request shape, text/empty/sources returns, model/thinkingBudget/signal forwarding, SSE streaming path) and updated the 4 stale prompt assertions to the current 4-element body structure + Socratic/no-template hint. **105/105 green; `vite build` clean.** (App code was already correct — the tests had simply lagged the Gemini migration + prompt redesign.)
+
+### 18.2 "NOT SUITABLE FOR" bullet leak (commit `02345dd`)
+
+The saved-skill "When to use" card showed a dangling `NOT SUITABLE FOR:` label. Root cause: the PERFECT-FOR bullet parser `•[^•]+` greedily swallowed the trailing NOT-SUITABLE-FOR section into the last bullet. Fixed at the source (`saveStyleSkill` cuts the section at "NOT SUITABLE FOR" before extracting bullets), at render (`SavedSkillDetail` strips it so existing skills display cleanly without re-analysing), and in the Style Lab "Use It" tab.
+
+### 18.3 Selectable section count, 1–9 (commit `3551163`)
+
+Students now choose how many style-profile sections the X-Ray generates. `styleProfilerPrompt` (a static const) became `buildStyleProfilerPrompt(n)`, which emits ONLY the first N of the 9 sections in order (techniques 1–7, then When-to-use, then Signature) and stops. A 1–9 chip selector lives on the Source step and the Style Lab Analyse tab (default 9 — behaviour unchanged unless lowered). `tests/lyra-brain.test.js` updated for the rename.
+
+### 18.4 LYRA_LEARNING_DATA leak in analysis output (commit `3551163`)
+
+LYRA_BRAIN instructs the model to append a hidden `<!--LYRA_LEARNING_DATA …-->` block on coaching turns; it sometimes appended it to the X-Ray analysis too, where the analysis flow (unlike the chat) never stripped it — so raw JSON leaked into the last WRITER'S WORDS card. Added `stripLearningData()` to `learning-sync.js`, applied in both analysis flows (streaming + final, so saved skills are clean) and as a defensive strip inside `parseSectionContent` (covers older analyses + saved skills at render).
+
+### 18.5 "Analyse new text" button + technique picker (commit `3551163`)
+
+- The analysis result gained an **"Analyse new text"** button (`resetAll`) so students can clear and paste a fresh article without hunting for the top-right "New analysis".
+- `SavedSkillDetail`'s **"Practice"** now enters a selection mode: a circle appears on each technique card (descriptions stay visible), the student ticks which to drill, and **"▶ Practise (N)"** launches a session containing only those (a partial selection gets its own progress/chat id namespace). Circles are hidden until Practice is pressed; per-card edit/remove/single-practise hide during selection.
+
+### 18.6 anonymiseSkillsForAI regex crash (commit `3551163`)
+
+`replaceAuthor` built `new RegExp(authorName, 'gi')` without escaping, so a name containing regex metacharacters — e.g. "Alaina Demopoulos (The Guardian)", whose last word is "Guardian)" — threw "Invalid regular expression" and broke exercise generation + the stuck-chat for that skill. Now escapes metacharacters first. (Known minor: for parenthetical names the bare surname can still leak in the anonymisation — cosmetic, not a crash.)
+
+### 18.7 Files changed (Section 18)
+
+| File | Status | Purpose |
+|---|---|---|
+| `tests/api.test.js` | REWRITTEN | Gemini-proxy `callAI` coverage (replaces stale Anthropic assertions) |
+| `tests/prompts.test.js` | UPDATED | 4 stale assertions → 4-element body structure + Socratic/no-template hint |
+| `tests/lyra-brain.test.js` | UPDATED | `styleProfilerPrompt` → `buildStyleProfilerPrompt()` |
+| `src/prompts.js` | UPDATED | `styleProfilerPrompt` const → `buildStyleProfilerPrompt(n)` with first-N-sections directive |
+| `src/learning-sync.js` | UPDATED | new `stripLearningData()` helper |
+| `src/utils.js` | UPDATED | escape regex metacharacters in `anonymiseSkillsForAI` / `replaceAuthor` |
+| `src/components/SourceSetup.jsx` | UPDATED | section-count selector; strip leaked learning-data on analysis (stream + final) |
+| `src/components/StyleLab.jsx` | UPDATED | section-count selector; NOT-SUITABLE-FOR strip; "Analyse new text"; technique-selection Practice; learning-data strip |
+| `src/components/XRayView.jsx` | UPDATED | `saveStyleSkill` NOT-SUITABLE-FOR cut; `parseSectionContent` strips leaked learning-data/HTML comments at render |
+
+**Verification this session:** `npx vite build` ✓ (54 modules) and `npx vitest run` → **105/105** after each change; the `anonymiseSkillsForAI` fix verified by running the real function on a Guardian-byline name (no throw, correct anonymise/restore). UI changes confirmed via the live preview where reproducible; not seeded into the preview's localStorage (a separate sandbox) after an earlier incident where a test-seed looked like data loss.
+
