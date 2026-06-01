@@ -3,7 +3,8 @@ import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { styleProfilerPrompt, styleCoachPrompt, translatePrompt } from "../prompts.js";
+import { buildStyleProfilerPrompt, styleCoachPrompt, translatePrompt } from "../prompts.js";
+import { stripLearningData } from "../learning-sync.js";
 import { FeatherIcon } from "./Icons.jsx";
 import { useTypewriter } from "../hooks.js";
 import XRayView, {
@@ -418,7 +419,7 @@ function synthSectionFromTechnique(t) {
 // Click → expand inline to render the full SectionCard. The ✎ button puts
 // the title into inline-edit mode (Enter saves, Escape cancels); the × button
 // removes the technique entirely from the saved skill.
-function CollapsibleTechnique({ section, index, trackCall, onRemove, onRename, onPractice }) {
+function CollapsibleTechnique({ section, index, trackCall, selected, onToggleSelect, onRemove, onRename, onPractice }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -484,6 +485,15 @@ function CollapsibleTechnique({ section, index, trackCall, onRemove, onRename, o
         transition: "border-color 0.15s",
       }}
     >
+      {onToggleSelect && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+          title={selected ? "Selected to practise" : "Tap to select for practice"}
+          style={{ width: 22, height: 22, borderRadius: 11, border: `2px solid ${selected ? COLORS.green : COLORS.muted}`, background: selected ? COLORS.green : "transparent", color: "#fff", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 1, padding: 0, lineHeight: 1 }}
+        >
+          {selected ? "✓" : ""}
+        </button>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         {editing ? (
           <input
@@ -548,6 +558,29 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
     .map(b => b.replace(/\s*NOT\s+SUITABLE\s+FOR[\s\S]*$/i, "").trim())
     .filter(Boolean);
 
+  // "Practice" enters selection mode: a circle appears on each technique card
+  // (descriptions stay visible) and the student ticks which to drill, then
+  // "Practise (N)" launches only those. Circles are hidden until then.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const toggleSelect = (i) => setSelected(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
+  const beginPractice = () => { setSelected(new Set()); setSelecting(true); };
+  const practiseSelected = () => {
+    const idxs = [...selected].sort((a, b) => a - b);
+    if (!idxs.length || !onPractice) return;
+    const pick = (arr) => Array.isArray(arr) ? idxs.map(i => arr[i]).filter(v => v !== undefined) : arr;
+    onPractice({
+      ...skill,
+      // keep the real id when practising everything; use a subset id otherwise
+      // so a partial selection's progress/chats stay separate from the full skill
+      id: idxs.length === sections.length ? skill.id : `${skill.id}__sel_${idxs.join("-")}`,
+      sections: hasFullSections ? idxs.map(i => skill.sections[i]).filter(Boolean) : skill.sections,
+      analysedTechniques: pick(skill.analysedTechniques),
+      researchedTechniques: pick(skill.researchedTechniques),
+      techniques: pick(skill.techniques),
+    });
+  };
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -593,9 +626,11 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
             section={s}
             index={i + 1}
             trackCall={trackCall}
-            onRemove={onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
-            onRename={onRenameTechnique ? (newTitle) => onRenameTechnique(i, newTitle, hasFullSections) : null}
-            onPractice={onPracticeTechnique ? () => onPracticeTechnique(i) : null}
+            selected={selected.has(i)}
+            onToggleSelect={onPractice && selecting ? () => toggleSelect(i) : null}
+            onRemove={!selecting && onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
+            onRename={!selecting && onRenameTechnique ? (newTitle) => onRenameTechnique(i, newTitle, hasFullSections) : null}
+            onPractice={!selecting && onPracticeTechnique ? () => onPracticeTechnique(i) : null}
           />
         ))
       ) : (
@@ -604,28 +639,56 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 16, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
-        <button
-          onClick={onRemove}
-          style={{ fontSize: 11, fontFamily: mono, padding: "6px 12px", borderRadius: 8, border: `1px solid ${COLORS.red}`, background: "transparent", color: COLORS.red, cursor: "pointer" }}
-        >
-          Remove
-        </button>
-        {onPractice && (
-          <button
-            onClick={() => onPractice(skill)}
-            style={{ fontSize: 12, fontFamily: mono, padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.green}`, background: "transparent", color: COLORS.green, cursor: "pointer", fontWeight: 700, letterSpacing: 0.3 }}
-          >
-            Practice
-          </button>
-        )}
-        {onApply && (
-          <button
-            onClick={() => onApply(skill)}
-            style={{ flex: 1, fontSize: 12, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: "none", background: COLORS.heading, color: "#fff", cursor: "pointer", fontWeight: 700, letterSpacing: 0.3 }}
-          >
-            ✦ Write with this skill
-          </button>
+      {selecting && sections.length > 0 && (
+        <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, marginTop: 8 }}>
+          {selected.size === 0
+            ? "Tap the circles to choose which techniques to practise."
+            : `${selected.size} of ${sections.length} selected for practice.`}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+        {selecting ? (
+          <>
+            <button
+              onClick={() => setSelecting(false)}
+              style={{ fontSize: 12, fontFamily: mono, padding: "8px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={practiseSelected}
+              disabled={selected.size === 0}
+              style={{ flex: 1, fontSize: 13, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: "none", background: selected.size ? COLORS.green : COLORS.bg3, color: "#fff", cursor: selected.size ? "pointer" : "not-allowed", fontWeight: 700, letterSpacing: 0.3 }}
+            >
+              ▶ Practise ({selected.size})
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={onRemove}
+              style={{ fontSize: 11, fontFamily: mono, padding: "6px 12px", borderRadius: 8, border: `1px solid ${COLORS.red}`, background: "transparent", color: COLORS.red, cursor: "pointer" }}
+            >
+              Remove
+            </button>
+            {onPractice && sections.length > 0 && (
+              <button
+                onClick={beginPractice}
+                style={{ fontSize: 12, fontFamily: mono, padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.green}`, background: "transparent", color: COLORS.green, cursor: "pointer", fontWeight: 700, letterSpacing: 0.3 }}
+              >
+                Practice
+              </button>
+            )}
+            {onApply && (
+              <button
+                onClick={() => onApply(skill)}
+                style={{ flex: 1, fontSize: 12, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: "none", background: COLORS.heading, color: "#fff", cursor: "pointer", fontWeight: 700, letterSpacing: 0.3 }}
+              >
+                ✦ Write with this skill
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -967,6 +1030,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     if (!showStyleLab) setActiveTab("analyze");
   }, [showStyleLab, initialTab]);
   const [referenceText, setReferenceText] = useState("");
+  const [sectionCount, setSectionCount] = useState(9); // how many style-profile sections to analyse (1-9)
   const [styleProfile, setStyleProfile] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [authorName, setAuthorName] = useState("");
@@ -1039,11 +1103,12 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
 
       const analysisRoute = getRouteConfig("style_analysis");
       trackCall();
-      const result = await callAI(styleProfilerPrompt, userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
+      const result = await callAI(buildStyleProfilerPrompt(sectionCount), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
         // Live-update as tokens stream in
-        const author = extractAuthor(partial);
+        const clean = stripLearningData(partial);
+        const author = extractAuthor(clean);
         if (author !== "Unknown Author") setAuthorName(author);
-        const sections = parseProfileSections(partial);
+        const sections = parseProfileSections(clean);
         if (sections.length > 0) {
           setProfileSections(sections);
           setAnalyzing(false);
@@ -1052,12 +1117,13 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
       if (!result || !result.trim()) {
         setError("No response received. Please check your API connection and try again.");
       } else {
-        setStyleProfile(result);
-        const author = extractAuthor(result);
+        const clean = stripLearningData(result);
+        setStyleProfile(clean);
+        const author = extractAuthor(clean);
         setAuthorName(author);
-        const sections = parseProfileSections(result);
+        const sections = parseProfileSections(clean);
         if (sections.length === 0) {
-          setProfileSections([{ title: "STYLE ANALYSIS", content: result }]);
+          setProfileSections([{ title: "STYLE ANALYSIS", content: clean }]);
         } else {
           setProfileSections(sections);
           const savedSkill = saveStyleSkill(author, sections);
@@ -1070,7 +1136,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
       setError(e.message || "Analysis failed. Please try again.");
     }
     setAnalyzing(false);
-  }, [referenceText, trackCall]);
+  }, [referenceText, trackCall, sectionCount]);
 
   const sendPractice = useCallback(async (text) => {
     if (!text.trim() || !styleProfile) return;
@@ -1184,6 +1250,20 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                     {wordCount} word{wordCount !== 1 ? "s" : ""}{wordCount < 80 ? ` (need ${80 - wordCount} more)` : " — ready"}
                   </div>
                 </div>
+                {/* Section count selector (1–9) */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 8, fontFamily: mono }}>
+                    How many sections to analyse? <span style={{ color: COLORS.heading, fontWeight: 700 }}>{sectionCount}</span> <span style={{ opacity: 0.6 }}>/ 9</span>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                      <button key={num} onClick={() => setSectionCount(num)} style={{ ...s.chip, minWidth: 36, textAlign: "center", padding: "8px 0", ...(sectionCount === num ? s.chipActive : {}) }}>
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   onClick={analyzeStyle}
                   disabled={wordCount < 80}
@@ -1249,10 +1329,16 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                 ))}
                 <div ref={analyseEndRef} />
 
-                <div style={{ textAlign: "center", marginTop: 16, marginBottom: 8 }}>
+                <div style={{ display: "flex", gap: 10, marginTop: 16, marginBottom: 8 }}>
+                  <button
+                    onClick={resetAll}
+                    style={{ ...s.chip, flex: 1, textAlign: "center", fontSize: 13 }}
+                  >
+                    Analyse new text
+                  </button>
                   <button
                     onClick={() => setActiveTab("practice")}
-                    style={{ ...s.btn, padding: "12px 32px" }}
+                    style={{ ...s.btn, flex: 1, fontSize: 14 }}
                   >
                     Start Practising
                   </button>

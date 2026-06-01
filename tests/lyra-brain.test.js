@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { LYRA_BRAIN } from "../src/lyra-brain.js";
 import {
   buildCoachPrompt, buildScaffoldingPrompt, buildTrainingExercisesPrompt,
-  buildTrainingEvalPrompt, buildTrainingHintPrompt, styleProfilerPrompt, styleCoachPrompt,
+  buildTrainingEvalPrompt, buildTrainingHintPrompt, buildStyleProfilerPrompt, styleCoachPrompt,
   buildStructuralPrompt, buildProofreadPrompt,
 } from "../src/prompts.js";
 
@@ -53,8 +53,8 @@ describe("LYRA_BRAIN is prepended to coaching prompts", () => {
     expect(result).toContain("4-STEP COACHING PROTOCOL");
   });
 
-  it("styleProfilerPrompt includes LYRA_BRAIN", () => {
-    expect(styleProfilerPrompt).toContain("4-STEP COACHING PROTOCOL");
+  it("buildStyleProfilerPrompt includes LYRA_BRAIN", () => {
+    expect(buildStyleProfilerPrompt()).toContain("4-STEP COACHING PROTOCOL");
   });
 
   it("styleCoachPrompt includes LYRA_BRAIN", () => {

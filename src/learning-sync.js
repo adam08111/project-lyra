@@ -32,6 +32,22 @@ export function extractLearningData(response) {
 }
 
 /**
+ * Strip the hidden LYRA_LEARNING_DATA block (and any other HTML comments) from
+ * AI output that is rendered directly — e.g. the style analysis, which does NOT
+ * go through the chat extract/display split. LYRA_BRAIN tells the model to
+ * append this block on coaching turns, and it sometimes appends it to analysis
+ * output too, where it would otherwise leak into the last rendered section.
+ * Handles a complete block, an unterminated trailing block (mid-stream), and
+ * stray HTML comments.
+ */
+export function stripLearningData(text) {
+  return (text || "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<!--[\s\S]*$/, "")
+    .trimEnd();
+}
+
+/**
  * Sync learning data to persistent storage.
  *
  * @param {object} data - The parsed learning data object

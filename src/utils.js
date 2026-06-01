@@ -32,7 +32,11 @@ export function anonymiseSkillsForAI(skills) {
 
       let result = text;
       patterns.forEach(pattern => {
-        result = result.replace(new RegExp(pattern, 'gi'), writerLabel);
+        // Escape regex metacharacters — author names can contain "()", ".", etc.
+        // (e.g. "Alaina Demopoulos (The Guardian)"), which would otherwise build
+        // an invalid RegExp and throw "Invalid regular expression".
+        const safe = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        result = result.replace(new RegExp(safe, 'gi'), writerLabel);
       });
       return result;
     };

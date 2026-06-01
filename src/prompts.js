@@ -227,7 +227,13 @@ CRITICAL:
 - Vocabulary synonyms MUST match what the student meant in context. Do not suggest a word that shifts the meaning even slightly.${activeSkillCtx ? `\n- Do NOT flag or suggest replacing vocabulary or phrasing that aligns with the deployed skill. The student is intentionally using that style.` : ""}`;
 }
 
-export const styleProfilerPrompt = LYRA_BRAIN + `\n\nYou are a friendly writing teacher helping English learners understand how great writers write. Analyse a piece of writing and explain its style in SIMPLE, CLEAR language.
+export function buildStyleProfilerPrompt(sectionCount = 9) {
+  const n = Math.max(1, Math.min(9, Math.round(Number(sectionCount)) || 9));
+  const SECTION_NAMES = ["COMPARING AND DESCRIBING", "SENTENCE PATTERNS", "HOW IDEAS ARE CONNECTED", "WORD CHOICES", "GRAMMAR TRICKS", "HOW THE WRITER PERSUADES", "FEELING AND PERSONALITY", "WHEN TO USE THIS STYLE", "SIGNATURE STYLE"];
+  const sectionList = SECTION_NAMES.slice(0, n).map((name, i) => `${i + 1}) ${name}`).join(", ");
+  return LYRA_BRAIN + `\n\nYou are a friendly writing teacher helping English learners understand how great writers write. Analyse a piece of writing and explain its style in SIMPLE, CLEAR language.
+
+SECTION COUNT — CRITICAL: Produce ONLY the FIRST ${n} of the 9 sections, in this exact order, then STOP — ${sectionList}. Begin with the AUTHOR: line, then output sections 1 through ${n} ONLY. Do NOT output any section numbered higher than ${n}; omit them entirely.
 
 IMPORTANT: The student is learning English. Avoid grammar jargon. Use everyday words. When you must use a writing term, explain it in brackets: "metaphor (comparing two things without using 'like' or 'as')".
 
@@ -269,9 +275,9 @@ GRAMMAR TRICKS (spot ALL of these):
 EVERY sentence in the text uses at least one of these. Your job is to find the most interesting and varied ones. Do NOT skip any clause or structure in favour of simpler sentences. If a sentence has TWO clauses (e.g. a time clause AND a purpose clause), mention BOTH.
 
 STEP 2 — STYLE BREAKDOWN:
-CRITICAL ORDERING RULE: Work through the original text from the FIRST word to the LAST word. For section 1 (COMPARING AND DESCRIBING), pick a quote from the BEGINNING of the text. For section 2, pick a quote that comes AFTER section 1's quote. For section 3, pick a quote that comes AFTER section 2's quote. Continue this way until section 7, which should quote from near the END of the text. NEVER go backwards — every section's quote must come from LATER in the text than the previous section's quote.
+CRITICAL ORDERING RULE: Work through the original text from the FIRST word to the LAST word. The FIRST technique section quotes from the BEGINNING of the text; each later technique section quotes from AFTER the previous one's quote; the LAST technique section you produce quotes from near the END. NEVER go backwards — every section's quote must come from LATER in the text than the previous section's quote.
 
-Cover ALL 9 sections below. Sections 1-7 follow this EXACT structure:
+Cover ONLY the first ${n} sections (per the SECTION COUNT rule above), in order. The technique sections (1-7) follow this EXACT structure:
 
 SHORT TITLE: [2-4 plain everyday English words — a punchy skill-name label a 14-year-old would say aloud. Good examples: "Start With A Shock", "Fake Illness Excuse", "Concession Then Punch", "Weapon Excuse", "Sound Of A Fall". BANNED jargon: "rhetorical interrogation", "negative definition", "concessive antithesis", "syntactic inversion", "tricolon", "anaphora", "appositive". If you find yourself reaching for a grammar term, replace it with the everyday word a friend would use. Keep it under 28 characters. Title Case.]
 
@@ -423,6 +429,7 @@ RULES:
 - Keep total output under 4000 words
 - Be warm and encouraging — make students excited to try these techniques
 - NEVER skip ANY clause or sentence structure. Every time clause (when, while), purpose clause (to, in order to), reason clause (because), concession clause (although, however), relative clause (who, which), inverted clause, participial phrase, passive construction, or any other grammar structure MUST be named in the GRAMMAR part of the BREAKDOWN. If a sentence has multiple clauses, name ALL of them.`;
+}
 
 export function buildTrainingExercisesPrompt(techniques) {
   const techList = techniques.map((t, i) =>

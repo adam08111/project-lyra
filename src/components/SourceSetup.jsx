@@ -5,7 +5,8 @@ import { FeatherIcon } from "./Icons.jsx";
 import Sidebar from "./Sidebar.jsx";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { styleProfilerPrompt } from "../prompts.js";
+import { buildStyleProfilerPrompt } from "../prompts.js";
+import { stripLearningData } from "../learning-sync.js";
 import XRayView, { parseProfileSections, extractAuthor, saveStyleSkill, mono } from "./XRayView.jsx";
 
 export default function SourceSetup({
@@ -22,6 +23,7 @@ export default function SourceSetup({
   sidebarProps, onOpenTraining,
 }) {
   const [step, setStep] = useState(1); // 1=source, 2=xray, 3=mission
+  const [sectionCount, setSectionCount] = useState(9); // how many style-profile sections to analyse (1-9)
   const [nameInput, setNameInput] = useState(userName || "");
   const [analyzing, setAnalyzing] = useState(false);
   const [profileSections, setProfileSections] = useState([]);
@@ -145,13 +147,14 @@ export default function SourceSetup({
       // Throttle parsing to every ~400ms — avoids O(n²) re-parsing on every token
       let lastParseAt = 0;
       let advancedToStep2 = false;
-      const result = await callAI(styleProfilerPrompt, userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
+      const result = await callAI(buildStyleProfilerPrompt(sectionCount), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
         const now = Date.now();
         if (now - lastParseAt < 400) return;
         lastParseAt = now;
-        const author = extractAuthor(partial);
+        const clean = stripLearningData(partial);
+        const author = extractAuthor(clean);
         if (author !== "Unknown Author") setAuthorName(author);
-        const sections = parseProfileSections(partial);
+        const sections = parseProfileSections(clean);
         if (sections.length > 0) {
           setProfileSections(sections);
           setAnalyzing(false);
@@ -166,12 +169,13 @@ export default function SourceSetup({
       if (!result || !result.trim()) {
         setError("No response received. Please check your API connection and try again.");
       } else {
-        setSourceAnalysis(result);
-        const author = extractAuthor(result);
+        const clean = stripLearningData(result);
+        setSourceAnalysis(clean);
+        const author = extractAuthor(clean);
         setAuthorName(author);
-        const sections = parseProfileSections(result);
+        const sections = parseProfileSections(clean);
         if (sections.length === 0) {
-          setProfileSections([{ title: "STYLE ANALYSIS", content: result }]);
+          setProfileSections([{ title: "STYLE ANALYSIS", content: clean }]);
         } else {
           setProfileSections(sections);
           const savedSkill = saveStyleSkill(author, sections);
@@ -192,7 +196,7 @@ export default function SourceSetup({
       setError(e.message || "Analysis failed. Please try again.");
     }
     setAnalyzing(false);
-  }, [sourceText, sourceWordCount, trackCall, setSourceAnalysis, setExtractedSkills, setTargetVoice, setAppliedSkill, setWritingTechniques]);
+  }, [sourceText, sourceWordCount, sectionCount, trackCall, setSourceAnalysis, setExtractedSkills, setTargetVoice, setAppliedSkill, setWritingTechniques]);
 
   // ── Derived ──
   const typeLabel = type ? writingTypes.find(w => w.id === type)?.label : "";
@@ -287,6 +291,20 @@ export default function SourceSetup({
                 {scanning ? "Scanning..." : "📷 Upload photo"}
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleSourcePhotoUpload} />
+            </div>
+
+            {/* Section count selector (1–9) */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 8, fontFamily: mono }}>
+                How many sections to analyse? <span style={{ color: COLORS.heading, fontWeight: 700 }}>{sectionCount}</span> <span style={{ opacity: 0.6 }}>/ 9</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                  <button key={num} onClick={() => setSectionCount(num)} style={{ ...s.chip, minWidth: 36, textAlign: "center", padding: "8px 0", ...(sectionCount === num ? s.chipActive : {}) }}>
+                    {num}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Analyse button */}

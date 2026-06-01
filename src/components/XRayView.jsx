@@ -113,6 +113,10 @@ export function trimToSentence(text, max) {
 }
 
 export function parseSectionContent(content) {
+  // Defensive: strip any leaked LYRA_LEARNING_DATA / HTML comment block the
+  // model may have appended to the analysis, so it never renders in a card
+  // (covers older analyses + saved skills generated before the flow-level fix).
+  content = (content || "").replace(/<!--[\s\S]*?-->/g, "").replace(/<!--[\s\S]*$/, "");
   const parts = { shortTitle: "", keyIdea: "", body: "", example: "", breakdown: "", whyItWorks: "", structure: "", watchOut: "", vocabUpgrade: "" };
   const lines = content.split("\n");
   let current = "body";
