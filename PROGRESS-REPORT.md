@@ -1043,3 +1043,52 @@ Wiring threads an optional `techIdx` from the technique → `onOpenTraining(skil
 | `src/backup.js` | NEW | local backup safety net (snapshot + sticky-per-key + absent-key auto-restore) |
 | `src/components/EditorTab.jsx` | UPDATED | `onPractice` forwards `techIdx` (whole-skill vs per-technique) |
 
+---
+
+## 18. UPDATE — 1–3 June 2026 — Branch `claude/youthful-wing-17a2f6`
+
+This branch was fast-forwarded onto commit `3551163` (the latest Style-Lab work, originally committed on `claude/objective-ramanujan-974c10` after a cwd drift), so youthful-wing now carries the full codebase. The `3551163` features were re-verified live in the preview, then four more Style-Lab improvements were built on top and committed as `1bdcdad`.
+
+### 18.1 Verified live: the `3551163` features
+
+A preview pass with a real analysis confirmed the commit that shipped just before this session:
+- **Selectable section count (1–9)** — `styleProfilerPrompt` → `buildStyleProfilerPrompt(n)`; a 1–9 selector sits on the Source step and the Analyse tab (default 9). Choosing 3 produced "Style Profile — 3 sections analysed", so the count flows into the prompt, not just the UI.
+- **`LYRA_LEARNING_DATA` leak strip** — stripped from analysis output at the flow level and as a `parseSectionContent` render guard.
+- **"Try different text" reset** — clears the analysis and returns to the paste screen. *Observed nuance:* it does not empty the textarea — the previous passage stays in the box.
+- **Practice selection-circle** — `SavedSkillDetail` "Practice" reveals a circle on each technique card; "Practise (N)" drills only the ticked ones.
+- **Regex-escape in `anonymiseSkillsForAI`** — author names containing `()` no longer throw and break Practice.
+
+### 18.2 Skills list — per-row delete (commit `1bdcdad`)
+
+Each saved-skill row in the Skills tab now has a red **×** with a two-step confirm (× → "Tap to delete" / "Cancel"), matching the Achievements delete pattern, so a whole skill can be removed without opening it. Reuses the existing `remove(idx)`; updates the `Skills (N)` badge and localStorage. Verified: Cancel reverts; delete removes only the targeted skill.
+
+### 18.3 Analyse tab — Original-text translation
+
+The Analyse-tab Original-text block was missing the 翻譯成中文 toggle that the X-Ray entry flow (`XRayView`) already had. Added the same toggle (`translation`/`showTranslation`/`translating` state + `handleTranslateOriginal`, reusing the exported `translateWithGuard`), rendering sentence-by-sentence Traditional Chinese; resets on a new analysis. Verified live (e.g. "Old libraries smell of patience." → "古老的圖書館散發著耐心的氣息。").
+
+### 18.4 Analyse tab — "Add to Skills" recovery
+
+A skill auto-saves after analysis, but a manual removal left no way back. The saved banner is now three-way: **saved + in store** → green "Writing skill saved"; **removed** → an "✦ Add to Skills" button that re-saves (`saveStyleSkill` dedupes by author, so no duplicate); **too-short** → amber (unchanged). A `skillInStore` flag re-checks localStorage whenever the student returns to the Analyse tab, so removing the skill from the Skills tab flips the banner. Verified the full remove → recover loop.
+
+### 18.5 Detail Remove — selection mode with red circles
+
+`SavedSkillDetail`'s Remove button now mirrors Practice: tapping it enters a selection mode with a **red** circle on each technique, and "Remove (N)" deletes only the ticked ones. The circle colour is a new `selectColor` prop on `CollapsibleTechnique` (green for Practice, red for Remove); the shared `selectMode` is `null | "practice" | "remove"`. A new parent `removeTechniques(skillIdx, idxs, hasFullSections)` filters all indices in one pass (avoids the index-shift bug of calling single-remove repeatedly). Removing every technique deletes the whole skill and returns to the list. The per-technique "×" and "Practice" still work when not selecting. Verified: non-adjacent multi-select removed the right techniques; remove-all deleted the skill.
+
+### 18.6 Open issue — reload/backup data integrity (NOT fixed)
+
+During testing, the reload/backup path showed two inconsistent behaviours across dev hot-reloads:
+- A real saved skill (**"Unknown Author (The Guardian)"**) **disappeared** from `localStorage` and was not present in the `lyra-backup-v1` snapshot.
+- A skill that had been **fully deleted** ("Unknown Author") **resurrected** with all its techniques after a later reload.
+
+Since `autoRestoreFromBackup()` (`main.jsx`) runs on every page load, this could affect real users on a plain refresh — it appears to both lose and resurrect data. The backup safety net (`backup.js`, §17.3) needs investigation. Not yet diagnosed or fixed.
+
+### 18.7 Minor known item
+
+Cosmetic React console warning on the 1–9 section-count chips (`SourceSetup.jsx` and the StyleLab Analyse tab): the chip merges `s.chip` (sets the `border` shorthand) with `s.chipActive` (sets `borderColor`), so React warns about mixing shorthand/non-shorthand border properties on every re-render. Harmless; not fixed.
+
+### 18.8 Files changed (Section 18, commit `1bdcdad`)
+
+| File | Status | Purpose |
+|---|---|---|
+| `src/components/StyleLab.jsx` | UPDATED | Skills-row two-step × delete (`confirmIdx`); Analyse-tab Original-text 翻譯成中文 toggle (reuses `translateWithGuard`); "Add to Skills" recovery banner + `skillInStore` + re-check effect; `SavedSkillDetail` shared `selectMode` (practice/remove) + red `selectColor` on `CollapsibleTechnique`; batch `removeTechniques`; "remove all = delete skill" |
+
