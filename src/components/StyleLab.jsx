@@ -11,7 +11,7 @@ import XRayView, {
   parseProfileSections, parseSectionContent, parseAnnotations,
   labelColorIndex, ANNOTATION_COLORS, AnnotatedQuote, SectionCard,
   extractAuthor, saveStyleSkill, mono, parseStructureContent,
-  deriveShortTitle
+  deriveShortTitle, translateWithGuard
 } from "./XRayView.jsx";
 
 function CoachMessage({ text, profileSections }) {
@@ -419,7 +419,7 @@ function synthSectionFromTechnique(t) {
 // Click → expand inline to render the full SectionCard. The ✎ button puts
 // the title into inline-edit mode (Enter saves, Escape cancels); the × button
 // removes the technique entirely from the saved skill.
-function CollapsibleTechnique({ section, index, trackCall, selected, onToggleSelect, onRemove, onRename, onPractice }) {
+function CollapsibleTechnique({ section, index, trackCall, selected, selectColor = COLORS.green, onToggleSelect, onRemove, onRename, onPractice }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -488,8 +488,8 @@ function CollapsibleTechnique({ section, index, trackCall, selected, onToggleSel
       {onToggleSelect && (
         <button
           onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
-          title={selected ? "Selected to practise" : "Tap to select for practice"}
-          style={{ width: 22, height: 22, borderRadius: 11, border: `2px solid ${selected ? COLORS.green : COLORS.muted}`, background: selected ? COLORS.green : "transparent", color: "#fff", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 1, padding: 0, lineHeight: 1 }}
+          title={selected ? "Selected" : "Tap to select for practice"}
+          style={{ width: 22, height: 22, borderRadius: 11, border: `2px solid ${selected ? selectColor : COLORS.muted}`, background: selected ? selectColor : "transparent", color: "#fff", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 1, padding: 0, lineHeight: 1 }}
         >
           {selected ? "✓" : ""}
         </button>
@@ -543,7 +543,7 @@ function CollapsibleTechnique({ section, index, trackCall, selected, onToggleSel
   );
 }
 
-function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechnique, onRemove, onRemoveTechnique, onRenameTechnique, trackCall }) {
+function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechnique, onRemove, onRemoveTechnique, onRemoveTechniques, onRenameTechnique, trackCall }) {
   // Prefer full saved sections (new format); fall back to synthesizing from
   // analysedTechniques (legacy skills saved before the sections field existed).
   const hasFullSections = skill.sections && skill.sections.length > 0;
@@ -561,10 +561,16 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
   // "Practice" enters selection mode: a circle appears on each technique card
   // (descriptions stay visible) and the student ticks which to drill, then
   // "Practise (N)" launches only those. Circles are hidden until then.
-  const [selecting, setSelecting] = useState(false);
+  // selectMode is shared by Practice and Remove: a circle appears on each
+  // technique card and the student ticks which ones to drill or delete.
+  // null | "practice" | "remove". Circles are hidden until then.
+  const [selectMode, setSelectMode] = useState(null);
+  const selecting = selectMode !== null;
   const [selected, setSelected] = useState(() => new Set());
   const toggleSelect = (i) => setSelected(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
-  const beginPractice = () => { setSelected(new Set()); setSelecting(true); };
+  const cancelSelect = () => { setSelectMode(null); setSelected(new Set()); };
+  const beginPractice = () => { setSelected(new Set()); setSelectMode("practice"); };
+  const beginRemove = () => { setSelected(new Set()); setSelectMode("remove"); };
   const practiseSelected = () => {
     const idxs = [...selected].sort((a, b) => a - b);
     if (!idxs.length || !onPractice) return;
@@ -579,6 +585,14 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
       researchedTechniques: pick(skill.researchedTechniques),
       techniques: pick(skill.techniques),
     });
+  };
+  const removeSelected = () => {
+    const idxs = [...selected];
+    if (!idxs.length) return;
+    // Removing every technique = delete the whole skill.
+    if (idxs.length === sections.length && onRemove) { onRemove(); return; }
+    if (onRemoveTechniques) onRemoveTechniques(idxs, hasFullSections);
+    cancelSelect();
   };
 
   return (
@@ -627,7 +641,8 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
             index={i + 1}
             trackCall={trackCall}
             selected={selected.has(i)}
-            onToggleSelect={onPractice && selecting ? () => toggleSelect(i) : null}
+            selectColor={selectMode === "remove" ? COLORS.red : COLORS.green}
+            onToggleSelect={selecting ? () => toggleSelect(i) : null}
             onRemove={!selecting && onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
             onRename={!selecting && onRenameTechnique ? (newTitle) => onRenameTechnique(i, newTitle, hasFullSections) : null}
             onPractice={!selecting && onPracticeTechnique ? () => onPracticeTechnique(i) : null}
@@ -642,8 +657,8 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
       {selecting && sections.length > 0 && (
         <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, marginTop: 8 }}>
           {selected.size === 0
-            ? "Tap the circles to choose which techniques to practise."
-            : `${selected.size} of ${sections.length} selected for practice.`}
+            ? `Tap the circles to choose which techniques to ${selectMode === "remove" ? "remove" : "practise"}.`
+            : `${selected.size} of ${sections.length} selected ${selectMode === "remove" ? "to remove" : "for practice"}.`}
         </div>
       )}
 
@@ -651,27 +666,46 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
         {selecting ? (
           <>
             <button
-              onClick={() => setSelecting(false)}
+              onClick={cancelSelect}
               style={{ fontSize: 12, fontFamily: mono, padding: "8px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
             >
               Cancel
             </button>
-            <button
-              onClick={practiseSelected}
-              disabled={selected.size === 0}
-              style={{ flex: 1, fontSize: 13, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: "none", background: selected.size ? COLORS.green : COLORS.bg3, color: "#fff", cursor: selected.size ? "pointer" : "not-allowed", fontWeight: 700, letterSpacing: 0.3 }}
-            >
-              ▶ Practise ({selected.size})
-            </button>
+            {selectMode === "remove" ? (
+              <button
+                onClick={removeSelected}
+                disabled={selected.size === 0}
+                style={{ flex: 1, fontSize: 13, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: "none", background: selected.size ? COLORS.red : COLORS.bg3, color: "#fff", cursor: selected.size ? "pointer" : "not-allowed", fontWeight: 700, letterSpacing: 0.3 }}
+              >
+                Remove ({selected.size})
+              </button>
+            ) : (
+              <button
+                onClick={practiseSelected}
+                disabled={selected.size === 0}
+                style={{ flex: 1, fontSize: 13, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: "none", background: selected.size ? COLORS.green : COLORS.bg3, color: "#fff", cursor: selected.size ? "pointer" : "not-allowed", fontWeight: 700, letterSpacing: 0.3 }}
+              >
+                ▶ Practise ({selected.size})
+              </button>
+            )}
           </>
         ) : (
           <>
-            <button
-              onClick={onRemove}
-              style={{ fontSize: 11, fontFamily: mono, padding: "6px 12px", borderRadius: 8, border: `1px solid ${COLORS.red}`, background: "transparent", color: COLORS.red, cursor: "pointer" }}
-            >
-              Remove
-            </button>
+            {(onRemoveTechniques && sections.length > 0) ? (
+              <button
+                onClick={beginRemove}
+                style={{ fontSize: 11, fontFamily: mono, padding: "6px 12px", borderRadius: 8, border: `1px solid ${COLORS.red}`, background: "transparent", color: COLORS.red, cursor: "pointer" }}
+              >
+                Remove
+              </button>
+            ) : onRemove ? (
+              <button
+                onClick={onRemove}
+                style={{ fontSize: 11, fontFamily: mono, padding: "6px 12px", borderRadius: 8, border: `1px solid ${COLORS.red}`, background: "transparent", color: COLORS.red, cursor: "pointer" }}
+              >
+                Remove
+              </button>
+            ) : null}
             {onPractice && sections.length > 0 && (
               <button
                 onClick={beginPractice}
@@ -863,6 +897,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
   const [viewingIdx, setViewingIdx] = useState(null);
   const [editingIdx, setEditingIdx] = useState(null);
   const [editName, setEditName] = useState("");
+  const [confirmIdx, setConfirmIdx] = useState(null);
 
   const rename = (idx, newName) => {
     const trimmed = newName.trim();
@@ -899,6 +934,28 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
       }
     }
     const next = skills.map((s, i) => i === skillIdx ? updated : s);
+    setSkills(next);
+    localStorage.setItem("lyra-style-skills", JSON.stringify(next));
+  };
+
+  // Batch-remove several techniques at once (the Remove selection mode).
+  // Filtering all indices in one pass avoids the index-shift bug you'd hit by
+  // calling the single-remove repeatedly. Mirrors removeTechnique's
+  // sections-vs-analysedTechniques branch.
+  const removeTechniques = (skillIdx, techIdxs, hasFullSections) => {
+    const target = skills[skillIdx];
+    if (!target || !techIdxs || !techIdxs.length) return;
+    const drop = new Set(techIdxs);
+    const updated = { ...target };
+    if (hasFullSections && updated.sections) {
+      updated.sections = updated.sections.filter((_, i) => !drop.has(i));
+    } else if (updated.analysedTechniques) {
+      updated.analysedTechniques = updated.analysedTechniques.filter((_, i) => !drop.has(i));
+      if (updated.techniques) {
+        updated.techniques = updated.techniques.filter((_, i) => !drop.has(i));
+      }
+    }
+    const next = skills.map((sk, i) => i === skillIdx ? updated : sk);
     setSkills(next);
     localStorage.setItem("lyra-style-skills", JSON.stringify(next));
   };
@@ -961,6 +1018,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
         onPracticeTechnique={onPractice ? (techIdx) => onPractice(skills[viewingIdx], techIdx) : null}
         onRemove={() => remove(viewingIdx)}
         onRemoveTechnique={(techIdx, hasFullSections) => removeTechnique(viewingIdx, techIdx, hasFullSections)}
+        onRemoveTechniques={(techIdxs, hasFullSections) => removeTechniques(viewingIdx, techIdxs, hasFullSections)}
         onRenameTechnique={(techIdx, newTitle, hasFullSections) => renameTechnique(viewingIdx, techIdx, newTitle, hasFullSections)}
         trackCall={trackCall}
       />
@@ -976,7 +1034,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
       {skills.map((sk, i) => (
         <div
           key={sk.id}
-          onClick={() => editingIdx !== i && setViewingIdx(i)}
+          onClick={() => editingIdx !== i && confirmIdx !== i && setViewingIdx(i)}
           style={{
             background: COLORS.card,
             border: `1px solid ${COLORS.border}`,
@@ -1014,7 +1072,31 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
               </>
             )}
           </div>
-          <span style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, flexShrink: 0 }}>›</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+            {confirmIdx === i ? (
+              <>
+                <button
+                  onClick={() => { remove(i); setConfirmIdx(null); }}
+                  style={{ background: COLORS.red || "#c44", border: `1px solid ${COLORS.red || "#c44"}`, color: "#fff", fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "4px 10px", fontFamily: mono, borderRadius: 6, whiteSpace: "nowrap" }}
+                >Tap to delete</button>
+                <button
+                  onClick={() => setConfirmIdx(null)}
+                  style={{ background: "transparent", border: `1px solid ${COLORS.border}`, color: COLORS.muted, fontSize: 10, fontWeight: 600, cursor: "pointer", padding: "4px 8px", fontFamily: mono, borderRadius: 6 }}
+                >Cancel</button>
+              </>
+            ) : (
+              <>
+                {editingIdx !== i && (
+                  <button
+                    onClick={() => setConfirmIdx(i)}
+                    title="Remove skill"
+                    style={{ background: "none", border: "none", fontSize: 16, color: COLORS.red || "#c44", cursor: "pointer", padding: "1px 5px", opacity: 0.5, lineHeight: 1, flexShrink: 0 }}
+                  >×</button>
+                )}
+                <span style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, flexShrink: 0 }}>›</span>
+              </>
+            )}
+          </div>
         </div>
       ))}
     </div>
@@ -1037,6 +1119,28 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
   const [profileSections, setProfileSections] = useState([]);
   const [error, setError] = useState("");
 
+  // Original-text translation on the Analyse tab (mirrors XRayView's toggle)
+  const [translation, setTranslation] = useState("");
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [translating, setTranslating] = useState(false);
+
+  const handleTranslateOriginal = async () => {
+    if (!referenceText || translating) return;
+    if (showTranslation) { setShowTranslation(false); return; }
+    if (translation) { setShowTranslation(true); return; }
+    setTranslating(true);
+    try {
+      const route = getRouteConfig("translate");
+      const result = await translateWithGuard(referenceText, route, trackCall);
+      setTranslation(result);
+      setShowTranslation(true);
+    } catch (e) {
+      setTranslation("翻譯失敗，請再試一次。");
+      setShowTranslation(true);
+    }
+    setTranslating(false);
+  };
+
   const [practiceMessages, setPracticeMessages] = useState([]);
   const [practiceInput, setPracticeInput] = useState("");
   const [practiceLoading, setPracticeLoading] = useState(false);
@@ -1044,6 +1148,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
 
   const [savedCount, setSavedCount] = useState(() => JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]").length);
   const [skillSaved, setSkillSaved] = useState(null); // null | "saved" | "too-short"
+  const [skillInStore, setSkillInStore] = useState(false); // whether the analysed skill is currently in localStorage (false after a manual remove)
   const [skillCount, setSkillCount] = useState(() => JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);
   const [achievementCount, setAchievementCount] = useState(() => JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]").length);
 
@@ -1064,6 +1169,27 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     }
   }, [profileSections]);
 
+  // Re-check whether the analysed skill is still in localStorage whenever the
+  // student returns to the Analyse tab — so removing it from the Skills tab
+  // flips the "saved" banner to an "Add to Skills" recovery button.
+  useEffect(() => {
+    if (activeTab !== "analyze" || skillSaved !== "saved") return;
+    try {
+      const arr = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]");
+      setSkillInStore(arr.some(sk => sk.authorName === authorName));
+    } catch (e) { /* ignore */ }
+  }, [activeTab, skillSaved, authorName]);
+
+  // Re-save the analysed skill (recovery path after a manual remove).
+  // saveStyleSkill dedupes by authorName, so this never creates a duplicate.
+  const handleAddToSkills = () => {
+    const saved = saveStyleSkill(authorName, profileSections);
+    if (saved) {
+      setSkillInStore(true);
+      setSkillCount(JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);
+    }
+  };
+
   const wordCount = referenceText.trim() ? referenceText.trim().split(/\s+/).length : 0;
 
   const resetAll = useCallback(() => {
@@ -1078,12 +1204,17 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     setTypingMsg(null);
     setActiveTab("analyze");
     setSkillSaved(null);
+    setSkillInStore(false);
+    setTranslation("");
+    setShowTranslation(false);
   }, []);
 
   const analyzeStyle = useCallback(async () => {
     if (!referenceText.trim() || referenceText.trim().split(/\s+/).length < 80) return;
     setAnalyzing(true);
     setError("");
+    setTranslation("");
+    setShowTranslation(false);
     try {
       // Cross-author technique referencing: pass existing skill names so the AI can surface connections
       let existingSkillsCtx = "";
@@ -1129,6 +1260,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
           const savedSkill = saveStyleSkill(author, sections);
           setSkillCount(JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);
           setSkillSaved(savedSkill ? "saved" : "too-short");
+          setSkillInStore(!!savedSkill);
         }
       }
     } catch (e) {
@@ -1297,14 +1429,6 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                   <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 4, fontFamily: mono }}>Style Profile — {profileSections.length} sections analysed</div>
                 </div>
 
-                {skillSaved === "saved" && (
-                  <div style={{ ...s.card, marginBottom: 12, padding: "10px 14px", borderLeft: `3px solid ${COLORS.green}`, background: "#F0F6F1", display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14 }}>&#10003;</span>
-                    <div style={{ fontSize: 11, color: COLORS.heading, fontFamily: mono, lineHeight: 1.5 }}>
-                      <strong>Writing skill saved</strong> — check the Skills tab to review and reuse
-                    </div>
-                  </div>
-                )}
                 {skillSaved === "too-short" && (
                   <div style={{ ...s.card, marginBottom: 12, padding: "10px 14px", borderLeft: `3px solid ${COLORS.amber}`, background: "#FFF8EE" }}>
                     <div style={{ fontSize: 11, color: COLORS.heading, fontFamily: mono, lineHeight: 1.5 }}>
@@ -1312,15 +1436,66 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                     </div>
                   </div>
                 )}
+                {skillSaved === "saved" && skillInStore && (
+                  <div style={{ ...s.card, marginBottom: 12, padding: "10px 14px", borderLeft: `3px solid ${COLORS.green}`, background: "#F0F6F1", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 14 }}>&#10003;</span>
+                    <div style={{ fontSize: 11, color: COLORS.heading, fontFamily: mono, lineHeight: 1.5 }}>
+                      <strong>Writing skill saved</strong> — check the Skills tab to review and reuse
+                    </div>
+                  </div>
+                )}
+                {skillSaved === "saved" && !skillInStore && (
+                  <div style={{ ...s.card, marginBottom: 12, padding: "10px 14px", borderLeft: `3px solid ${COLORS.accent1}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, lineHeight: 1.5 }}>
+                      This skill isn't in your Skills tab right now.
+                    </div>
+                    <button
+                      onClick={handleAddToSkills}
+                      style={{ ...s.chip, flexShrink: 0, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}
+                    >
+                      &#10022; Add to Skills
+                    </button>
+                  </div>
+                )}
 
                 {/* Original text reference */}
                 <details style={{ ...s.card, marginBottom: 12, padding: 0, cursor: "pointer" }}>
-                  <summary style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 8, transition: "transform 0.2s" }}>&#9654;</span> Original text
+                  <summary style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, listStyle: "none", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 8, transition: "transform 0.2s" }}>&#9654;</span> Original text
+                    </span>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTranslateOriginal(); }}
+                      disabled={translating}
+                      style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: translating ? COLORS.bg2 : COLORS.card, color: COLORS.heading, cursor: translating ? "default" : "pointer", textTransform: "none", letterSpacing: 0, fontWeight: 600 }}
+                    >
+                      {translating ? "翻譯中..." : showTranslation ? "隱藏翻譯" : "翻譯成中文"}
+                    </button>
                   </summary>
                   <div style={{ padding: "0 14px 12px", fontSize: 12, color: COLORS.text, lineHeight: 1.8, fontFamily: mono, fontStyle: "italic", borderTop: `1px solid ${COLORS.border}`, marginTop: 0, paddingTop: 10 }}>
                     {referenceText}
                   </div>
+                  {showTranslation && translation && (
+                    <div style={{ padding: "10px 14px 12px", borderTop: `1px solid ${COLORS.border}`, fontFamily: mono }}>
+                      {translation
+                        .split(/\n\s*\n/)
+                        .map(pair => pair.trim())
+                        .filter(Boolean)
+                        .map((pair, i) => {
+                          const enMatch = pair.match(/^EN:\s*(.+?)(?:\n|$)/s);
+                          const zhMatch = pair.match(/ZH:\s*(.+)$/s);
+                          const en = enMatch ? enMatch[1].trim() : "";
+                          const zh = zhMatch ? zhMatch[1].trim() : "";
+                          if (!en && !zh) return null;
+                          return (
+                            <div key={i} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px dashed ${COLORS.border}` }}>
+                              {en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, fontStyle: "italic" }}>{en}</div>}
+                              {zh && <div style={{ fontSize: 13, color: COLORS.heading, lineHeight: 1.7, marginTop: 4 }}>{zh}</div>}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
                 </details>
 
                 {/* Section cards (exclude WHEN TO USE — it has its own tab) */}
