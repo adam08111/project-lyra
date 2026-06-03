@@ -1074,13 +1074,21 @@ A skill auto-saves after analysis, but a manual removal left no way back. The sa
 
 `SavedSkillDetail`'s Remove button now mirrors Practice: tapping it enters a selection mode with a **red** circle on each technique, and "Remove (N)" deletes only the ticked ones. The circle colour is a new `selectColor` prop on `CollapsibleTechnique` (green for Practice, red for Remove); the shared `selectMode` is `null | "practice" | "remove"`. A new parent `removeTechniques(skillIdx, idxs, hasFullSections)` filters all indices in one pass (avoids the index-shift bug of calling single-remove repeatedly). Removing every technique deletes the whole skill and returns to the list. The per-technique "×" and "Practice" still work when not selecting. Verified: non-adjacent multi-select removed the right techniques; remove-all deleted the skill.
 
-### 18.6 Open issue — reload/backup data integrity (NOT fixed)
+### 18.6 Investigated: reload/backup data integrity — NOT a production bug
 
-During testing, the reload/backup path showed two inconsistent behaviours across dev hot-reloads:
-- A real saved skill (**"Unknown Author (The Guardian)"**) **disappeared** from `localStorage` and was not present in the `lyra-backup-v1` snapshot.
-- A skill that had been **fully deleted** ("Unknown Author") **resurrected** with all its techniques after a later reload.
+During this session a saved skill once **disappeared** ("Unknown Author (The Guardian)") and a fully-deleted skill once **resurrected** ("Unknown Author") across reloads, which looked alarming. Investigated and cleared:
 
-Since `autoRestoreFromBackup()` (`main.jsx`) runs on every page load, this could affect real users on a plain refresh — it appears to both lose and resurrect data. The backup safety net (`backup.js`, §17.3) needs investigation. Not yet diagnosed or fixed.
+- `autoRestoreFromBackup()` (`backup.js`) writes a key **only when it is entirely absent** (`localStorage.getItem(k) === null`); a present value, even `"[]"`, is never overwritten.
+- **Nothing in the app ever nulls `lyra-style-skills`** — every writer uses `setItem(JSON.stringify(array))`; the only `removeItem` is the generic `window.storage.delete` shim, which is never called on a skills key.
+- So a deleted-but-present skills array cannot be resurrected by the backup in normal use. **Confirmed empirically:** a plain page reload with the key present is a no-op (no `[lyra-backup] restored` log; `localStorage` unchanged).
+
+The session-only symptoms were **Vite HMR / Fast-Refresh dev artifacts**: `SavedSkills` holds its list in `useState(() => JSON.parse(localStorage…))`, and Fast Refresh preserved/re-seeded that React state out of sync with `localStorage` across ~6 live edits to `StyleLab.jsx`. A real user never triggers HMR, so it is not reproducible in production.
+
+**Latent (low-risk) notes — not bugs, and not the cause of the above:**
+- Whole-array (key-level) snapshots: a genuine full wipe (cleared site data) restores the last snapshot, which can be up to ~30s stale (snapshots run every 30s + on tab-hide/unload).
+- The `useState(() => localStorage…)` copy pattern gives each component its own copy with no shared source of truth — a latent lost-update footgun if two skill-writers are ever mounted at once (currently avoided by per-tab mount/unmount).
+
+Optional hardening (not required): snapshot on every critical write so the backup is never stale; or move to a single storage source-of-truth to remove the copy-divergence class.
 
 ### 18.7 Minor known item
 
