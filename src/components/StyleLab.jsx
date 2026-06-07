@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { groupReports } from "../report-utils.js";
 import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
@@ -851,37 +852,8 @@ function AchievementCard({ report, index, onRemove }) {
   );
 }
 
-// Shared helpers for collapsing reports that describe the SAME practice moment.
-// The AI re-logs one student sentence under several invented technique names,
-// and the manual "Save this turn" dumps the verbatim chat — so without this the
-// same win shows up several times. Group by the student's sentence and keep the
-// richest (structured gains + mistakes) card per group.
-const reportClean = (s) => (s || "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
-const reportWords = (s) => new Set(reportClean(s).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length >= 4));
-const reportSameMoment = (a, b) => {
-  if (a.size < 4 || b.size < 4) return false;
-  let inter = 0;
-  for (const w of a) if (b.has(w)) inter++;
-  return inter / Math.min(a.size, b.size) >= 0.6;
-};
-// Prefer a structured report (real gains + mistakes) over a freeform verbatim-
-// chat dump when collapsing a group to a single display card.
-const reportRichness = (r) => (r.reportText ? 0 : 100)
-  + (r.skills?.length || 0) + (r.structures?.length || 0)
-  + (r.vocabulary?.length || 0) + (r.grammar?.length || 0)
-  + (r.before ? 1 : 0) + (r.after ? 1 : 0);
-function groupReports(reports) {
-  const groups = [];
-  for (const r of (reports || [])) {
-    const sentence = r.after || (r.skills && r.skills[0] && r.skills[0].studentApplication) || "";
-    const w = reportWords(sentence);
-    let g = groups.find(grp => reportSameMoment(grp._w, w));
-    if (!g) { g = { members: [], display: r, _w: w }; groups.push(g); }
-    g.members.push(r);
-    if (reportRichness(r) > reportRichness(g.display)) g.display = r;
-  }
-  return groups;
-}
+// groupReports + the report-clustering dedup now live in src/report-utils.js
+// (shared with the Continuous Growth Report and unit-tested there).
 
 export function MasterclassReports({ onCountChange }) {
   const [reports, setReports] = useState(() => JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]"));

@@ -35,6 +35,7 @@ export const CRITICAL_KEYS = [
   "lyra-skill-deployments",   // skill deployment log
   "lyra-growth-log",          // before/after growth log
   "grammar-log",              // grammar mistakes log
+  "lyra-growth-profile",      // continuous growth report — Lyra's running memory of the student
 ];
 
 const isEmptyVal = (v) => v == null || v === "[]" || v === "{}" || v === "";

@@ -87,6 +87,14 @@ const ROUTE_CONFIG = {
     brain: true,
   },
 
+  // Continuous Growth Report — Lyra's running, honest assessment of the student.
+  // Carries its own system prompt (REPORT_CARD_BRAIN), so brain:false.
+  growth_report: {
+    model: MODELS.pro,
+    thinkingBudget: 2048,
+    brain: false,
+  },
+
   // ═══════════════════════════════════════
   // FLASH TIER — Decent reasoning, no brain needed
   // ═══════════════════════════════════════
