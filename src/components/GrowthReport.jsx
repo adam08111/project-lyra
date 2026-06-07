@@ -7,7 +7,8 @@ import {
   regenerateGrowthProfile,
   dedupedPracticeCount,
   MIN_PRACTICES_TO_UNLOCK,
-  REGEN_EVERY_N_PRACTICES,
+  effectiveRegenThreshold,
+  hasMilestone,
 } from "../growth-report.js";
 
 const mono = "'Courier Prime', monospace";
@@ -35,6 +36,7 @@ export default function GrowthReport({ trackCall }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [expanded, setExpanded] = useState({});
+  const [milestones, setMilestones] = useState(null);
 
   const practiceCount = dedupedPracticeCount();
   const pending = Number(localStorage.getItem("lyra-growth-pending")) || 0;
@@ -46,18 +48,22 @@ export default function GrowthReport({ trackCall }) {
     setErr("");
     try {
       const res = await regenerateGrowthProfile(trackCall, { force });
-      if (res && res.profile) setProfile(res.profile);
-      else if (res && res.error) setErr(pick("Couldn't build your report — try again.", "未能建立報告，請再試一次。"));
+      if (res && res.profile) {
+        setProfile(res.profile);
+        setMilestones(hasMilestone(res.milestones) ? res.milestones : null);
+      } else if (res && res.error) setErr(pick("Couldn't build your report — try again.", "未能建立報告，請再試一次。"));
     } catch (e) {
       setErr(pick("Couldn't build your report — try again.", "未能建立報告，請再試一次。"));
     }
     setLoading(false);
   };
 
-  // First open: generate if unlocked & no profile yet, or refresh if enough new practices.
+  // First open: generate if unlocked & no profile yet, or refresh if enough new
+  // practices. The threshold drops to 1 when the last report flagged a milestone
+  // as imminent (§5 milestone-force) so a fresh win surfaces without the full wait.
   useEffect(() => {
     if (!profile && practiceCount >= MIN_PRACTICES_TO_UNLOCK) regen();
-    else if (profile && pending >= REGEN_EVERY_N_PRACTICES) regen();
+    else if (profile && pending >= effectiveRegenThreshold(profile)) regen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -140,6 +146,25 @@ export default function GrowthReport({ trackCall }) {
         </button>
       </div>
 
+      {/* milestone — §5: a fresh level-up or beaten weakness, celebrated up top */}
+      {milestones && (
+        <div style={{ ...card("#EAF7EE", COLORS.green), display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ flex: 1, fontSize: 12.5, color: COLORS.heading, lineHeight: 1.6 }}>
+            {milestones.leveledUp && (
+              <div style={{ fontWeight: 700 }}>
+                🚀 {pick(`New level: ${milestones.levelTo}!`, `升級了：${milestones.levelTo_zh || milestones.levelTo}！`)}
+              </div>
+            )}
+            {(milestones.resolved || []).map((r, i) => (
+              <div key={r.id || i} style={{ marginTop: milestones.leveledUp || i ? 4 : 0 }}>
+                🎉 {pick(`You beat "${r.label}" — it's no longer holding you back.`, `你克服了「${r.label_zh || r.label}」，不再被它拖住了。`)}
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setMilestones(null)} aria-label="dismiss" style={{ border: "none", background: "transparent", color: COLORS.muted, cursor: "pointer", fontSize: 14, lineHeight: 1, fontFamily: mono, padding: 0 }}>×</button>
+        </div>
+      )}
+
       {/* header — named level + trajectory */}
       <div style={{ ...card(COLORS.bg2, COLORS.accent1), textAlign: "center", padding: 18 }}>
         <FeatherIcon size={22} />
@@ -169,7 +194,7 @@ export default function GrowthReport({ trackCall }) {
             {p.sections?.growth && <div style={{ ...prose, marginBottom: p.growthItems?.length ? 8 : 0 }}>{renderProse(pick(p.sections.growth.en, p.sections.growth.zh))}</div>}
             {(p.growthItems || []).map((g, i) => (
               <div key={i} style={{ fontSize: 12, color: COLORS.heading, marginTop: 4, display: "flex", gap: 6, alignItems: "baseline" }}>
-                <span style={{ color: COLORS.green }}>{g.type === "weakness_resolved" ? "🎉" : "✓"}</span>
+                <span style={{ color: COLORS.green }}>{g.type === "weakness_resolved" ? "🎉" : g.type === "level_up" ? "🚀" : "✓"}</span>
                 <span style={{ flex: 1 }}>{pick(g.text, g.text_zh)}</span>
                 {g.isNew && <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: COLORS.green, borderRadius: 6, padding: "1px 5px" }}>NEW</span>}
               </div>

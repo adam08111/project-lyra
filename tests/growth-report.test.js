@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { groupReports, consolidateMistakes, buildDelta } from "../src/report-utils.js";
+import {
+  milestoneImminent,
+  effectiveRegenThreshold,
+  computeMilestones,
+  hasMilestone,
+  REGEN_EVERY_N_PRACTICES,
+} from "../src/growth-report.js";
 
 describe("consolidateMistakes — cross-source dedup (accuracy keystone)", () => {
   it("counts ONE mistake logged across grammar-log + report.grammar + before-sentence as one", () => {
@@ -71,5 +78,78 @@ describe("buildDelta — only data newer than `since`", () => {
     expect(delta.practices).toHaveLength(1);
     expect(delta.practices[0].before).toBe("new sentence two here");
     expect(delta.mistakes).toHaveLength(1);
+  });
+});
+
+describe("milestoneImminent — eager regen only when the AI flagged a turning point", () => {
+  it("is true when any weakness is marked improving", () => {
+    expect(milestoneImminent({ weaknesses: [{ id: "a", status: "active" }, { id: "b", status: "improving" }] })).toBe(true);
+  });
+  it("is true when the trajectory is rising", () => {
+    expect(milestoneImminent({ level: { trajectory: "rising" }, weaknesses: [{ id: "a", status: "active" }] })).toBe(true);
+  });
+  it("is false when nothing is on the verge (active/watch weaknesses, steady level)", () => {
+    expect(milestoneImminent({ level: { trajectory: "steady" }, weaknesses: [{ id: "a", status: "active" }, { id: "b", status: "watch" }] })).toBe(false);
+  });
+  it("is false for an empty/missing profile", () => {
+    expect(milestoneImminent(null)).toBe(false);
+    expect(milestoneImminent({})).toBe(false);
+  });
+});
+
+describe("effectiveRegenThreshold — drop the cadence bar to 1 at a turning point", () => {
+  it("returns 1 when a milestone is imminent", () => {
+    expect(effectiveRegenThreshold({ weaknesses: [{ id: "a", status: "improving" }] })).toBe(1);
+  });
+  it("returns the normal cadence otherwise", () => {
+    expect(effectiveRegenThreshold({ weaknesses: [{ id: "a", status: "active" }] })).toBe(REGEN_EVERY_N_PRACTICES);
+  });
+});
+
+describe("computeMilestones — what changed since the last report", () => {
+  it("flags a level change as a level-up", () => {
+    const prev = { level: { name: "Emerging Writer" } };
+    const updated = { level: { name: "Developing Writer", name_zh: "發展中的寫作者" } };
+    const m = computeMilestones(prev, updated);
+    expect(m.leveledUp).toBe(true);
+    expect(m.levelFrom).toBe("Emerging Writer");
+    expect(m.levelTo).toBe("Developing Writer");
+    expect(hasMilestone(m)).toBe(true);
+  });
+
+  it("reports a tracked weakness that graduated as resolved", () => {
+    const prev = { weaknesses: [{ id: "tense_drift", label: "Tense Drift", status: "improving" }] };
+    const updated = {
+      weaknesses: [],
+      graduated: [{ id: "tense_drift", label: "Tense Drift", label_zh: "時態飄移" }],
+    };
+    const m = computeMilestones(prev, updated);
+    expect(m.resolved).toHaveLength(1);
+    expect(m.resolved[0].id).toBe("tense_drift");
+    expect(m.resolved[0].label_zh).toBe("時態飄移");
+  });
+
+  it("reports a tracked weakness flipped to status resolved", () => {
+    const prev = { weaknesses: [{ id: "sva", label: "Subject-Verb", status: "active" }] };
+    const updated = { weaknesses: [{ id: "sva", label: "Subject-Verb", status: "resolved" }] };
+    expect(computeMilestones(prev, updated).resolved.map((r) => r.id)).toEqual(["sva"]);
+  });
+
+  it("never reports a phantom milestone on a cold start (no prior profile)", () => {
+    const updated = {
+      level: { name: "Emerging Writer" },
+      weaknesses: [{ id: "x", status: "resolved" }],
+      graduated: [{ id: "y" }],
+    };
+    const m = computeMilestones({}, updated);
+    expect(m.leveledUp).toBe(false);
+    expect(m.resolved).toHaveLength(0);
+    expect(hasMilestone(m)).toBe(false);
+  });
+
+  it("reports no milestone when level and weaknesses are unchanged", () => {
+    const prev = { level: { name: "Developing Writer" }, weaknesses: [{ id: "a", status: "active" }] };
+    const updated = { level: { name: "Developing Writer" }, weaknesses: [{ id: "a", status: "active" }] };
+    expect(hasMilestone(computeMilestones(prev, updated))).toBe(false);
   });
 });

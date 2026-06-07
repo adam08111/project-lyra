@@ -1180,3 +1180,33 @@ Commits: `5c76712` (foundation, steps 1-3) + `855a8d6` (steps 4-6 + §10 fix), p
 - **Dual-audience:** `bandEstimate` is stored from day one but never rendered (display effectively gated off). An explicit feature flag + a teacher dashboard remain future work.
 - To see it live in-app, the student needs **3 deduped practices** to unlock the first report.
 
+---
+
+## 21. UPDATE — 7 June 2026 — Milestone-force regeneration wired (§5) — branch `claude/vigorous-zhukovsky-413664`
+
+Closes the first §20.4 caveat. The Continuous Growth Report no longer makes a student wait the full 3-practice cadence to see a turning point: when the previous report flagged a milestone as imminent, a single new practice now regenerates the report, and a fresh level-up or beaten weakness is celebrated at the top of the card.
+
+### 21.1 The trigger — eager, but never a local guess
+A milestone (a weakness resolving, or the level changing) is an AI judgment that only exists *after* a regeneration, so we never try to detect one locally. Instead we read the AI's own forward-looking flags from the *last* report:
+- a weakness with `status === "improving"` (the model's "this is on the verge of resolving"), or
+- `level.trajectory === "rising"` (on the way to a new level).
+
+When either holds, `effectiveRegenThreshold()` drops the auto-regen bar from `REGEN_EVERY_N_PRACTICES` (3) to **1**, so the very next practice refreshes the report. Cost stays bounded: those flags are transient (they flip to resolved/steady once the student lands or plateaus), `pending` only grows on real practice, and the existing `pending === 0` guard still prevents a wasted zero-data call. Regeneration stays lazy (on Report-tab open), not a silent background spend.
+
+### 21.2 The payoff — surfaced, not buried
+`computeMilestones(prev, updated)` diffs the pre-regen profile against the freshly produced one and returns what actually changed: a level-up (level name changed) and any weakness that was *being worked on* and is now resolved/graduated. It is cold-start-guarded — a brand-new "resolved" the model invents on the first run can't masquerade as a hard-won win. The result rides back on `regenerateGrowthProfile`'s return as `{ profile, milestones }`. The Report tab shows a dismissible green banner (🚀 level-up / 🎉 beaten weakness, bilingual) above the header, and `level_up` growth items now get a 🚀 (was a generic ✓).
+
+### 21.3 Files
+| File | Status | Purpose |
+|---|---|---|
+| `src/growth-report.js` | UPDATED | `milestoneImminent` + `effectiveRegenThreshold` (eager cadence); `computeMilestones` + `hasMilestone` (post-regen diff, cold-start-guarded); `regenerateGrowthProfile` now returns `{ profile, milestones }` |
+| `src/components/GrowthReport.jsx` | UPDATED | mount effect uses `effectiveRegenThreshold(profile)`; `milestones` state + dismissible celebratory banner; 🚀 icon for `level_up` items; dropped the now-unused `REGEN_EVERY_N_PRACTICES` import |
+| `tests/growth-report.test.js` | UPDATED | +11 tests — imminence (improving / rising / steady / empty), threshold (1 vs cadence), milestone diff (level-up, graduate, status-resolved, cold-start guard, unchanged) |
+
+### 21.4 Verification
+- **120/120 unit tests pass** (was 109; +11 here), covering all the new pure logic. Production build compiles clean.
+- **Not browser-verified, by design:** the path only fires on AI output that marks a weakness `improving` / changes the level. Faking that needs seeding the live preview's `localStorage` (against the standing "never seed a live preview" rule), and opening the Report tab on real data would spend a real Gemini call and mutate the saved profile — so the logic is pinned at the unit-test layer instead. A genuine end-to-end pass still waits on real accumulating practice data (the same dependency as §20.4's continuity caveat).
+
+### 21.5 Still open (unchanged from §20.4)
+Cross-regen continuity over many real regens; dual-audience `bandEstimate` rendering + teacher dashboard; first report still needs 3 deduped practices to unlock.
+

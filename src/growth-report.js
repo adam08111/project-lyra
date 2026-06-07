@@ -25,6 +25,28 @@ export const MIN_PRACTICES_TO_UNLOCK = 3;
 // assessment; a few give a real delta).
 export const REGEN_EVERY_N_PRACTICES = 3;
 
+// MILESTONE-FORCE (spec §5) — when the last report flagged that the student is on
+// the verge of a milestone (a weakness the AI marked "improving", or a "rising"
+// trajectory toward a new level), don't make them wait the full cadence: a single
+// new practice is enough to regenerate, so a freshly-beaten weakness or a level-up
+// is confirmed and celebrated the moment it happens. The trigger is the AI's own
+// forward-looking flags — we never guess the milestone locally, we just check more
+// eagerly. Cost stays bounded: "improving"/"rising" are transient (they flip to
+// resolved/steady once the student lands or plateaus), and `pending` only grows on
+// real practice, so this never regenerates with zero new data.
+export function milestoneImminent(profile) {
+  if (!profile) return false;
+  const improving = (profile.weaknesses || []).some((w) => w && w.status === "improving");
+  const rising = profile.level?.trajectory === "rising";
+  return improving || rising;
+}
+
+// New practices needed before an auto-regen: 1 when a milestone is imminent, else
+// the normal cadence.
+export function effectiveRegenThreshold(profile) {
+  return milestoneImminent(profile) ? 1 : REGEN_EVERY_N_PRACTICES;
+}
+
 const readJSON = (key) => {
   try {
     return JSON.parse(localStorage.getItem(key) || "[]");
@@ -111,6 +133,47 @@ function markNewGrowthItems(prev, updated) {
 }
 
 /**
+ * Diff the pre-regen profile against the just-produced one to surface the two
+ * milestones §5 cares about: a level change, and any weakness that was being
+ * worked on and is now resolved/graduated. Guarded so a cold start (no prior
+ * level or weakness to compare) never reports a phantom milestone.
+ * @returns {{ leveledUp, levelFrom, levelTo, levelTo_zh, resolved: {id,label,label_zh}[] }}
+ */
+export function computeMilestones(prev, updated) {
+  const out = { leveledUp: false, levelFrom: "", levelTo: "", levelTo_zh: "", resolved: [] };
+  const prevLevel = prev?.level?.name || "";
+  const newLevel = updated?.level?.name || "";
+  if (prevLevel && newLevel && prevLevel !== newLevel) {
+    out.leveledUp = true;
+    out.levelFrom = prevLevel;
+    out.levelTo = newLevel;
+    out.levelTo_zh = updated.level?.name_zh || "";
+  }
+
+  // A weakness counts as just-resolved only if it was actively tracked before and
+  // is now resolved or graduated — so a brand-new "resolved" the AI invents on a
+  // cold start can't masquerade as a hard-won win.
+  const wasActive = new Map(
+    (prev?.weaknesses || [])
+      .filter((w) => w && w.id && w.status && w.status !== "resolved")
+      .map((w) => [w.id, w])
+  );
+  const nowResolved = new Set([
+    ...(updated?.graduated || []).map((g) => g && g.id).filter(Boolean),
+    ...(updated?.weaknesses || []).filter((w) => w && w.status === "resolved").map((w) => w.id),
+  ]);
+  for (const [id, w] of wasActive) {
+    if (nowResolved.has(id)) {
+      const grad = (updated?.graduated || []).find((g) => g && g.id === id);
+      out.resolved.push({ id, label: grad?.label || w.label || "", label_zh: grad?.label_zh || w.label_zh || "" });
+    }
+  }
+  return out;
+}
+
+export const hasMilestone = (m) => !!m && (m.leveledUp || (Array.isArray(m.resolved) && m.resolved.length > 0));
+
+/**
  * Regenerate the growth profile: load → build delta → ONE Gemini call → save.
  * Incremental (current profile + small delta), never full re-synthesis.
  *
@@ -169,6 +232,6 @@ export async function regenerateGrowthProfile(trackCall, { force = false } = {})
   pushHistorySnapshot(updated);
   saveProfile(updated);
   try { localStorage.setItem("lyra-growth-pending", "0"); } catch (e) { /* silent */ }
-  return { profile: updated };
+  return { profile: updated, milestones: computeMilestones(profile, updated) };
 }
 
