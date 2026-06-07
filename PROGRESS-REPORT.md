@@ -1124,7 +1124,7 @@ The AI re-logs one student sentence under several invented technique names (and 
 
 Per the product owner: the per-practice detailed card IS the "achievement". So the **Achievements** tab now renders the grouped detailed cards (`MasterclassReports`) — author/skill, before→after + why it's better, vocabulary gained, grammar fixed. The earlier concise "skills learnt + sentence" view (and its `learntSkillsFromReports` helper) was removed. Each card = one practice moment.
 
-### 19.5 The Report tab → Continuous Growth Report (Stage 2, IN DESIGN — NOT built yet)
+### 19.5 The Report tab → Continuous Growth Report (Stage 2 — designed here; **now BUILT + verified, see §20**)
 
 The **Report** tab is now a placeholder for the app's centrepiece: a **continuous, evolving assessment of the student** (not per-practice). Per the product owner, this is "the heart of the app" — Lyra should remember the student's weaknesses and recurring mistakes and critique honestly as they grow, like a teacher's running report card.
 
@@ -1145,4 +1145,38 @@ Data already available to feed it: `lyra-masterclass-reports` (per-practice befo
 | `src/components/StyleLab.jsx` | UPDATED | tab-history back arrow (`tabHistory`/`goToTab`/`goBack`); `groupReports` + `reportRichness` dedup; Achievements tab → grouped detailed cards; Report tab → growth-report placeholder; removed the now-unused concise `Achievements` view + `learntSkillsFromReports` |
 | `src/components/TrainingSession.jsx` | UPDATED | pass `forcedTechnique` (active technique name) into the report-save paths |
 | `src/learning-sync.js` | UPDATED | honour `forcedTechnique` for `report.technique` + `skills[].skillName`; save-side dedup by `after` |
+
+---
+
+## 20. UPDATE — 4 June 2026 — Continuous Growth Report BUILT + verified (branch `claude/growth-report`)
+
+The §19.5 feature is implemented on a new branch `claude/growth-report` (off `claude/youthful-wing-17a2f6`), built in the spec's order — accuracy keystone first, verified before the UI. All 109 tests pass.
+
+### 20.1 Architecture
+Incremental student profile in `localStorage["lyra-growth-profile"]` (added to `backup.js` CRITICAL_KEYS). Each regeneration: load profile → build a delta of only-new learning → **one** Pro-tier Gemini call (`REPORT_CARD_BRAIN`) → updated profile → save. Never full re-synthesis (preserves continuity + bounds cost).
+
+### 20.2 Files
+| File | Purpose |
+|---|---|
+| `src/report-utils.js` (NEW, pure) | `groupReports` (practice-moment clustering, now shared with Style Lab), `consolidateMistakes` (cross-source dedup: grammar-log + report.grammar + before-sentence → one instance), `buildDelta` (reliable id-timestamp boundary) |
+| `tests/growth-report.test.js` (NEW) | 4 tests — the dedup keystone ("one slip across three sources = 1"), grouping, delta boundary |
+| `src/growth-report.js` (NEW) | profile load/save, cold-start gate (`MIN_PRACTICES_TO_UNLOCK = 3`), delta gathering, `regenerateGrowthProfile` (anonymise/restore, defensive JSON parse, history snapshot, NEW-item marking), cadence reset |
+| `src/report-card-brain.js` (NEW) | `REPORT_CARD_BRAIN` — the 5 judgments (cluster by rule; rate not raw count; opportunity-before-credit; prescribe-a-check-not-a-lecture; ≤2 prescriptions), lifecycle tracking, honest-but-kind tone, bilingual, JSON schema |
+| `src/components/GrowthReport.jsx` (NEW) | the Report tab — locked/loading/profile states, EN/繁中 toggle, named level + trajectory, green strengths / gold growth (NEW badges) / amber (never red) weakness cards with occurrence counts + trend + expandable before-after evidence / blue focus / subordinate stats; refresh disabled when no new practices |
+| `src/ai-router.js` | `growth_report` route (Pro tier, `brain:false`) |
+| `src/learning-sync.js` | cadence counter `lyra-growth-pending` (incremented per growth event, reset on regen) |
+| `src/utils.js` | **§10 anti-bias fix** — `anonymiseSkillsForAI` now scrubs the newer `sections` field (author names in `sections.content` were leaking to the AI) |
+| `src/components/StyleLab.jsx` | Report tab renders `<GrowthReport/>`; imports the shared `groupReports` |
+
+### 20.3 Verification
+- **Gate 1 (dedup):** 4 unit tests pass, incl. one mistake logged across grammar-log + report.grammar + before-sentence counted **once**.
+- **Gate 2 (worked example — real Pro-tier call on actual practice data):** produced level "Developing Narrative Voice / 發展中的敘事者" (band 3.5-4.0 stored, display-gated), bilingual sections, a tracked weakness "Narrative Tense Drift" (occurrence count + a memorable-image prescription) citing the student's own "is swarming"/"sat" slip, plus NEW growth badges. Rendered correctly (amber, counts, expandable evidence). Matches the spec's §6.1 quality.
+
+Commits: `5c76712` (foundation, steps 1-3) + `855a8d6` (steps 4-6 + §10 fix), pushed to `origin/claude/growth-report`.
+
+### 20.4 Not yet done / caveats
+- Cross-regen **continuity** (a weakness id incremented across multiple regens over time) is built + prompt-instructed, but only ONE regeneration was verified — it needs real practice data accumulating to exercise fully.
+- **Milestone-force** regen (§5 — force a regen immediately when a weakness resolves or the level changes) is NOT wired; only auto-every-3-practices + manual refresh + cooldown.
+- **Dual-audience:** `bandEstimate` is stored from day one but never rendered (display effectively gated off). An explicit feature flag + a teacher dashboard remain future work.
+- To see it live in-app, the student needs **3 deduped practices** to unlock the first report.
 
