@@ -58,7 +58,7 @@ export function stripLearningData(text) {
 export function syncLearningData(data, ctx) {
   if (!data || data.type !== "learning_sync") return;
 
-  const { setGrammarLog, topic } = ctx;
+  const { setGrammarLog, topic, forcedTechnique } = ctx;
 
   // 1. Grammar → existing Grammar Log
   if (data.grammar?.length && setGrammarLog) {
@@ -174,10 +174,10 @@ export function syncLearningData(data, ctx) {
       topic: topic?.slice(0, 80) || "",
       before: g.before || "",
       after: g.after || "",
-      technique: g.technique_used || (data.skills_deployed?.[0] && data.skills_deployed[0].skill_name) || "",
+      technique: forcedTechnique || g.technique_used || (data.skills_deployed?.[0] && data.skills_deployed[0].skill_name) || "",
       why_better: g.why_better || "",
       skills: (data.skills_deployed || []).map(s => ({
-        skillName: s.skill_name || "",
+        skillName: forcedTechnique || s.skill_name || "",
         sourceAuthor: s.source_author || "",
         studentApplication: s.student_application || "",
         mastery: s.mastery_signal || "",
@@ -240,7 +240,7 @@ export function maybeSaveVisibleReport(displayText, ctx) {
     source: "auto-visible",
     topic: ctx?.topic?.slice(0, 80) || "",
     after,
-    technique: techMatch ? techMatch[1].trim() : "",
+    technique: ctx?.forcedTechnique || (techMatch ? techMatch[1].trim() : ""),
     reportText: displayText,
   });
 }
@@ -261,6 +261,11 @@ export function maybeSaveVisibleReport(displayText, ctx) {
 export function saveMasterclassReport(report) {
   try {
     const existing = JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]");
+    // Dedup: the auto-save, the visible-report fallback, and the manual
+    // "Save this turn" button can all fire for the SAME turn. If this exact
+    // upgraded sentence is already saved, don't add a second card.
+    const after = (report.after || "").trim();
+    if (after && existing.some(r => (r.after || "").trim() === after)) return null;
     const entry = {
       id: "report_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
       date: new Date().toISOString(),

@@ -851,26 +851,60 @@ function AchievementCard({ report, index, onRemove }) {
   );
 }
 
-export function Achievements({ onCountChange }) {
-  const [reports, setReports] = useState(() => {
-    const r = JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]");
-    if (onCountChange) setTimeout(() => onCountChange(r.length), 0);
-    return r;
-  });
+// Shared helpers for collapsing reports that describe the SAME practice moment.
+// The AI re-logs one student sentence under several invented technique names,
+// and the manual "Save this turn" dumps the verbatim chat — so without this the
+// same win shows up several times. Group by the student's sentence and keep the
+// richest (structured gains + mistakes) card per group.
+const reportClean = (s) => (s || "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
+const reportWords = (s) => new Set(reportClean(s).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length >= 4));
+const reportSameMoment = (a, b) => {
+  if (a.size < 4 || b.size < 4) return false;
+  let inter = 0;
+  for (const w of a) if (b.has(w)) inter++;
+  return inter / Math.min(a.size, b.size) >= 0.6;
+};
+// Prefer a structured report (real gains + mistakes) over a freeform verbatim-
+// chat dump when collapsing a group to a single display card.
+const reportRichness = (r) => (r.reportText ? 0 : 100)
+  + (r.skills?.length || 0) + (r.structures?.length || 0)
+  + (r.vocabulary?.length || 0) + (r.grammar?.length || 0)
+  + (r.before ? 1 : 0) + (r.after ? 1 : 0);
+function groupReports(reports) {
+  const groups = [];
+  for (const r of (reports || [])) {
+    const sentence = r.after || (r.skills && r.skills[0] && r.skills[0].studentApplication) || "";
+    const w = reportWords(sentence);
+    let g = groups.find(grp => reportSameMoment(grp._w, w));
+    if (!g) { g = { members: [], display: r, _w: w }; groups.push(g); }
+    g.members.push(r);
+    if (reportRichness(r) > reportRichness(g.display)) g.display = r;
+  }
+  return groups;
+}
 
-  const remove = (idx) => {
-    const next = reports.filter((_, i) => i !== idx);
+export function MasterclassReports({ onCountChange }) {
+  const [reports, setReports] = useState(() => JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]"));
+  const groups = groupReports(reports);
+
+  useEffect(() => { if (onCountChange) onCountChange(groups.length); }, [groups.length]);
+
+  // A card stands for a whole group (one practice moment); deleting it removes
+  // every duplicate report in that group.
+  const removeGroup = (members) => {
+    const set = new Set(members);
+    const next = reports.filter(r => !set.has(r));
     setReports(next);
     localStorage.setItem("lyra-masterclass-reports", JSON.stringify(next));
-    if (onCountChange) onCountChange(next.length);
+    if (onCountChange) onCountChange(groupReports(next).length);
   };
 
-  if (reports.length === 0) {
+  if (groups.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px 20px" }}>
         <FeatherIcon size={24} color={COLORS.accent2} />
         <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 12, lineHeight: 1.5, fontFamily: mono }}>
-          No achievements yet. When you nail a technique in a writing session, Lyra saves a Masterclass Report here — or tap "Save this turn" under any of Lyra's replies to keep it.
+          No reports yet. When you practise a technique with Lyra, a Masterclass Report (your gains + the mistakes you fixed) shows up here.
         </div>
       </div>
     );
@@ -879,10 +913,10 @@ export function Achievements({ onCountChange }) {
   return (
     <div>
       <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 12, fontFamily: mono }}>
-        {reports.length} achievement{reports.length !== 1 ? "s" : ""} saved
+        {groups.length} report{groups.length !== 1 ? "s" : ""}
       </div>
-      {reports.map((r, i) => (
-        <AchievementCard key={r.id || i} report={r} index={i + 1} onRemove={() => remove(i)} />
+      {groups.map((g, i) => (
+        <AchievementCard key={i} report={g.display} index={i + 1} onRemove={() => removeGroup(g.members)} />
       ))}
     </div>
   );
@@ -1105,11 +1139,27 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
 
 export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining }) {
   const [activeTab, setActiveTab] = useState("analyze");
+  // Tab-history stack so the header ← steps back through the tabs the student
+  // visited, and only closes Style Lab (back to the previous screen) once
+  // there's no earlier tab left.
+  const [tabHistory, setTabHistory] = useState([]);
+  const goToTab = (key) => {
+    if (key === activeTab) return;
+    setTabHistory(h => [...h, activeTab]);
+    setActiveTab(key);
+  };
+  const goBack = () => {
+    if (tabHistory.length === 0) { setShowStyleLab(false); return; }
+    const prev = tabHistory[tabHistory.length - 1];
+    setTabHistory(tabHistory.slice(0, -1));
+    setActiveTab(prev);
+  };
 
-  // Jump to requested tab when StyleLab opens
+  // Jump to the requested tab when StyleLab opens; reset tab history on open/close.
   useEffect(() => {
-    if (showStyleLab && initialTab) setActiveTab(initialTab);
-    if (!showStyleLab) setActiveTab("analyze");
+    if (!showStyleLab) { setActiveTab("analyze"); setTabHistory([]); return; }
+    if (initialTab) setActiveTab(initialTab);
+    setTabHistory([]);
   }, [showStyleLab, initialTab]);
   const [referenceText, setReferenceText] = useState("");
   const [sectionCount, setSectionCount] = useState(9); // how many style-profile sections to analyse (1-9)
@@ -1203,6 +1253,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     setPracticeInput("");
     setTypingMsg(null);
     setActiveTab("analyze");
+    setTabHistory([]);
     setSkillSaved(null);
     setSkillInStore(false);
     setTranslation("");
@@ -1302,7 +1353,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, maxWidth: 430, margin: "0 auto", background: COLORS.bg1, zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.25s ease" }}>
       {/* Header */}
       <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
-        <button onClick={() => setShowStyleLab(false)} style={{ width: 32, height: 32, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, color: COLORS.muted }}>
+        <button onClick={goBack} title="Back" style={{ width: 32, height: 32, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, color: COLORS.muted }}>
           &#x2190;
         </button>
         <div style={{ flex: 1 }}>
@@ -1326,12 +1377,13 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
             { key: "saved", label: savedCount > 0 ? `Saved (${savedCount})` : "Saved" },
             { key: "skills", label: skillCount > 0 ? `Skills (${skillCount})` : "Skills" },
             { key: "achievements", label: achievementCount > 0 ? `Achievements (${achievementCount})` : "Achievements" },
+            { key: "report", label: "Report" },
           ].map(t => {
             const disabled = t.needsProfile && !hasProfile;
             return (
               <button
                 key={t.key}
-                onClick={() => { if (disabled) return; setActiveTab(t.key); }}
+                onClick={() => { if (disabled) return; goToTab(t.key); }}
                 style={{
                   flex: 1, padding: "8px 16px", borderRadius: 17, border: "none",
                   background: activeTab === t.key ? COLORS.card : "transparent",
@@ -1512,7 +1564,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                     Analyse new text
                   </button>
                   <button
-                    onClick={() => setActiveTab("practice")}
+                    onClick={() => goToTab("practice")}
                     style={{ ...s.btn, flex: 1, fontSize: 14 }}
                   >
                     Start Practising
@@ -1583,10 +1635,23 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
           </div>
         )}
 
-        {/* ACHIEVEMENTS TAB */}
+        {/* ACHIEVEMENTS TAB — the per-practice detailed cards (gains + mistakes) */}
         {activeTab === "achievements" && (
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-            <Achievements onCountChange={setAchievementCount} />
+            <MasterclassReports onCountChange={setAchievementCount} />
+          </div>
+        )}
+
+        {/* REPORT TAB — Lyra's continuous growth report (Stage 2, in design) */}
+        {activeTab === "report" && (
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
+            <div style={{ textAlign: "center", padding: "40px 20px" }}>
+              <FeatherIcon size={24} color={COLORS.accent2} />
+              <div style={{ fontSize: 13, color: COLORS.heading, fontWeight: 700, marginTop: 12, fontFamily: mono }}>Your growth report</div>
+              <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 8, lineHeight: 1.6, fontFamily: mono }}>
+                Lyra's continuous, honest read on how you're growing — your strengths, the mistakes you keep making, and what to work on next. Coming soon.
+              </div>
+            </div>
           </div>
         )}
 

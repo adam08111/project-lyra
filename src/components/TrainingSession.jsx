@@ -364,9 +364,13 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
       // Lyra printed a visible MASTERCLASS REPORT, the visible-report
       // fallback captures it.
       const { displayText: synced, learningData } = extractLearningData(result);
+      // Name the report after the skill the student is actually practising, not
+      // whatever fresh name the AI invents — keeps Achievements/Report names in
+      // sync with the Skills list (e.g. "The One Person Reset").
+      const practisedName = (activeTechIdx !== null && techniques[activeTechIdx]) ? (techniques[activeTechIdx].title || techniques[activeTechIdx].technique) : "";
       let savedReport = false;
       if (learningData) {
-        const syncResult = syncLearningData(learningData, { topic: skill?.authorName || "" });
+        const syncResult = syncLearningData(learningData, { topic: skill?.authorName || "", forcedTechnique: practisedName });
         savedReport = !!(syncResult && syncResult.savedReport);
       }
       const message = synced
@@ -374,7 +378,7 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
         .replace(/```json|```/g, "")
         .trim();
       if (!savedReport) {
-        maybeSaveVisibleReport(message, { topic: skill?.authorName || "" });
+        maybeSaveVisibleReport(message, { topic: skill?.authorName || "", forcedTechnique: practisedName });
       }
       if (message) {
         setChatMessages(prev => [...prev, { role: 'lyra', text: message }]);

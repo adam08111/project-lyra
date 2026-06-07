@@ -1100,3 +1100,49 @@ Cosmetic React console warning on the 1–9 section-count chips (`SourceSetup.js
 |---|---|---|
 | `src/components/StyleLab.jsx` | UPDATED | Skills-row two-step × delete (`confirmIdx`); Analyse-tab Original-text 翻譯成中文 toggle (reuses `translateWithGuard`); "Add to Skills" recovery banner + `skillInStore` + re-check effect; `SavedSkillDetail` shared `selectMode` (practice/remove) + red `selectColor` on `CollapsibleTechnique`; batch `removeTechniques`; "remove all = delete skill" |
 
+---
+
+## 19. UPDATE — 3–4 June 2026 — Achievements ⇄ Report restructure + the Continuous Growth Report (planned)
+
+Branch `claude/youthful-wing-17a2f6`. This session reworked the Style Lab "Achievements" area and set up the app's next big feature — a continuous growth report card. Supporting fixes landed too. (Not yet committed when this section was written; lands with the same commit.)
+
+### 19.1 Style Lab back arrow — tab history
+
+The header ← now steps back through the tabs the student visited (Saved → Skills → Analyse), and only closes Style Lab (returning to the previous screen) when there's no earlier tab left. Implemented with a `tabHistory` stack + `goToTab`/`goBack`; resets on open/close and on "New analysis". Verified live.
+
+### 19.2 Practice reports named after the practised skill
+
+When a student drills a saved technique (e.g. "The One Person Reset"), the Masterclass Report is now named after THAT skill — not a fresh name the AI invents — keeping report/achievement names in sync with the Skills list. `TrainingSession` passes the active technique name as `forcedTechnique` into `syncLearningData` + `maybeSaveVisibleReport` (`learning-sync.js`), which apply it to `report.technique` and `skills[].skillName`. (The manual "Save this turn" already did this.) **Verified live:** practising "The One Person Reset" produced an auto report named "The One Person Reset".
+
+### 19.3 Report dedup — one card per practice moment
+
+The AI re-logs one student sentence under several invented technique names (and the manual "Save this turn" dumps the verbatim chat), so the same win used to appear many times. Two layers:
+- **Save-side:** `saveMasterclassReport` skips a report whose `after` sentence already exists.
+- **Display-side:** `groupReports()` clusters reports by sentence-content overlap (≥60% of the shorter sentence's content words shared) and shows ONE card per cluster — the richest report (structured gains+mistakes beats a freeform chat dump, via `reportRichness`). Deleting a card removes the whole cluster.
+
+### 19.4 Achievements is now the detailed per-practice cards (Stage 1, done)
+
+Per the product owner: the per-practice detailed card IS the "achievement". So the **Achievements** tab now renders the grouped detailed cards (`MasterclassReports`) — author/skill, before→after + why it's better, vocabulary gained, grammar fixed. The earlier concise "skills learnt + sentence" view (and its `learntSkillsFromReports` helper) was removed. Each card = one practice moment.
+
+### 19.5 The Report tab → Continuous Growth Report (Stage 2, IN DESIGN — NOT built yet)
+
+The **Report** tab is now a placeholder for the app's centrepiece: a **continuous, evolving assessment of the student** (not per-practice). Per the product owner, this is "the heart of the app" — Lyra should remember the student's weaknesses and recurring mistakes and critique honestly as they grow, like a teacher's running report card.
+
+Design is being drafted with a stronger model (Opus 4.8) before implementation. Open design questions:
+- **Sections:** overall level/trajectory, strengths, recurring weaknesses & mistake patterns, growth since last time, focus for next.
+- **Generation:** synthesize the whole history each time vs. maintain a persistent "student profile" updated incrementally.
+- **Memory of weaknesses:** how to persist/track recurring mistakes across sessions so the critique is genuinely continuous, not a one-off summary.
+- **Update cadence:** when to (re)generate given Gemini cost (on demand / after each practice / every N).
+- **Tone:** honest critique that names real weaknesses without discouraging a 14-year-old (+ Traditional Chinese).
+- **Data model & mobile UX:** one evolving card on a phone; assume one Gemini call per regeneration.
+
+Data already available to feed it: `lyra-masterclass-reports` (per-practice before/after, skills, grammar, vocab), `grammar-log`, saved skills + practised techniques, `lyra-structures`, `lyra-vocabulary`, and the coaching-chat transcripts.
+
+### 19.6 Files changed (Section 19)
+
+| File | Status | Purpose |
+|---|---|---|
+| `src/components/StyleLab.jsx` | UPDATED | tab-history back arrow (`tabHistory`/`goToTab`/`goBack`); `groupReports` + `reportRichness` dedup; Achievements tab → grouped detailed cards; Report tab → growth-report placeholder; removed the now-unused concise `Achievements` view + `learntSkillsFromReports` |
+| `src/components/TrainingSession.jsx` | UPDATED | pass `forcedTechnique` (active technique name) into the report-save paths |
+| `src/learning-sync.js` | UPDATED | honour `forcedTechnique` for `report.technique` + `skills[].skillName`; save-side dedup by `after` |
+
