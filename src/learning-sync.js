@@ -109,6 +109,12 @@ export function syncLearningData(data, ctx) {
         topic: topic?.slice(0, 80) || "",
       }));
       localStorage.setItem("lyra-growth-log", JSON.stringify([...newEntries, ...existing]));
+      // Growth Report cadence: count this practice moment toward the next regen.
+      // The Report tab regenerates when this reaches REGEN_EVERY_N_PRACTICES.
+      try {
+        const n = (Number(localStorage.getItem("lyra-growth-pending")) || 0) + 1;
+        localStorage.setItem("lyra-growth-pending", String(n));
+      } catch (e2) { /* silent */ }
     } catch (e) { /* silent */ }
   }
 

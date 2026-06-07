@@ -10,6 +10,10 @@
  */
 
 import { groupReports, buildDelta, countDedupedPractices } from "./report-utils.js";
+import { callAI } from "./api.js";
+import { getRouteConfig } from "./ai-router.js";
+import { REPORT_CARD_BRAIN } from "./report-card-brain.js";
+import { anonymiseSkillsForAI, restoreAuthorNames } from "./utils.js";
 
 export const GROWTH_PROFILE_KEY = "lyra-growth-profile";
 
@@ -85,3 +89,86 @@ export function pushHistorySnapshot(profile) {
   profile.history = [...(profile.history || []), snap].slice(-12);
   return profile;
 }
+
+// Defensive parse: the model is told "no fences", but tolerate ```json fences
+// or a stray preamble by extracting the outermost { ... } object.
+function parseProfileJSON(s) {
+  let t = (s || "").trim();
+  t = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const first = t.indexOf("{");
+  const last = t.lastIndexOf("}");
+  if (first >= 0 && last > first) t = t.slice(first, last + 1);
+  return JSON.parse(t);
+}
+
+// Flag growthItems that weren't in the previous profile, so the UI can badge
+// them "NEW" (a freshly resolved weakness is the biggest motivator).
+function markNewGrowthItems(prev, updated) {
+  const prevTexts = new Set((prev?.growthItems || []).map((g) => (g.text || "").trim()));
+  (updated.growthItems || []).forEach((g) => {
+    g.isNew = !prevTexts.has((g.text || "").trim());
+  });
+}
+
+/**
+ * Regenerate the growth profile: load → build delta → ONE Gemini call → save.
+ * Incremental (current profile + small delta), never full re-synthesis.
+ *
+ * @param {Function} trackCall - the app's API-call counter
+ * @param {{ force?: boolean }} opts - force bypasses the cold-start gate
+ * @returns {Promise<{profile}|{locked, practiceCount, needed}|{error, raw}>}
+ */
+export async function regenerateGrowthProfile(trackCall, { force = false } = {}) {
+  const { reports } = gatherStores();
+  const practiceCount = countDedupedPractices(reports);
+  if (!force && practiceCount < MIN_PRACTICES_TO_UNLOCK) {
+    return { locked: true, practiceCount, needed: MIN_PRACTICES_TO_UNLOCK };
+  }
+
+  const profile = loadProfile() || {};
+  const delta = buildCurrentDelta(profile);
+
+  // Anti-bias: scrub saved-author names from the input, restore them in the
+  // output (same discipline as the coaching chat).
+  let savedSkills = [];
+  try {
+    savedSkills = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]");
+  } catch (e) {
+    /* ignore */
+  }
+  const { mapping } = anonymiseSkillsForAI(savedSkills);
+  let input = JSON.stringify({ CURRENT_PROFILE: profile, DELTA: delta });
+  for (const { writerLabel, realName } of mapping) {
+    if (realName && realName.length > 2) {
+      const safe = realName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      input = input.replace(new RegExp(safe, "gi"), writerLabel);
+    }
+  }
+
+  const route = getRouteConfig("growth_report");
+  if (trackCall) trackCall();
+  let raw = await callAI(REPORT_CARD_BRAIN, input, false, 4000, route.thinkingBudget, undefined, undefined, route.model);
+  if (raw && typeof raw === "object" && typeof raw.text === "string") raw = raw.text;
+  raw = restoreAuthorNames(raw, mapping);
+
+  let updated;
+  try {
+    updated = parseProfileJSON(raw);
+  } catch (e) {
+    return { error: "parse", raw: typeof raw === "string" ? raw.slice(0, 500) : "" };
+  }
+
+  // App-managed bookkeeping (don't trust the model for these).
+  updated.version = 1;
+  updated.createdAt = profile.createdAt || updated.createdAt || new Date().toISOString();
+  updated.lastRegenAt = new Date().toISOString();
+  updated.practicesSinceRegen = 0;
+  updated.totalPractices = practiceCount;
+  updated.history = profile.history || []; // history is app-managed, not AI-managed
+  markNewGrowthItems(profile, updated);
+  pushHistorySnapshot(updated);
+  saveProfile(updated);
+  try { localStorage.setItem("lyra-growth-pending", "0"); } catch (e) { /* silent */ }
+  return { profile: updated };
+}
+

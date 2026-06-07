@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { groupReports } from "../report-utils.js";
+import GrowthReport from "./GrowthReport.jsx";
 import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
@@ -1614,16 +1615,10 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
           </div>
         )}
 
-        {/* REPORT TAB — Lyra's continuous growth report (Stage 2, in design) */}
+        {/* REPORT TAB — Lyra's Continuous Growth Report */}
         {activeTab === "report" && (
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-            <div style={{ textAlign: "center", padding: "40px 20px" }}>
-              <FeatherIcon size={24} color={COLORS.accent2} />
-              <div style={{ fontSize: 13, color: COLORS.heading, fontWeight: 700, marginTop: 12, fontFamily: mono }}>Your growth report</div>
-              <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 8, lineHeight: 1.6, fontFamily: mono }}>
-                Lyra's continuous, honest read on how you're growing — your strengths, the mistakes you keep making, and what to work on next. Coming soon.
-              </div>
-            </div>
+            <GrowthReport trackCall={trackCall} />
           </div>
         )}
 

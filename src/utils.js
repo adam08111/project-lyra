@@ -79,6 +79,16 @@ export function anonymiseSkillsForAI(skills) {
     if (anon.when_not_to_use) {
       anon.when_not_to_use = anon.when_not_to_use.map(replaceAuthor);
     }
+    // The newer `sections` field (raw title + content per technique, added
+    // 17 May / §15.2) can carry the author's name in its prose. Scrub it too,
+    // or the real name leaks to the AI through the saved skill. (§10)
+    if (anon.sections) {
+      anon.sections = anon.sections.map(s => ({
+        ...s,
+        title: replaceAuthor(s.title),
+        content: replaceAuthor(s.content),
+      }));
+    }
 
     return anon;
   });
