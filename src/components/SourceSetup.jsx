@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { COLORS, FONTS_LINK, writingTypes, wordCounts, writingPurposes, getExamRules } from "../constants.js";
+import { COLORS, FONTS_LINK, writingTypes, wordCounts, writingPurposes, getExamRules, defaultXraySections } from "../constants.js";
 import { keyframes, sharedStyles as s } from "../styles.js";
 import { FeatherIcon } from "./Icons.jsx";
 import Sidebar from "./Sidebar.jsx";
@@ -23,7 +23,6 @@ export default function SourceSetup({
   sidebarProps, onOpenTraining,
 }) {
   const [step, setStep] = useState(1); // 1=source, 2=xray, 3=mission
-  const [sectionCount, setSectionCount] = useState(9); // how many style-profile sections to analyse (1-9)
   const [nameInput, setNameInput] = useState(userName || "");
   const [analyzing, setAnalyzing] = useState(false);
   const [profileSections, setProfileSections] = useState([]);
@@ -147,7 +146,7 @@ export default function SourceSetup({
       // Throttle parsing to every ~400ms — avoids O(n²) re-parsing on every token
       let lastParseAt = 0;
       let advancedToStep2 = false;
-      const result = await callAI(buildStyleProfilerPrompt(sectionCount), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
+      const result = await callAI(buildStyleProfilerPrompt(defaultXraySections(null)), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
         const now = Date.now();
         if (now - lastParseAt < 400) return;
         lastParseAt = now;
@@ -196,7 +195,7 @@ export default function SourceSetup({
       setError(e.message || "Analysis failed. Please try again.");
     }
     setAnalyzing(false);
-  }, [sourceText, sourceWordCount, sectionCount, trackCall, setSourceAnalysis, setExtractedSkills, setTargetVoice, setAppliedSkill, setWritingTechniques]);
+  }, [sourceText, sourceWordCount, trackCall, setSourceAnalysis, setExtractedSkills, setTargetVoice, setAppliedSkill, setWritingTechniques]);
 
   // ── Derived ──
   const typeLabel = type ? writingTypes.find(w => w.id === type)?.label : "";
@@ -207,12 +206,21 @@ export default function SourceSetup({
 
   const canStartWriting = topic.trim() && type && purpose && wordCount;
 
+  // Step back one page through the flow: mission sub-step 2→1, then mission→X-Ray
+  // (or →source if the student skipped the source), then X-Ray→source.
+  const goBack = () => {
+    if (step === 3 && missionStep === 2) { setMissionStep(1); return; }
+    if (step === 3) { setStep(profileSections.length > 0 ? 2 : 1); return; }
+    if (step === 2) { setStep(1); return; }
+  };
+  const canGoBack = step > 1 || missionStep > 1;
+
   return (
     <div style={s.app}>
       <style>{keyframes}</style>
       <link href={FONTS_LINK} rel="stylesheet" />
 
-      {/* Top bar */}
+      {/* Top bar (menu) */}
       <div style={{ padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
         <button onClick={() => sidebarProps.setSidebarOpen(true)} style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, color: COLORS.muted, position: "relative" }}>
           ☰
@@ -222,6 +230,15 @@ export default function SourceSetup({
         </button>
         <div style={{ width: 36 }} />
       </div>
+
+      {/* Back arrow — its own row beneath the menu bar */}
+      {canGoBack && (
+        <div style={{ padding: "0 18px 8px", flexShrink: 0 }}>
+          <button onClick={goBack} aria-label="Go back to the previous step" style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: COLORS.muted }}>
+            ←
+          </button>
+        </div>
+      )}
 
       {/* Progress dots */}
       <div style={{ display: "flex", justifyContent: "center", gap: 6, padding: "0 18px 12px" }}>
@@ -293,18 +310,10 @@ export default function SourceSetup({
               <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleSourcePhotoUpload} />
             </div>
 
-            {/* Section count selector (1–9) */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 8, fontFamily: mono }}>
-                How many sections to analyse? <span style={{ color: COLORS.heading, fontWeight: 700 }}>{sectionCount}</span> <span style={{ opacity: 0.6 }}>/ 9</span>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                  <button key={num} onClick={() => setSectionCount(num)} style={{ ...s.chip, minWidth: 36, textAlign: "center", padding: "8px 0", ...(sectionCount === num ? s.chipActive : {}) }}>
-                    {num}
-                  </button>
-                ))}
-              </div>
+            {/* Lyra curates the most useful lessons — frames the 2-3 section output
+                as a choice, and pre-frames the later "Analyse more" expansion. */}
+            <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, textAlign: "left", marginBottom: 16 }}>
+              Lyra will pick the {defaultXraySections(null).length} most useful lessons from this writing
             </div>
 
             {/* Analyse button */}
@@ -497,18 +506,6 @@ export default function SourceSetup({
                   </button>
                 </div>
               </>
-            )}
-
-            {/* Back to source */}
-            {step === 3 && missionStep === 1 && sourceText && (
-              <div style={{ textAlign: "center", marginTop: 16 }}>
-                <button
-                  onClick={() => setStep(profileSections.length > 0 ? 2 : 1)}
-                  style={{ background: "none", border: "none", fontFamily: mono, fontSize: 12, color: COLORS.muted, cursor: "pointer", textDecoration: "underline", opacity: 0.7 }}
-                >
-                  ← Back to source
-                </button>
-              </div>
             )}
           </div>
         )}

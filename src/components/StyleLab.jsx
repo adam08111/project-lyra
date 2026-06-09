@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { groupReports } from "../report-utils.js";
 import GrowthReport from "./GrowthReport.jsx";
-import { COLORS } from "../constants.js";
+import { COLORS, defaultXraySections } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
@@ -1110,7 +1110,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
   );
 }
 
-export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining }) {
+export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
   const [activeTab, setActiveTab] = useState("analyze");
   // Tab-history stack so the header ← steps back through the tabs the student
   // visited, and only closes Style Lab (back to the previous screen) once
@@ -1135,7 +1135,6 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     setTabHistory([]);
   }, [showStyleLab, initialTab]);
   const [referenceText, setReferenceText] = useState("");
-  const [sectionCount, setSectionCount] = useState(9); // how many style-profile sections to analyse (1-9)
   const [styleProfile, setStyleProfile] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [authorName, setAuthorName] = useState("");
@@ -1258,7 +1257,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
 
       const analysisRoute = getRouteConfig("style_analysis");
       trackCall();
-      const result = await callAI(buildStyleProfilerPrompt(sectionCount), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
+      const result = await callAI(buildStyleProfilerPrompt(defaultXraySections(writingType)), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
         // Live-update as tokens stream in
         const clean = stripLearningData(partial);
         const author = extractAuthor(clean);
@@ -1292,7 +1291,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
       setError(e.message || "Analysis failed. Please try again.");
     }
     setAnalyzing(false);
-  }, [referenceText, trackCall, sectionCount]);
+  }, [referenceText, trackCall, writingType]);
 
   const sendPractice = useCallback(async (text) => {
     if (!text.trim() || !styleProfile) return;
@@ -1407,18 +1406,10 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                     {wordCount} word{wordCount !== 1 ? "s" : ""}{wordCount < 80 ? ` (need ${80 - wordCount} more)` : " — ready"}
                   </div>
                 </div>
-                {/* Section count selector (1–9) */}
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 8, fontFamily: mono }}>
-                    How many sections to analyse? <span style={{ color: COLORS.heading, fontWeight: 700 }}>{sectionCount}</span> <span style={{ opacity: 0.6 }}>/ 9</span>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                      <button key={num} onClick={() => setSectionCount(num)} style={{ ...s.chip, minWidth: 36, textAlign: "center", padding: "8px 0", ...(sectionCount === num ? s.chipActive : {}) }}>
-                        {num}
-                      </button>
-                    ))}
-                  </div>
+                {/* Lyra curates the most useful lessons — task-matched when a
+                    writing type is active, generic otherwise. No manual count. */}
+                <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, textAlign: "left", marginBottom: 12 }}>
+                  Lyra will pick the {defaultXraySections(writingType).length} most useful lessons from this writing
                 </div>
 
                 <button

@@ -304,6 +304,7 @@ export default function Lyra() {
     if (activeWritingId === writingId) setActiveWritingId(null);
   }, [activeWritingId]);
 
+  const [homeKey, setHomeKey] = useState(0);
   const resetToNew = useCallback(() => {
     setSidebarOpen(false);
     setScreen("source-setup");
@@ -328,6 +329,10 @@ export default function Lyra() {
     setApiCalls(0);
     apiCallRef.current = 0;
     setActiveWritingId(null);
+    // Remount SourceSetup so its internal step resets to 1. Otherwise, when we're
+    // already on the source-setup screen, setScreen is a no-op and "+ New Writing"
+    // (and the Lyra logo) would clear the fields but leave you on the same sub-step.
+    setHomeKey(k => k + 1);
   }, []);
 
   const startEditingTitle = useCallback(() => {
@@ -738,6 +743,7 @@ Rules:
     editingProjectName, setEditingProjectName, createProject, renameProject,
     deleteProject, moveWriting, deleteWriting, loadWriting,
     onNewWriting: resetToNew, grammarLog, setShowStyleLab,
+    onHome: resetToNew,
   };
 
   // === SOURCE SETUP SCREEN (new unified flow) ===
@@ -746,6 +752,7 @@ Rules:
     return (
       <>
         <SourceSetup
+          key={homeKey}
           userName={userName} setUserName={setUserName}
           topic={topic} setTopic={setTopic}
           type={type} setType={setType}
@@ -762,7 +769,7 @@ Rules:
           sidebarProps={sidebarProps}
           onOpenTraining={openTrainingSession}
         />
-        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
+        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
         {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
       </>
     );
@@ -784,7 +791,7 @@ Rules:
           onStart={() => { const autoTitle = generateTitle(topic, type); setTitle(autoTitle); setScreen("app"); setTimeout(() => saveNewWriting("default", autoTitle), 500); }}
           sidebarProps={sidebarProps}
         />
-        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
+        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
         {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
       </>
     );
@@ -907,7 +914,7 @@ Rules:
       />
 
       {/* Style Lab Overlay */}
-      <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} />
+      <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
 
       {/* Training Session Overlay */}
       {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
