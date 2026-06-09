@@ -8,7 +8,7 @@ export default function Sidebar({
   expandedProjects, setExpandedProjects, editingProjectId, setEditingProjectId,
   editingProjectName, setEditingProjectName, createProject, renameProject,
   deleteProject, moveWriting, deleteWriting, loadWriting, onNewWriting, grammarLog,
-  setShowStyleLab,
+  setShowStyleLab, onHome,
 }) {
   const [search, setSearch] = useState("");
 
@@ -32,10 +32,10 @@ export default function Sidebar({
       <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: "82%", maxWidth: 340, background: COLORS.bg1, zIndex: 70, display: "flex", flexDirection: "column", boxShadow: "4px 0 24px rgba(0,0,0,0.1)", animation: "slideLeft 0.25s ease" }}>
         <div style={{ padding: "18px 18px 14px", borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <button onClick={onHome} aria-label="Go to the home page" title="Home" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "none", border: "none", padding: 0, cursor: "pointer" }}>
               <div style={{ position: "relative", top: -2 }}><FeatherIcon size={22} /></div>
               <span style={{ fontFamily: "'Special Elite', cursive", fontSize: 18, color: COLORS.heading, lineHeight: 1 }}>Lyra</span>
-            </div>
+            </button>
             <button onClick={() => setSidebarOpen(false)} style={{ width: 30, height: 30, borderRadius: 15, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, color: COLORS.muted }}>×</button>
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
