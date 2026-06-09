@@ -1368,6 +1368,10 @@ export function saveStyleSkill(authorName, profileSections, sourceText) {
       // via SectionCard later — gives the same rich X-Ray-style detail view as the
       // post-analysis page.
       sections: validSections.map(s => ({ title: s.title, content: s.content })),
+      // Canonical sections this analysis actually covered (by emitted header) — the
+      // authoritative basis for what "Analyse more" still has to fetch, robust even
+      // if a section came back with thin/empty content (so the button can't loop).
+      coveredSections: XRAY_ALL_SECTIONS.filter(name => profileSections.some(s => s.title === name)),
       // The analysed passage, kept so "Analyse more of this writer" can re-run the
       // missing sections later. Legacy skills lack this and just hide the button.
       sourceText: sourceText || "",
@@ -1428,8 +1432,13 @@ function presentTitles(skill) {
 
 // Canonical sections not yet covered by this skill (empty ⇒ fully analysed).
 export function remainingSections(skill) {
-  const present = presentTitles(skill);
-  return XRAY_ALL_SECTIONS.filter(name => !present.has(normTitle(name)));
+  // Prefer the explicit coveredSections ledger (recorded by emitted header, so a
+  // thin WHEN/SIGNATURE re-emit still counts as done). Fall back to deriving
+  // presence from content for older records that predate the ledger.
+  const covered = Array.isArray(skill?.coveredSections) && skill.coveredSections.length
+    ? new Set(skill.coveredSections)
+    : presentTitles(skill);
+  return XRAY_ALL_SECTIONS.filter(name => !covered.has(name));
 }
 
 // Merge freshly analysed sections into a saved skill WITHOUT duplicating any
@@ -1459,6 +1468,11 @@ export function mergeNewSectionsIntoSkill(skill, newSections) {
       have.add(nt);
     }
   }
+  // Extend the covered-sections ledger by every canonical header the model
+  // returned — even a thin WHEN/SIGNATURE one — so remaining can reach empty and
+  // the button stops offering an endless empty re-run.
+  const coveredBefore = new Set(Array.isArray(skill.coveredSections) ? skill.coveredSections : [...presentTitles(skill)]);
+  merged.coveredSections = XRAY_ALL_SECTIONS.filter(name => coveredBefore.has(name) || (newSections || []).some(s => s.title === name));
   merged.techniques = merged.analysedTechniques.map(t => t.technique);
   return merged;
 }
@@ -1664,11 +1678,14 @@ export default function XRayView({ profileSections, authorName, referenceText, s
             trackCall={trackCall}
             onMerged={(merged, added) => {
               setSavedSkill(merged);
-              // Only display sections not already on screen (the saved skill is
-              // already deduped; this guards the view if the model re-emits one).
+              // Append only technique sections not already on screen. WHEN TO USE /
+              // SIGNATURE STYLE have no card in this view (they persist to the skill
+              // and show in the Skills tab), so excluding them keeps the header
+              // count matching the visible cards. The dedupe guards a re-emit.
               setExtraSections(prev => {
-                const have = new Set([...profileSections, ...prev].map(s => (s.title || "").toUpperCase().replace(/\s+/g, " ").trim()));
-                return [...prev, ...(added || []).filter(s => s.title && !have.has(s.title.toUpperCase().replace(/\s+/g, " ").trim()))];
+                const have = new Set([...profileSections, ...prev].map(s => normTitle(s.title)));
+                const isFreshCard = (s) => { const t = normTitle(s.title); return t !== "WHEN TO USE THIS STYLE" && t !== "SIGNATURE STYLE" && !have.has(t); };
+                return [...prev, ...(added || []).filter(s => s.title && isFreshCard(s))];
               });
             }}
           />

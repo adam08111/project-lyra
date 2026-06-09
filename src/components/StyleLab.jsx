@@ -1212,7 +1212,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
   // Re-save the analysed skill (recovery path after a manual remove).
   // saveStyleSkill dedupes by authorName, so this never creates a duplicate.
   const handleAddToSkills = () => {
-    const saved = saveStyleSkill(authorName, profileSections);
+    const saved = saveStyleSkill(authorName, profileSections, referenceText);
     if (saved) {
       setSkillInStore(true);
       setSkillCount(JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);

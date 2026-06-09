@@ -75,3 +75,34 @@ describe("mergeNewSectionsIntoSkill — append without duplicates", () => {
     expect(skill.analysedTechniques).toHaveLength(0);
   });
 });
+
+describe("coveredSections ledger — 'Analyse more' always terminates", () => {
+  it("records every returned header as covered — even thin WHEN/SIGNATURE — so remaining empties", () => {
+    const skill = {
+      sections: ["SENTENCE PATTERNS", "WORD CHOICES", "COMPARING AND DESCRIBING"].map(title => ({ title, content: "KEY IDEA: x" })),
+      analysedTechniques: [{ technique: "x" }, { technique: "y" }, { technique: "z" }],
+      coveredSections: ["SENTENCE PATTERNS", "WORD CHOICES", "COMPARING AND DESCRIBING"],
+      whenToUse: { keyIdea: "", bullets: [] },
+      signatureStyle: "",
+    };
+    // The remaining 4 techniques + WHEN/SIGNATURE, where WHEN/SIGNATURE come back
+    // with NO parseable content (header only) — the exact non-termination edge.
+    const newSections = [
+      { title: "HOW IDEAS ARE CONNECTED", content: "KEY IDEA: a" },
+      { title: "GRAMMAR TRICKS", content: "KEY IDEA: b" },
+      { title: "HOW THE WRITER PERSUADES", content: "KEY IDEA: c" },
+      { title: "FEELING AND PERSONALITY", content: "KEY IDEA: d" },
+      { title: "WHEN TO USE THIS STYLE", content: "" },
+      { title: "SIGNATURE STYLE", content: "" },
+    ];
+    const merged = mergeNewSectionsIntoSkill(skill, newSections);
+    expect(merged.whenToUse.keyIdea).toBe(""); // content genuinely stayed empty
+    expect(merged.signatureStyle).toBe("");
+    expect(remainingSections(merged)).toEqual([]); // …but the button still hides
+  });
+
+  it("remainingSections trusts the ledger over thin content", () => {
+    const skill = { coveredSections: [...XRAY_ALL_SECTIONS], sections: [], whenToUse: { keyIdea: "", bullets: [] }, signatureStyle: "" };
+    expect(remainingSections(skill)).toEqual([]);
+  });
+});
