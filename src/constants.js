@@ -18,6 +18,28 @@ export const writingTypes = [
   { id: "persuasive", label: "Persuasive Writing", icon: "speech" },
 ];
 
+// Task-matched default X-Ray section sets. The student no longer picks a section
+// count; Lyra analyses 2-3 sections chosen to fit the writing type, and the rest
+// arrive later via "Analyse more of this writer". Names must match prompts.js
+// XRAY_ALL_SECTIONS exactly. WHEN TO USE THIS STYLE / SIGNATURE STYLE are NEVER in
+// a default set — they only arrive via "Analyse more".
+export const XRAY_SECTION_DEFAULTS = {
+  essay:      ["HOW THE WRITER PERSUADES", "SENTENCE PATTERNS", "WORD CHOICES"],
+  persuasive: ["HOW THE WRITER PERSUADES", "FEELING AND PERSONALITY", "SENTENCE PATTERNS"],
+  story:      ["COMPARING AND DESCRIBING", "FEELING AND PERSONALITY", "SENTENCE PATTERNS"],
+  complaint:  ["WORD CHOICES", "HOW IDEAS ARE CONNECTED", "FEELING AND PERSONALITY"],
+  email:      ["WORD CHOICES", "HOW IDEAS ARE CONNECTED", "FEELING AND PERSONALITY"],
+  report:     ["HOW IDEAS ARE CONNECTED", "WORD CHOICES", "SENTENCE PATTERNS"],
+  _default:   ["SENTENCE PATTERNS", "WORD CHOICES", "COMPARING AND DESCRIBING"],
+};
+
+// The default section set for a writing-type id (e.g. "essay"), or the generic
+// _default set when the type is unknown/absent (e.g. the Source step, where the
+// writing type isn't chosen yet).
+export function defaultXraySections(typeId) {
+  return XRAY_SECTION_DEFAULTS[typeId] || XRAY_SECTION_DEFAULTS._default;
+}
+
 export const wordCounts = [50, 100, 150, 200, 300, 400, 500, "600+"];
 
 // ── NEW: Writing purpose / exam context ──

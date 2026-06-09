@@ -227,13 +227,28 @@ CRITICAL:
 - Vocabulary synonyms MUST match what the student meant in context. Do not suggest a word that shifts the meaning even slightly.${activeSkillCtx ? `\n- Do NOT flag or suggest replacing vocabulary or phrasing that aligns with the deployed skill. The student is intentionally using that style.` : ""}`;
 }
 
-export function buildStyleProfilerPrompt(sectionCount = 9) {
-  const n = Math.max(1, Math.min(9, Math.round(Number(sectionCount)) || 9));
-  const SECTION_NAMES = ["COMPARING AND DESCRIBING", "SENTENCE PATTERNS", "HOW IDEAS ARE CONNECTED", "WORD CHOICES", "GRAMMAR TRICKS", "HOW THE WRITER PERSUADES", "FEELING AND PERSONALITY", "WHEN TO USE THIS STYLE", "SIGNATURE STYLE"];
-  const sectionList = SECTION_NAMES.slice(0, n).map((name, i) => `${i + 1}) ${name}`).join(", ");
+// Canonical master list of every X-Ray style section, in the exact order the
+// profiler emits them. Exported so the parser, the task-default map, and the
+// "Analyse more" expansion all share ONE source of truth instead of each
+// re-hardcoding the names. Indices 0-6 are the seven "technique" sections; the
+// last two (WHEN TO USE THIS STYLE, SIGNATURE STYLE) have their own formats.
+export const XRAY_ALL_SECTIONS = ["COMPARING AND DESCRIBING", "SENTENCE PATTERNS", "HOW IDEAS ARE CONNECTED", "WORD CHOICES", "GRAMMAR TRICKS", "HOW THE WRITER PERSUADES", "FEELING AND PERSONALITY", "WHEN TO USE THIS STYLE", "SIGNATURE STYLE"];
+
+// Safety-net set used only when a caller passes nothing valid. Mirrors
+// constants.js XRAY_SECTION_DEFAULTS._default.
+const XRAY_GENERIC_DEFAULT = ["SENTENCE PATTERNS", "WORD CHOICES", "COMPARING AND DESCRIBING"];
+
+export function buildStyleProfilerPrompt(sectionNames) {
+  // Keep only canonical names, re-ordered into canonical order so the output
+  // order stays stable for the parser no matter how the caller listed them.
+  // Empty/invalid input falls back to the generic default set.
+  const requested = (Array.isArray(sectionNames) ? sectionNames : []).map(r => String(r).trim().toUpperCase());
+  let chosen = XRAY_ALL_SECTIONS.filter(name => requested.includes(name));
+  if (chosen.length === 0) chosen = XRAY_ALL_SECTIONS.filter(name => XRAY_GENERIC_DEFAULT.includes(name));
+  const sectionList = chosen.map((name, i) => `${i + 1}) ${name}`).join(", ");
   return LYRA_BRAIN + `\n\nYou are a friendly writing teacher helping English learners understand how great writers write. Analyse a piece of writing and explain its style in SIMPLE, CLEAR language.
 
-SECTION COUNT — CRITICAL: Produce ONLY the FIRST ${n} of the 9 sections, in this exact order, then STOP — ${sectionList}. Begin with the AUTHOR: line, then output sections 1 through ${n} ONLY. Do NOT output any section numbered higher than ${n}; omit them entirely.
+SECTION COUNT — CRITICAL: Produce ONLY these sections, in this exact order, then STOP: ${sectionList}. Begin with the AUTHOR: line, then output ONLY the sections listed above, in that order. Omit every other section entirely — do not output any section that is not in this list.
 
 IMPORTANT: The student is learning English. Avoid grammar jargon. Use everyday words. When you must use a writing term, explain it in brackets: "metaphor (comparing two things without using 'like' or 'as')".
 
@@ -277,7 +292,7 @@ EVERY sentence in the text uses at least one of these. Your job is to find the m
 STEP 2 — STYLE BREAKDOWN:
 CRITICAL ORDERING RULE: Work through the original text from the FIRST word to the LAST word. The FIRST technique section quotes from the BEGINNING of the text; each later technique section quotes from AFTER the previous one's quote; the LAST technique section you produce quotes from near the END. NEVER go backwards — every section's quote must come from LATER in the text than the previous section's quote.
 
-Cover ONLY the first ${n} sections (per the SECTION COUNT rule above), in order. The technique sections (1-7) follow this EXACT structure:
+Cover ONLY the sections listed in the SECTION COUNT rule above, in that order. The technique sections (1-7) follow this EXACT structure:
 
 SHORT TITLE: [2-4 plain everyday English words — a punchy skill-name label a 14-year-old would say aloud. Good examples: "Start With A Shock", "Fake Illness Excuse", "Concession Then Punch", "Weapon Excuse", "Sound Of A Fall". BANNED jargon: "rhetorical interrogation", "negative definition", "concessive antithesis", "syntactic inversion", "tricolon", "anaphora", "appositive". If you find yourself reaching for a grammar term, replace it with the everyday word a friend would use. Keep it under 28 characters. Title Case.]
 

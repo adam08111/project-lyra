@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCoachPrompt, buildStructuralPrompt, buildProofreadPrompt, buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingHintPrompt } from "../src/prompts.js";
+import { buildCoachPrompt, buildStructuralPrompt, buildProofreadPrompt, buildTrainingExercisesPrompt, buildTrainingEvalPrompt, buildTrainingHintPrompt, buildStyleProfilerPrompt, XRAY_ALL_SECTIONS } from "../src/prompts.js";
 
 describe("buildCoachPrompt", () => {
   it("includes topic, type, and word count", () => {
@@ -261,5 +261,44 @@ describe("exam rules integration", () => {
     const structural = buildStructuralPrompt("test", "Essay");
     expect(coach).not.toContain("You MUST follow these exam rules in ALL coaching advice");
     expect(structural).not.toContain("EXAM RULES — OVERRIDE ALL SUGGESTIONS");
+  });
+});
+
+describe("buildStyleProfilerPrompt — name-based section selection", () => {
+  // The single SECTION COUNT line carries the chosen-section list; assert against
+  // it specifically, since the format TEMPLATE below still names all 9 sections.
+  const sectionLine = (p) => (p.match(/SECTION COUNT — CRITICAL:[^\n]*/) || [""])[0];
+
+  it("emits exactly the requested sections, numbered, in canonical order", () => {
+    // Caller lists WORD CHOICES first, but canonical order is SENTENCE(2) < WORD(4).
+    const line = sectionLine(buildStyleProfilerPrompt(["WORD CHOICES", "SENTENCE PATTERNS"]));
+    expect(line).toContain("1) SENTENCE PATTERNS");
+    expect(line).toContain("2) WORD CHOICES");
+    expect(line).not.toContain("COMPARING AND DESCRIBING");
+    expect(line).toContain("Omit every other section");
+  });
+
+  it("is case- and whitespace-insensitive on the input names", () => {
+    const line = sectionLine(buildStyleProfilerPrompt([" word choices ", "grammar tricks"]));
+    expect(line).toContain("WORD CHOICES");
+    expect(line).toContain("GRAMMAR TRICKS");
+  });
+
+  it("filters unknown names and falls back to the generic default when empty", () => {
+    const line = sectionLine(buildStyleProfilerPrompt(["NONSENSE", "NOT A SECTION"]));
+    expect(line).toContain("SENTENCE PATTERNS");
+    expect(line).toContain("WORD CHOICES");
+    expect(line).toContain("COMPARING AND DESCRIBING");
+  });
+
+  it("still returns a LYRA_BRAIN-anchored prompt when called with no args", () => {
+    expect(buildStyleProfilerPrompt()).toContain("4-STEP COACHING PROTOCOL");
+  });
+
+  it("XRAY_ALL_SECTIONS is the 9 canonical sections in order", () => {
+    expect(XRAY_ALL_SECTIONS).toHaveLength(9);
+    expect(XRAY_ALL_SECTIONS[0]).toBe("COMPARING AND DESCRIBING");
+    expect(XRAY_ALL_SECTIONS[8]).toBe("SIGNATURE STYLE");
+    expect(XRAY_ALL_SECTIONS).toContain("WHEN TO USE THIS STYLE");
   });
 });

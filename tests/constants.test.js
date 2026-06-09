@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { COLORS, writingTypes, wordCounts, placeholders, writingPurposes, EXAM_CONVENTIONS, getExamRules } from "../src/constants.js";
+import { COLORS, writingTypes, wordCounts, placeholders, writingPurposes, EXAM_CONVENTIONS, getExamRules, XRAY_SECTION_DEFAULTS, defaultXraySections } from "../src/constants.js";
+import { XRAY_ALL_SECTIONS } from "../src/prompts.js";
 
 describe("COLORS", () => {
   it("has all required color keys", () => {
@@ -141,5 +142,38 @@ describe("getExamRules", () => {
   it("returns empty string for personal with no type-specific rules", () => {
     const rules = getExamRules("personal", "essay");
     expect(rules).toContain("Personal Writing");
+  });
+});
+
+describe("defaultXraySections — task-matched X-Ray section sets", () => {
+  it("returns the essay set for the essay writing type", () => {
+    expect(defaultXraySections("essay")).toEqual(["HOW THE WRITER PERSUADES", "SENTENCE PATTERNS", "WORD CHOICES"]);
+  });
+
+  it("falls back to _default for an unknown or null/undefined type", () => {
+    expect(defaultXraySections("nope")).toEqual(XRAY_SECTION_DEFAULTS._default);
+    expect(defaultXraySections(null)).toEqual(XRAY_SECTION_DEFAULTS._default);
+    expect(defaultXraySections(undefined)).toEqual(XRAY_SECTION_DEFAULTS._default);
+  });
+
+  it("has a default set for every writing type id", () => {
+    for (const wt of writingTypes) {
+      expect(XRAY_SECTION_DEFAULTS).toHaveProperty(wt.id);
+    }
+  });
+
+  it("every default set is 3 canonical section names", () => {
+    for (const key of Object.keys(XRAY_SECTION_DEFAULTS)) {
+      const set = XRAY_SECTION_DEFAULTS[key];
+      expect(set).toHaveLength(3);
+      set.forEach(name => expect(XRAY_ALL_SECTIONS).toContain(name));
+    }
+  });
+
+  it("never includes WHEN TO USE / SIGNATURE STYLE in any default set", () => {
+    for (const key of Object.keys(XRAY_SECTION_DEFAULTS)) {
+      expect(XRAY_SECTION_DEFAULTS[key]).not.toContain("WHEN TO USE THIS STYLE");
+      expect(XRAY_SECTION_DEFAULTS[key]).not.toContain("SIGNATURE STYLE");
+    }
   });
 });
