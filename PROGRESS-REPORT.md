@@ -1210,3 +1210,31 @@ When either holds, `effectiveRegenThreshold()` drops the auto-regen bar from `RE
 ### 21.5 Still open (unchanged from §20.4)
 Cross-regen continuity over many real regens; dual-audience `bandEstimate` rendering + teacher dashboard; first report still needs 3 deduped practices to unlock.
 
+---
+
+## 22. UPDATE — 9 June 2026 — X-Ray section trim: 2-3 curated sections + lazy "Analyse more" (branch `claude/vigorous-zhukovsky-413664`)
+
+The Style Lab X-Ray produced 9 sections by default (~3-4k words of meta-text before a 14-year-old writes anything), gated behind a 1-9 numeric selector that asked for a decision the student couldn't evaluate. This replaces the selector with task-matched curation (2-3 sections) and a lazy, informed expansion. Built in units, each committed and green.
+
+### 22.1 Name-based section selection (`buildStyleProfilerPrompt`)
+The profiler now takes an array of canonical section **names** instead of a count: it filters to known names, re-orders them into canonical order (so output order stays stable for the header-keyed parser regardless of caller order), and falls back to a generic default when given nothing valid. The 9-section format **template is unchanged** (it's the reference); only the SECTION COUNT instruction was rewritten to "produce ONLY these … omit the rest". The master list is exported as `XRAY_ALL_SECTIONS` so the parser, the task map, and the expansion all share one source of truth. (Commit `4b5eb62`.)
+
+### 22.2 Task-matched defaults + selector removal
+`constants.js` gained `XRAY_SECTION_DEFAULTS` (per writing-type 2-3 section sets + a generic `_default`) and `defaultXraySections(typeId)`. `WHEN TO USE THIS STYLE` / `SIGNATURE STYLE` are never in a default set. Both numeric selectors (SourceSetup Source step + StyleLab Analyse tab) and their `sectionCount` state are gone; SourceSetup uses `_default` (the writing type isn't chosen yet on the Source step — the flow was deliberately **not** reordered to read it), StyleLab uses the task set with `writingType` plumbed from lyra.jsx. The selector slot now holds one muted caption — "Lyra will pick the {n} most useful lessons from this writing", `{n}` derived from the set length so it can't drift — framing the output as curation. Removing the chips also dropped the §18.7 border-shorthand React warning. (Commit `29955c1`.)
+
+### 22.3 Lazy "Analyse more of this writer"
+`saveStyleSkill` now persists the analysed `sourceText` on the skill (legacy records lack it and hide the button). A pure expansion engine in `XRayView.jsx`: `remainingSections(skill)` (canonical sections not yet covered), `mergeNewSectionsIntoSkill` (append-without-duplicate by normalized title, immutable, identity preserved), and `analyseMoreOfWriter` (ONE `style_analysis` call for just the missing sections on the cached source → merge → persist in place by author). An ✦ "Analyse more of this writer" button (`AnalyseMoreButton`, self-hiding when nothing remains or there's no cached source) appears in the post-analysis X-Ray footer (SourceSetup) and in `SavedSkillDetail` (Skills tab). `parseProfileSections` keys purely on the exported `XRAY_ALL_SECTIONS` headers and already handles arbitrary subsets, so a partial re-analysis merges cleanly. (Commit `3fd8c4a`.)
+
+### 22.4 Verification
+- **138 unit tests pass** (was 120 pre-feature): name selection + canonical re-ordering + fallback; the task map + no-WHEN/SIGNATURE-in-defaults rule; remaining-set incl. the empty case; merge dedupe (overlap ignored, case/space-insensitive, identity preserved, no mutation); and the coveredSections termination case (§22.5). Production build clean.
+- **Live end-to-end (real Pro-tier calls, a public-domain Austen passage):** X-Ray produced exactly **3** generic-default sections, auto-advanced, auto-saved the skill **with sourceText** (whenToUse/signature empty as expected). "Analyse more" merged the remaining **6** (→ all 7 technique sections + WHEN TO USE + SIGNATURE), **no duplicates**, and the button **self-hid** when complete. `GRAMMAR TRICKS` / `WHEN TO USE` / `SIGNATURE` are reachable only via expansion; translation still works on the skill. Caption renders in the old selector slot with intentional spacing.
+
+### 22.5 Adversarial review + fixes (commit `b3d827f`)
+A review workflow (4 dimensions → per-finding adversarial verification, 16 findings rejected) surfaced three real issues, all fixed:
+- **(major)** the "Add to Skills" recovery path re-saved the skill **without** `sourceText`, permanently disabling expansion for a removed-then-re-added skill — it now passes `referenceText` (the only call site of three that dropped it).
+- **(cosmetic)** the X-Ray footer counted WHEN/SIGNATURE in the header but rendered no card for them ("9 analysed" / 7 cards) — the footer now appends only technique sections to the display (WHEN/SIGNATURE still persist + show in the Skills tab).
+- **(robustness)** a WHEN/SIGNATURE section the model re-emitted with empty content was treated as still-missing, so the button could re-run forever — skills now carry a `coveredSections` ledger recorded by emitted header, which `remainingSections` trusts (content fallback only for pre-ledger records), so expansion always terminates.
+
+### 22.6 Notes / out of scope (unchanged)
+With fewer techniques per skill, `applySkillWithEnrichment`'s PEEL coverage check triggers web-search enrichment more often — expected, not a bug. Not built (deferred by spec): teacher-dashboard depth setting; task-specific top-up after the Mission step picks a type.
+
