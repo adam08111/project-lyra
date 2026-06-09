@@ -177,7 +177,7 @@ export default function SourceSetup({
           setProfileSections([{ title: "STYLE ANALYSIS", content: clean }]);
         } else {
           setProfileSections(sections);
-          const savedSkill = saveStyleSkill(author, sections);
+          const savedSkill = saveStyleSkill(author, sections, sourceText);
           setSkillSaved(savedSkill ? "saved" : "too-short");
           // Extract skills for the new flow
           if (savedSkill) {

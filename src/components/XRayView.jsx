@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { COLORS } from "../constants.js";
 import { FeatherIcon } from "./Icons.jsx";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { translatePrompt } from "../prompts.js";
+import { translatePrompt, buildStyleProfilerPrompt, XRAY_ALL_SECTIONS } from "../prompts.js";
+import { stripLearningData } from "../learning-sync.js";
 
 // ── Shared font ──
 export const mono = "'Courier Prime', 'Courier New', monospace";
@@ -18,7 +19,7 @@ export function parseProfileSections(text) {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    const sectionHeaders = ["COMPARING AND DESCRIBING", "SENTENCE PATTERNS", "HOW IDEAS ARE CONNECTED", "WORD CHOICES", "GRAMMAR TRICKS", "HOW THE WRITER PERSUADES", "FEELING AND PERSONALITY", "WHEN TO USE THIS STYLE", "SIGNATURE STYLE"];
+    const sectionHeaders = XRAY_ALL_SECTIONS;
     const isHeader = sectionHeaders.some(h => trimmed === h);
     const isAuthor = trimmed.startsWith("AUTHOR:");
 
@@ -1313,7 +1314,7 @@ export function extractAuthor(text) {
   return match ? match[1].trim() : "Unknown Author";
 }
 
-export function saveStyleSkill(authorName, profileSections) {
+export function saveStyleSkill(authorName, profileSections, sourceText) {
   try {
     // All 7 technique sections (sections 1-7 in the styleProfilerPrompt).
     // Previously this list missed WORD CHOICES and FEELING AND PERSONALITY,
@@ -1367,6 +1368,9 @@ export function saveStyleSkill(authorName, profileSections) {
       // via SectionCard later — gives the same rich X-Ray-style detail view as the
       // post-analysis page.
       sections: validSections.map(s => ({ title: s.title, content: s.content })),
+      // The analysed passage, kept so "Analyse more of this writer" can re-run the
+      // missing sections later. Legacy skills lack this and just hide the button.
+      sourceText: sourceText || "",
       savedAt: new Date().toISOString(),
     };
 
@@ -1378,6 +1382,145 @@ export function saveStyleSkill(authorName, profileSections) {
   } catch (e) { return null; }
 }
 
+// ── Lazy "Analyse more of this writer" expansion ──
+
+// The 7 "technique" sections — every canonical section except the two with
+// special formats. Derived from the master list so there's one source of truth.
+const XRAY_TECHNIQUE_SECTIONS = XRAY_ALL_SECTIONS.filter(
+  n => n !== "WHEN TO USE THIS STYLE" && n !== "SIGNATURE STYLE"
+);
+const normTitle = (t) => (t || "").toUpperCase().replace(/\s+/g, " ").trim();
+
+// Build one analysedTechnique record from a raw technique section (mirrors the
+// inline build in saveStyleSkill, reused by the merge path).
+function buildAnalysedTechnique(section) {
+  const parts = parseSectionContent(section.content);
+  const keyIdea = parts.keyIdea || section.title;
+  return {
+    title: parts.shortTitle || deriveShortTitle(keyIdea),
+    technique: keyIdea,
+    description: trimToSentence(parts.body || "", 350),
+    structure: parts.structure || "",
+    example: trimToSentence((parts.example || "").replace(/^["“]|["”]$/g, ""), 250),
+  };
+}
+
+// Extract the {keyIdea, bullets} "when to use" record from a WHEN TO USE section.
+function buildWhenToUse(whenSection) {
+  if (!whenSection) return { keyIdea: "", bullets: [] };
+  const whenParts = parseSectionContent(whenSection.content);
+  const rawBullets = ((whenSection.content || "").split(/NOT\s+SUITABLE\s+FOR/i)[0].match(/•[^•]+/g) || [])
+    .map(b => b.replace(/^•\s*/, "").trim())
+    .filter(b => b && !b.startsWith("KEY IDEA"));
+  return { keyIdea: whenParts.keyIdea || "", bullets: [...new Set(rawBullets)].slice(0, 4) };
+}
+
+// Canonical titles a saved skill already covers: its technique sections, plus
+// WHEN TO USE / SIGNATURE STYLE when those fields are populated (they live
+// outside `sections`). Drives the remaining-set and the "hide when done" rule.
+function presentTitles(skill) {
+  const titles = new Set((skill?.sections || []).map(s => normTitle(s.title)));
+  const w = skill?.whenToUse;
+  if (w && (w.keyIdea || (Array.isArray(w.bullets) && w.bullets.length))) titles.add(normTitle("WHEN TO USE THIS STYLE"));
+  if (skill?.signatureStyle) titles.add(normTitle("SIGNATURE STYLE"));
+  return titles;
+}
+
+// Canonical sections not yet covered by this skill (empty ⇒ fully analysed).
+export function remainingSections(skill) {
+  const present = presentTitles(skill);
+  return XRAY_ALL_SECTIONS.filter(name => !present.has(normTitle(name)));
+}
+
+// Merge freshly analysed sections into a saved skill WITHOUT duplicating any
+// section already present (dedupe by normalized canonical title). Pure: returns
+// a new skill object, does not persist.
+export function mergeNewSectionsIntoSkill(skill, newSections) {
+  const merged = {
+    ...skill,
+    sections: [...(skill.sections || [])],
+    analysedTechniques: [...(skill.analysedTechniques || [])],
+  };
+  const have = new Set(merged.sections.map(s => normTitle(s.title)));
+  for (const sec of newSections || []) {
+    if (!sec || !sec.title) continue;
+    const nt = normTitle(sec.title);
+    if (nt === normTitle("WHEN TO USE THIS STYLE")) {
+      if (!merged.whenToUse || (!merged.whenToUse.keyIdea && !(merged.whenToUse.bullets || []).length)) merged.whenToUse = buildWhenToUse(sec);
+      continue;
+    }
+    if (nt === normTitle("SIGNATURE STYLE")) {
+      if (!merged.signatureStyle) merged.signatureStyle = parseSectionContent(sec.content).keyIdea || "";
+      continue;
+    }
+    if (XRAY_TECHNIQUE_SECTIONS.some(t => normTitle(t) === nt) && !have.has(nt)) {
+      merged.sections.push({ title: sec.title, content: sec.content });
+      merged.analysedTechniques.push(buildAnalysedTechnique(sec));
+      have.add(nt);
+    }
+  }
+  merged.techniques = merged.analysedTechniques.map(t => t.technique);
+  return merged;
+}
+
+// Overwrite the saved skill in place (by author) so its list position is kept.
+function writeSkill(skill) {
+  try {
+    const all = JSON.parse(localStorage.getItem("lyra-style-skills") || "[]");
+    const idx = all.findIndex(s => s.authorName === skill.authorName);
+    if (idx >= 0) all[idx] = skill; else all.push(skill);
+    localStorage.setItem("lyra-style-skills", JSON.stringify(all));
+  } catch (e) { /* silent */ }
+}
+
+export function loadSavedSkill(authorName) {
+  try {
+    return (JSON.parse(localStorage.getItem("lyra-style-skills") || "[]")).find(s => s.authorName === authorName) || null;
+  } catch (e) { return null; }
+}
+
+// Run ONE style_analysis call for just the missing sections on the skill's cached
+// source text, merge them in, persist. Returns { merged, added }.
+export async function analyseMoreOfWriter(skill, { trackCall } = {}) {
+  const remaining = remainingSections(skill);
+  const src = skill?.sourceText;
+  if (!remaining.length || !src) return { merged: skill, added: [] };
+  if (trackCall) trackCall();
+  const route = getRouteConfig("style_analysis");
+  let raw = await callAI(buildStyleProfilerPrompt(remaining), src, false, 10000, route.thinkingBudget, undefined, undefined, route.model);
+  if (raw && typeof raw === "object" && typeof raw.text === "string") raw = raw.text;
+  const newSections = parseProfileSections(stripLearningData(raw || ""));
+  const merged = mergeNewSectionsIntoSkill(skill, newSections);
+  writeSkill(merged);
+  return { merged, added: newSections };
+}
+
+// Button that expands a saved skill with its missing sections. Self-hides when
+// the skill is fully analysed or has no cached source text (legacy records).
+export function AnalyseMoreButton({ skill, trackCall, onMerged, style }) {
+  const [busy, setBusy] = useState(false);
+  const remaining = skill ? remainingSections(skill) : [];
+  if (!skill || !skill.sourceText || remaining.length === 0) return null;
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { merged, added } = await analyseMoreOfWriter(skill, { trackCall });
+      if (onMerged) onMerged(merged, added);
+    } catch (e) { /* silent */ }
+    setBusy(false);
+  };
+  return (
+    <button
+      onClick={run}
+      disabled={busy}
+      style={{ fontSize: 12, fontFamily: mono, padding: "8px 16px", borderRadius: 10, border: `1.5px solid ${COLORS.accent1}`, background: "transparent", color: busy ? COLORS.muted : COLORS.heading, cursor: busy ? "default" : "pointer", fontWeight: 700, letterSpacing: 0.3, ...style }}
+    >
+      {busy ? "Analysing more…" : "✦ Analyse more of this writer"}
+    </button>
+  );
+}
+
 // ── XRayView default export ──
 // Presentational component displaying X-Ray analysis results.
 // No API calls — pure rendering of profileSections.
@@ -1386,6 +1529,13 @@ export default function XRayView({ profileSections, authorName, referenceText, s
   const [translation, setTranslation] = useState("");
   const [showTranslation, setShowTranslation] = useState(false);
   const [translating, setTranslating] = useState(false);
+  // The auto-saved skill for this analysis (drives "Analyse more"), plus the
+  // sections merged in by expanding it — shown alongside the original ones.
+  const [savedSkill, setSavedSkill] = useState(null);
+  const [extraSections, setExtraSections] = useState([]);
+  useEffect(() => {
+    setSavedSkill(skillSaved === "saved" && authorName ? loadSavedSkill(authorName) : null);
+  }, [skillSaved, authorName]);
 
   const handleTranslate = async () => {
     if (!referenceText || translating) return;
@@ -1428,6 +1578,8 @@ export default function XRayView({ profileSections, authorName, referenceText, s
 
   if (!profileSections || profileSections.length === 0) return null;
 
+  // Original sections plus any merged in via "Analyse more".
+  const allSections = [...profileSections, ...extraSections];
   const sharedCard = { background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: 16 };
 
   return (
@@ -1438,7 +1590,7 @@ export default function XRayView({ profileSections, authorName, referenceText, s
         <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.heading, marginTop: 8, fontFamily: "'Courier Prime', monospace" }}>
           {authorName}
         </div>
-        <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 4, fontFamily: mono }}>Style Profile — {profileSections.length} sections analysed</div>
+        <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 4, fontFamily: mono }}>Style Profile — {allSections.length} sections analysed</div>
       </div>
 
       {skillSaved === "saved" && (
@@ -1500,9 +1652,28 @@ export default function XRayView({ profileSections, authorName, referenceText, s
       )}
 
       {/* Section cards (exclude WHEN TO USE) */}
-      {profileSections.filter(s => s.title !== "WHEN TO USE THIS STYLE" && s.title !== "SIGNATURE STYLE").map((section, i) => (
+      {allSections.filter(s => s.title !== "WHEN TO USE THIS STYLE" && s.title !== "SIGNATURE STYLE").map((section, i) => (
         <SectionCard key={i} index={i + 1} section={section} onSave={onSave} trackCall={trackCall} />
       ))}
+
+      {/* Analyse more of this writer — lazy expansion of the auto-saved skill */}
+      {savedSkill && (
+        <div style={{ textAlign: "center", marginTop: 16 }}>
+          <AnalyseMoreButton
+            skill={savedSkill}
+            trackCall={trackCall}
+            onMerged={(merged, added) => {
+              setSavedSkill(merged);
+              // Only display sections not already on screen (the saved skill is
+              // already deduped; this guards the view if the model re-emits one).
+              setExtraSections(prev => {
+                const have = new Set([...profileSections, ...prev].map(s => (s.title || "").toUpperCase().replace(/\s+/g, " ").trim()));
+                return [...prev, ...(added || []).filter(s => s.title && !have.has(s.title.toUpperCase().replace(/\s+/g, " ").trim()))];
+              });
+            }}
+          />
+        </div>
+      )}
 
       {/* Practice button */}
       {onPractice && (

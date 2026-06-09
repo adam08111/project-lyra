@@ -13,7 +13,7 @@ import XRayView, {
   parseProfileSections, parseSectionContent, parseAnnotations,
   labelColorIndex, ANNOTATION_COLORS, AnnotatedQuote, SectionCard,
   extractAuthor, saveStyleSkill, mono, parseStructureContent,
-  deriveShortTitle, translateWithGuard
+  deriveShortTitle, translateWithGuard, AnalyseMoreButton, remainingSections
 } from "./XRayView.jsx";
 
 function CoachMessage({ text, profileSections }) {
@@ -545,7 +545,7 @@ function CollapsibleTechnique({ section, index, trackCall, selected, selectColor
   );
 }
 
-function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechnique, onRemove, onRemoveTechnique, onRemoveTechniques, onRenameTechnique, trackCall }) {
+function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechnique, onRemove, onRemoveTechnique, onRemoveTechniques, onRenameTechnique, onAnalyseMore, trackCall }) {
   // Prefer full saved sections (new format); fall back to synthesizing from
   // analysedTechniques (legacy skills saved before the sections field existed).
   const hasFullSections = skill.sections && skill.sections.length > 0;
@@ -727,6 +727,12 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
           </>
         )}
       </div>
+
+      {!selecting && onAnalyseMore && skill.sourceText && remainingSections(skill).length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <AnalyseMoreButton skill={skill} trackCall={trackCall} onMerged={(merged) => onAnalyseMore(merged)} style={{ width: "100%" }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1027,6 +1033,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
         onRemoveTechnique={(techIdx, hasFullSections) => removeTechnique(viewingIdx, techIdx, hasFullSections)}
         onRemoveTechniques={(techIdxs, hasFullSections) => removeTechniques(viewingIdx, techIdxs, hasFullSections)}
         onRenameTechnique={(techIdx, newTitle, hasFullSections) => renameTechnique(viewingIdx, techIdx, newTitle, hasFullSections)}
+        onAnalyseMore={(merged) => setSkills(prev => prev.map((sk, i) => i === viewingIdx ? merged : sk))}
         trackCall={trackCall}
       />
     );
@@ -1280,7 +1287,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
           setProfileSections([{ title: "STYLE ANALYSIS", content: clean }]);
         } else {
           setProfileSections(sections);
-          const savedSkill = saveStyleSkill(author, sections);
+          const savedSkill = saveStyleSkill(author, sections, referenceText);
           setSkillCount(JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);
           setSkillSaved(savedSkill ? "saved" : "too-short");
           setSkillInStore(!!savedSkill);
