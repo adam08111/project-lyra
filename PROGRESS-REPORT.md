@@ -1305,3 +1305,25 @@ Cache key is the word alone — the first lookup's sentence picks the sense (acc
 
 **170 unit tests green** (166 → +2 cap, +2 quota). Build clean.
 
+---
+
+## 26. UPDATE — 10 June 2026 — Authentic-growth validation: no more conversational/meta junk in Achievements or the Growth Report
+
+### 26.1 The bug chain (live evidence: 8 Jun card "Hollywood Cliché vs Messy Truth")
+A saved Achievements card had `before` = the canned "Search for facts" quick-action chip message and `after` = third-person meta-commentary ("The student understands that…"). Chain: LYRA_BRAIN's coupling rule mandated a growth entry on any "win" → the model emitted one for a conversational insight → `syncLearningData`'s loosened gate (any growth pair ⇒ card) trusted it → junk card, junk `lyra-growth-log` entry, a fake `lyra-growth-pending` increment, and a fake practice queued for the next Growth Report regen.
+
+### 26.2 The validator (commit `cddb545`)
+`isAuthenticGrowth(g, studentTexts)` — pure, exported. ALL must pass: before/after non-empty + different; `before` is NOT a canned chip message (`QUICK_ACTION_MESSAGES` now lives in constants.js as the single source of truth — ChatTab builds its chips FROM it — because chips arrive AS user messages and provenance alone would authenticate them); `before` TRACES to text the student actually authored (substring or ≥0.6 content-word overlap via `reportWords`/`reportSameMoment`; empty studentTexts fails closed); neither side is meta-commentary (`isMetaGrowthText`); `after` ≤600 chars.
+
+### 26.3 The gates (commit `dff173f`)
+`syncLearningData` uses ONLY authentic entries for the growth-log write, the pending increment, and the auto card; grammar/vocab/structures/skills sync unchanged. All-rejected ⇒ diagnostic `console.warn`. `studentTexts` wired at both call sites: lyra.jsx `sendChat` (prior user messages + the just-sent message + the draft) and TrainingSession `fetchLyraTurn` (the `role:'student'` turns carrying rewrite attempts). `maybeSaveVisibleReport` refuses a card whose "After:" line is meta; the manual ★ Save stays as the student-controlled override.
+
+### 26.4 The brain fix (commit `418f73b`)
+The MANDATORY DATA EMISSION rule was amended in place: growth entries exist ONLY for a literal sentence rewrite (`before` = a sentence the student typed, verbatim); realisations/insights/answered questions are NOT growth — omit the array when no rewrite happened; never write third-person observations into any LYRA_LEARNING_DATA field; ✗/✓ pair added using the exact bug case.
+
+### 26.5 The purge (commit `a384ea0`) — verified live
+`purgeInauthenticGrowthV1` (boot, after `autoRestoreFromBackup`, flag-guarded, META check only — traceability can't be evaluated retroactively) removed exactly the bug from the preview on first reload: `[lyra-purge] removed 1 growth-log entry + 1 report card(s) with meta-commentary: "The student understands that creative writing for HKDSE…"` — both stores cleaned, flag set, backup snapshotted. Every device self-cleans on its next load. grammar-log/vocab/structures untouched; pending not recomputed (next regen resets it).
+
+### 26.6 Tests
+**183 unit tests green** (170 → +13): the exact screenshot junk as a fixture (canned and meta each independently sufficient), traceable-rewrite pass, fail-closed, 0.6-overlap paraphrase, gating (invalid-only ⇒ nothing written but vocab still syncs; mixed ⇒ only valid logged), meta visible-report ⇒ null, migration (junk removed/legit kept/flag/idempotent). One pre-existing test updated to supply provenance — the new contract.
+
