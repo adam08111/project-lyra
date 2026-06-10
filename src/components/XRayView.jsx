@@ -5,6 +5,7 @@ import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
 import { translatePrompt, buildStyleProfilerPrompt, XRAY_ALL_SECTIONS } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
+import { normKey, explainAnnotation, buildConceptFromExplanation } from "../annotation-glossary.js";
 
 // ── Shared font ──
 export const mono = "'Courier Prime', 'Courier New', monospace";
@@ -211,13 +212,26 @@ export function labelColorIndex(label) {
   return Math.abs(hash) % ANNOTATION_COLORS.length;
 }
 
-export function AnnotatedQuote({ text }) {
+export function AnnotatedQuote({ text, onAnnotationTap, activeKey }) {
   const segments = parseAnnotations(text);
   const hasAnnotations = segments.some(s => s.label);
 
   if (!hasAnnotations) {
     return <span>{text}</span>;
   }
+
+  // Tappable only when a handler is wired — render sites without it behave
+  // exactly as before (no dead cursors).
+  const tappable = typeof onAnnotationTap === "function";
+  const tapProps = (seg) => tappable ? {
+    role: "button",
+    "aria-label": `Explain ${seg.label}`,
+    onClick: (e) => { e.preventDefault(); e.stopPropagation(); onAnnotationTap({ phrase: seg.text, label: seg.label }); },
+  } : {};
+  // Bump the highlight alpha on the annotation whose explanation is open, so
+  // the student sees which one the card below belongs to.
+  const isActive = (seg) => tappable && !!activeKey && activeKey === normKey(seg.label, seg.text);
+  const bgFor = (c, active) => active ? c.bg.replace("0.24", "0.45") : c.bg;
 
   return (
     <span>
@@ -240,11 +254,12 @@ export function AnnotatedQuote({ text }) {
         // wrap cleanly above the base).
         if (isCJK) {
           return (
-            <span key={i} style={{
-              background: c.bg,
+            <span key={i} {...tapProps(seg)} style={{
+              background: bgFor(c, isActive(seg)),
               borderBottom: `2.5px solid ${c.border}`,
               borderRadius: 3,
               padding: "1px 4px",
+              cursor: tappable ? "pointer" : undefined,
             }}>
               {seg.text}
               <span style={{
@@ -261,12 +276,13 @@ export function AnnotatedQuote({ text }) {
           );
         }
         return (
-          <ruby key={i} style={{
-            background: c.bg,
+          <ruby key={i} {...tapProps(seg)} style={{
+            background: bgFor(c, isActive(seg)),
             borderBottom: `2px solid ${c.border}`,
             borderRadius: 3,
             padding: "0 2px",
             rubyPosition: "over",
+            cursor: tappable ? "pointer" : undefined,
           }}>
             {seg.text}
             <rp>(</rp>
@@ -292,6 +308,124 @@ export function AnnotatedQuote({ text }) {
         );
       })}
     </span>
+  );
+}
+
+// Strip {phrase}[label] markers, leaving the plain phrase (for prompts/records).
+export const stripAnnotationMarkers = (t) => (t || "").replace(/\{([^}]+)\}\[([^\]]+)\]/g, "$1");
+
+// Muted bilingual hint under a quote card that contains ≥1 annotation.
+export function AnnotationHint() {
+  return (
+    <div style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono, margin: "4px 2px 8px" }}>
+      點一下螢光字詞看解釋 · Tap a highlighted phrase to learn it
+    </div>
+  );
+}
+
+/**
+ * Small bilingual explanation card for a tapped annotation. Mounts below the
+ * quote card that was tapped; fetches (cache-first, Lite tier) on mount and
+ * whenever the tapped annotation changes. Savable to the Saved Concepts tab.
+ */
+export function AnnotationExplainCard({ request, trackCall, sectionTitle }) {
+  const { phrase, label, sentence = "", sourceLang = "en" } = request || {};
+  const key = normKey(label, phrase);
+  const [state, setState] = useState({ status: "loading", entry: null });
+  const [attempt, setAttempt] = useState(0);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setState({ status: "loading", entry: null });
+    explainAnnotation({ label, phrase, sentence, sourceLang }, { trackCall })
+      .then(entry => {
+        if (!alive) return;
+        setState({ status: "loaded", entry });
+        try {
+          const concepts = JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]");
+          setSaved(concepts.some(s => s.annoKey === key));
+        } catch (e) { setSaved(false); }
+      })
+      .catch(() => { if (alive) setState({ status: "error", entry: null }); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, attempt]);
+
+  const c = ANNOTATION_COLORS[labelColorIndex(label || "")];
+  const card = { background: COLORS.card, border: `1px solid ${COLORS.border}`, borderLeft: `3px solid ${c.border}`, borderRadius: 14, padding: "12px 14px", marginTop: 6, marginBottom: 12, fontFamily: mono };
+
+  if (state.status === "loading") {
+    return (
+      <div style={card}>
+        <div style={{ fontSize: 11, color: COLORS.muted }}>Looking up “{label}”… <span style={{ opacity: 0.6 }}>正在查閱…</span></div>
+      </div>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <div style={card}>
+        <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 6 }}>Couldn't explain this one — try again. <span style={{ opacity: 0.7 }}>解釋失敗，請再試一次。</span></div>
+        <button onClick={() => setAttempt(a => a + 1)} style={{ fontSize: 11, fontFamily: mono, padding: "4px 12px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: "pointer" }}>
+          ↻ Retry
+        </button>
+      </div>
+    );
+  }
+
+  const entry = state.entry;
+  const handleSave = () => {
+    if (saved) return;
+    try {
+      const concepts = JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]");
+      const concept = buildConceptFromExplanation({ ...entry, label }, { phrase, sentence, sectionTitle });
+      if (!concepts.some(s => s.annoKey === concept.annoKey || s.name === concept.name)) {
+        concepts.push(concept);
+        localStorage.setItem("lyra-saved-concepts", JSON.stringify(concepts));
+      }
+      setSaved(true);
+    } catch (e) { /* silent */ }
+  };
+
+  return (
+    <div style={card}>
+      {/* term header */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading }}>{entry.term_en}</span>
+        {entry.term_zh && <span style={{ fontSize: 12, fontWeight: 700, color: c.text }}>{entry.term_zh}</span>}
+      </div>
+      {/* what it is */}
+      {entry.what_en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{entry.what_en}</div>}
+      {entry.what_zh && <div style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.7, marginTop: 2 }}>{entry.what_zh}</div>}
+      {/* in this sentence */}
+      {(entry.here_en || entry.here_zh) && (
+        <div style={{ marginTop: 8, background: COLORS.bg2, borderRadius: 8, padding: "8px 10px" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, letterSpacing: 0.5, marginBottom: 3 }}>In this sentence · 在這句中</div>
+          {entry.here_en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{entry.here_en.split(phrase).length > 1
+            ? entry.here_en.split(phrase).map((part, i, arr) => i < arr.length - 1 ? <span key={i}>{part}<em>{phrase}</em></span> : <span key={i}>{part}</span>)
+            : <>{entry.here_en} <em style={{ color: COLORS.heading }}>“{phrase}”</em></>}</div>}
+          {entry.here_zh && <div style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.7, marginTop: 2 }}>{entry.here_zh}</div>}
+        </div>
+      )}
+      {/* try it */}
+      {(entry.try_en || entry.try_zh) && (
+        <div style={{ marginTop: 8, border: `1.5px dashed ${COLORS.accent1}`, borderRadius: 8, padding: "8px 10px" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, letterSpacing: 0.5, marginBottom: 3 }}>Give it a go · 試試看</div>
+          {entry.try_en && <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.7 }}>{entry.try_en}</div>}
+          {entry.try_zh && <div style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.7, marginTop: 2 }}>{entry.try_zh}</div>}
+        </div>
+      )}
+      {/* save */}
+      <div style={{ marginTop: 8, textAlign: "right" }}>
+        <button
+          onClick={handleSave}
+          disabled={saved}
+          style={{ fontSize: 10, fontFamily: mono, padding: "4px 12px", borderRadius: 8, border: `1px solid ${saved ? COLORS.accent1 : COLORS.border}`, background: saved ? "#F0EDE8" : COLORS.card, color: saved ? COLORS.accent1 : COLORS.muted, cursor: saved ? "default" : "pointer" }}
+        >
+          {saved ? "★ Saved · 已儲存" : "☆ Save · 儲存"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -681,6 +815,16 @@ export function SectionCard({ section, onSave, trackCall, index }) {
   const [showTranslation, setShowTranslation] = useState(false); // visibility toggle
   const [translating, setTranslating] = useState(false);
 
+  // Tappable annotations: one open explanation per quote card (the English
+  // FROM THE TEXT card and the 譯文 card each manage their own). Tapping the
+  // same annotation again closes it; tapping another swaps the content.
+  const [openAnnoEn, setOpenAnnoEn] = useState(null); // {phrase,label,sentence,sourceLang}
+  const [openAnnoZh, setOpenAnnoZh] = useState(null);
+  const toggleAnno = (setter, sentence, sourceLang) => ({ phrase, label }) =>
+    setter(prev => prev && normKey(prev.label, prev.phrase) === normKey(label, phrase)
+      ? null
+      : { phrase, label, sentence, sourceLang });
+
   const handleTranslate = async () => {
     if (translating) return;
     // Toggle: if already showing, hide. If hidden but cached, show. Otherwise fetch.
@@ -858,17 +1002,26 @@ export function SectionCard({ section, onSave, trackCall, index }) {
       .map(p => stripRedundantPrefix(p.zh || ""))
       .filter(Boolean);
     if (zhLines.length === 0) return null;
+    const zhHasAnnotations = zhLines.some(l => parseAnnotations(l).some(s => s.label));
     return (
-      <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 14px", marginTop: 6, marginBottom: 12, borderLeft: `3px solid ${COLORS.accent1}`, fontFamily: mono }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
-          譯文 · Translation
-        </div>
-        {zhLines.map((zh, i) => (
-          <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.4, fontStyle: "italic", marginBottom: 6 }}>
-            <AnnotatedQuote text={zh} />
+      <>
+        <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 14px", marginTop: 6, marginBottom: zhHasAnnotations ? 4 : 12, borderLeft: `3px solid ${COLORS.accent1}`, fontFamily: mono }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
+            譯文 · Translation
           </div>
-        ))}
-      </div>
+          {zhLines.map((zh, i) => (
+            <div key={i} style={{ fontSize: 12, color: COLORS.heading, lineHeight: 2.4, fontStyle: "italic", marginBottom: 6 }}>
+              <AnnotatedQuote
+                text={zh}
+                onAnnotationTap={toggleAnno(setOpenAnnoZh, stripAnnotationMarkers(zh), "zh")}
+                activeKey={openAnnoZh ? normKey(openAnnoZh.label, openAnnoZh.phrase) : null}
+              />
+            </div>
+          ))}
+        </div>
+        {zhHasAnnotations && <AnnotationHint />}
+        {openAnnoZh && <AnnotationExplainCard request={openAnnoZh} trackCall={trackCall} sectionTitle={section.title} />}
+      </>
     );
   };
 
@@ -1140,10 +1293,16 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             <div style={{ background: COLORS.bg2, borderRadius: 10, padding: "10px 14px", marginBottom: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono }}>From the text</div>
               <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 4.5, fontStyle: "italic", fontFamily: mono }}>
-                <AnnotatedQuote text={parts.example} />
+                <AnnotatedQuote
+                  text={parts.example}
+                  onAnnotationTap={toggleAnno(setOpenAnnoEn, stripAnnotationMarkers(parts.example), "en")}
+                  activeKey={openAnnoEn ? normKey(openAnnoEn.label, openAnnoEn.phrase) : null}
+                />
               </div>
             </div>
           )}
+          {parts.example && parseAnnotations(parts.example).some(s => s.label) && <AnnotationHint />}
+          {openAnnoEn && <AnnotationExplainCard request={openAnnoEn} trackCall={trackCall} sectionTitle={section.title} />}
           {renderExampleTranslation()}
           {parts.breakdown && (() => {
             const raw = parts.breakdown;
