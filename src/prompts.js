@@ -805,3 +805,37 @@ Rules:
 - CRITICAL — COMPLETENESS: Translate EVERY labelled section in the source. Do NOT skip any line, even if it seems short, repetitive, or similar to another section. If the source contains "PLAIN MEANING:", "GRAMMAR:", "FUNCTION:", and "USE IT:" then your output MUST contain all four EN/ZH pairs — never just three. Count the labelled lines before you finish and verify each one is present in your output.
 - PRESERVE ANNOTATIONS: If the source contains annotation markers like {phrase}[label] (curly braces around a phrase, square-bracket label right after), keep BOTH the {...} braces and [...] brackets in the Chinese translation. Translate the phrase inside {} into Chinese. Translate the label inside [] into Chinese too. Example: source "{universally acknowledged}[adverb fronting]" → translation "{眾所公認}[副詞前置]". Never drop the {} or [] markers.
 - Output ONLY the EN/ZH pairs — no preamble, no commentary, no "Here is the translation"`;
+
+/**
+ * Explain ONE annotation label (e.g. "appositive", "ironic cliché") to a
+ * 14-year-old Hong Kong English learner, using the exact phrase they tapped as
+ * the worked example. Lite tier, no LYRA_BRAIN — purely mechanical JSON.
+ * @param {string} label - the annotation label that was tapped
+ * @param {string} phrase - the annotated phrase under that label
+ * @param {string} sentence - the full sentence/quote the phrase appears in
+ * @param {"en"|"zh"} sourceLang - which card was tapped (the label itself may be Chinese)
+ */
+export function buildAnnotationExplainPrompt(label, phrase, sentence, sourceLang = "en") {
+  return `You explain ONE writing-technique term to a 14-year-old English learner in Hong Kong.
+
+The student was reading ${sourceLang === "zh" ? "a Traditional Chinese translation card" : "an English quote card"} and tapped the highlighted phrase "${phrase}" labelled "${label}"${sentence ? ` in this sentence: "${sentence}"` : ""}.
+
+Write a tiny, friendly explanation:
+- Plain everyday words. Zero grammar jargon beyond the term you are defining itself. If you must mention another term, explain it in brackets.
+- You MUST use the student's exact tapped phrase "${phrase}" as the worked example. Explain what the technique DOES in this sentence — the effect on the reader — not just what it is.
+- "try" is a short reusable pattern the student can copy (a fill-in pattern, NOT a completed sentence about their topic).
+- HARD CAP: about 120 words across all English fields combined. Shorter is better.
+- All *_zh fields: Traditional Chinese (繁體中文) ONLY — never Simplified. Warm, natural Hong Kong register, not stiff textbook 書面語. Technical terms may stay bilingual.
+
+Return ONLY valid JSON — no markdown fences, no preamble, no commentary:
+{
+  "term_en": "canonical English name of the technique, e.g. Appositive",
+  "term_zh": "繁體中文 name, e.g. 同位語",
+  "what_en": "1-2 sentences: what this technique is",
+  "what_zh": "繁體中文 version",
+  "here_en": "1-2 sentences: what it does in THIS phrase/sentence — the effect on the reader",
+  "here_zh": "繁體中文 version",
+  "try_en": "one short use-it-yourself pattern",
+  "try_zh": "繁體中文 version"
+}`;
+}

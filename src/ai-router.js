@@ -166,6 +166,13 @@ const ROUTE_CONFIG = {
     brain: false,
   },
 
+  // Annotation label explanation (tap a highlighted phrase in a quote card)
+  annotation_explain: {
+    model: MODELS.lite,
+    thinkingBudget: 0,
+    brain: false,
+  },
+
   // Source text translation (English → Traditional Chinese)
   translate: {
     model: MODELS.lite,
