@@ -13,6 +13,23 @@ export const SVGIcons = ({ type, size = 28 }) => {
   return icons[type] || null;
 };
 
+// Line-art photo icons matching the SVGIcons stroke style (used by the
+// photo-upload chip buttons — emoji read as unprofessional there).
+export const CameraIcon = ({ size = 13, color = COLORS.muted }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M3 8a2 2 0 012-2h2l2-3h6l2 3h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </svg>
+);
+
+export const GalleryIcon = ({ size = 13, color = COLORS.muted }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="M3 17l5-5 4 4 3-3 6 6" />
+  </svg>
+);
+
 export const FeatherIcon = ({ size = 18, color = COLORS.heading }) => (
   <svg width={size} height={size} viewBox="0 0 36 36" fill="none" strokeLinecap="round" strokeLinejoin="round">
     <path d="M28 4c-2 3-4.5 7-7 12s-4.5 10-6.5 14.5L12 35" stroke={color} strokeWidth={1.3} fill="none"/>

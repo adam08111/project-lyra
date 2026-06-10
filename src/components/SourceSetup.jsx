@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { COLORS, FONTS_LINK, writingTypes, wordCounts, writingPurposes, getExamRules, defaultXraySections } from "../constants.js";
 import { keyframes, sharedStyles as s } from "../styles.js";
-import { FeatherIcon } from "./Icons.jsx";
+import { FeatherIcon, CameraIcon, GalleryIcon } from "./Icons.jsx";
 import Sidebar from "./Sidebar.jsx";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
@@ -324,15 +324,15 @@ export default function SourceSetup({
                 <>
                   <button
                     onClick={() => galleryInputRef.current?.click()}
-                    style={{ fontSize: 11, fontFamily: mono, padding: "6px 10px", borderRadius: 10, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer", whiteSpace: "nowrap" }}
+                    style={{ fontSize: 11, fontFamily: mono, padding: "6px 10px", borderRadius: 10, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}
                   >
-                    🖼 Gallery
+                    <GalleryIcon /> Gallery
                   </button>
                   <button
                     onClick={() => cameraInputRef.current?.click()}
-                    style={{ fontSize: 11, fontFamily: mono, padding: "6px 10px", borderRadius: 10, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer", whiteSpace: "nowrap" }}
+                    style={{ fontSize: 11, fontFamily: mono, padding: "6px 10px", borderRadius: 10, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}
                   >
-                    📷 Take photo
+                    <CameraIcon /> Take photo
                   </button>
                 </>
               )}
@@ -444,15 +444,15 @@ export default function SourceSetup({
                       <>
                         <button
                           onClick={() => topicGalleryRef.current?.click()}
-                          style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
+                          style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
                         >
-                          🖼 Gallery
+                          <GalleryIcon size={12} /> Gallery
                         </button>
                         <button
                           onClick={() => topicCameraRef.current?.click()}
-                          style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
+                          style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
                         >
-                          📷 Scan exam question
+                          <CameraIcon size={12} /> Scan exam question
                         </button>
                       </>
                     )}
