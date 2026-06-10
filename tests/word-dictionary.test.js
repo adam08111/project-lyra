@@ -11,7 +11,7 @@ globalThis.localStorage = globalThis.localStorage || {
 
 const {
   normWord, isLookableWord, getCachedWord, cacheWord, parseWordJSON, lookupWord,
-  DICTIONARY_KEY, DICTIONARY_MAX_ENTRIES,
+  buildConceptFromWord, DICTIONARY_KEY, DICTIONARY_MAX_ENTRIES,
 } = await import("../src/word-dictionary.js");
 const { buildWordLookupPrompt } = await import("../src/prompts.js");
 
@@ -88,6 +88,23 @@ describe("parseWordJSON — defensive", () => {
   it("throws on garbage or missing fields", () => {
     expect(() => parseWordJSON("nope")).toThrow();
     expect(() => parseWordJSON('{"a":1}')).toThrow();
+  });
+});
+
+describe("buildConceptFromWord — saved-vocab record", () => {
+  it("produces a kind:word record with pos, bilingual fields, and the legacy shape", () => {
+    const c = buildConceptFromWord(JSON.parse(FAKE), { sentence: "The author mocks the habit." });
+    expect(c.kind).toBe("word");
+    expect(c.name).toBe("mock · 嘲諷");
+    expect(c.pos).toBe("verb · 動詞"); // part of speech stated explicitly
+    expect(c.meaning_en).toContain("make fun");
+    expect(c.meaning_zh).toContain("取笑");
+    expect(c.wordKey).toBe("mock");
+    // legacy concept fields so older renderers degrade gracefully
+    for (const field of ["name", "grammar", "function", "useIt", "example", "section", "savedAt"]) {
+      expect(c).toHaveProperty(field);
+    }
+    expect(c.section).toContain("Dictionary");
   });
 });
 

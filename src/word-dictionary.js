@@ -80,6 +80,33 @@ export function parseWordJSON(s) {
   return obj;
 }
 
+/**
+ * Map a dictionary entry onto a lyra-saved-concepts record (kind:"word").
+ * Carries the word's own fields for the dedicated word-card renderer, plus the
+ * legacy concept fields so older renderers degrade gracefully. Dedupe by wordKey.
+ */
+export function buildConceptFromWord(entry, { sentence = "" } = {}) {
+  const word = (entry.word || entry.lookedUpWord || "").toLowerCase();
+  const pos = [entry.pos_en, entry.pos_zh].filter(Boolean).join(" · ");
+  return {
+    kind: "word",
+    name: [word, entry.zh].filter(Boolean).join(" · "),
+    pos,
+    meaning_en: entry.meaning_en || "",
+    meaning_zh: entry.meaning_zh || "",
+    example_en: entry.example_en || "",
+    example_zh: entry.example_zh || "",
+    // legacy concept fields (older renderers)
+    grammar: pos,
+    function: [entry.meaning_en, entry.meaning_zh].filter(Boolean).join(" — "),
+    useIt: "",
+    example: sentence ? `"${word}" — ${sentence.slice(0, 120)}` : "",
+    section: "Dictionary · 字典",
+    savedAt: Date.now(),
+    wordKey: normWord(word),
+  };
+}
+
 // In-flight guard: concurrent lookups for the same word share one promise.
 const pending = new Map();
 

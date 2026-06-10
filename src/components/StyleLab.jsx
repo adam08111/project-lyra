@@ -250,6 +250,49 @@ function SavedConceptCard({ concept, isExpanded, onToggle, onRemove }) {
   const [showTranslation, setShowTranslation] = useState(false);
   const [translating, setTranslating] = useState(false);
 
+  // Dictionary words (saved from the tap-to-define popup) are already fully
+  // bilingual and have their own fields — render a dedicated compact card
+  // (no translate button needed).
+  if (concept.kind === "word") {
+    const w = concept;
+    return (
+      <div style={{ background: COLORS.card, borderTop: `1px solid ${isExpanded ? COLORS.blue : COLORS.border}`, borderRight: `1px solid ${isExpanded ? COLORS.blue : COLORS.border}`, borderBottom: `1px solid ${isExpanded ? COLORS.blue : COLORS.border}`, borderLeft: `3px solid ${COLORS.blue}`, borderRadius: 14, marginBottom: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
+        <div onClick={onToggle} style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, cursor: "pointer" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono }}>{w.name}</span>
+              {w.pos && <span style={{ fontSize: 9, fontWeight: 700, color: COLORS.blue, border: `1px solid ${COLORS.blue}`, borderRadius: 6, padding: "1px 6px", fontFamily: mono, whiteSpace: "nowrap" }}>{w.pos}</span>}
+            </div>
+            <div style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono, marginTop: 2 }}>{w.section}</div>
+          </div>
+          <span style={{ fontSize: 10, color: COLORS.muted, transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}>&#9654;</span>
+        </div>
+        {isExpanded && (
+          <div style={{ padding: "0 14px 14px", fontFamily: mono }}>
+            {w.meaning_en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{w.meaning_en}</div>}
+            {w.meaning_zh && <div style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.7, marginTop: 2 }}>{w.meaning_zh}</div>}
+            {(w.example_en || w.example_zh) && (
+              <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#A6701F", letterSpacing: 0.5, marginBottom: 2 }}>For example · 例如</div>
+                {w.example_en && <div style={{ fontSize: 11, lineHeight: 1.6 }}>{w.example_en}</div>}
+                {w.example_zh && <div style={{ fontSize: 11, lineHeight: 1.6, marginTop: 2, opacity: 0.85 }}>{w.example_zh}</div>}
+              </div>
+            )}
+            {w.example && (
+              <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.6, fontStyle: "italic", marginTop: 8 }}>From: {w.example}</div>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1px solid ${COLORS.red || "#c44"}`, background: "transparent", color: COLORS.red || "#c44", cursor: "pointer", marginTop: 8 }}
+            >
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const handleTranslate = async (e) => {
     e.stopPropagation();
     if (translating) return;
@@ -1176,6 +1219,17 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
   const [typingMsg, setTypingMsg] = useState(null);
 
   const [savedCount, setSavedCount] = useState(() => JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]").length);
+
+  // The app-level word dictionary saves vocab into lyra-saved-concepts from
+  // outside StyleLab — listen for its change event so the "Saved (N)" badge
+  // stays fresh without prop threading.
+  useEffect(() => {
+    const onConceptsChanged = () => {
+      try { setSavedCount(JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]").length); } catch (e) { /* silent */ }
+    };
+    window.addEventListener("lyra-concepts-changed", onConceptsChanged);
+    return () => window.removeEventListener("lyra-concepts-changed", onConceptsChanged);
+  }, []);
   const [skillSaved, setSkillSaved] = useState(null); // null | "saved" | "too-short"
   const [skillInStore, setSkillInStore] = useState(false); // whether the analysed skill is currently in localStorage (false after a manual remove)
   const [skillCount, setSkillCount] = useState(() => JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);

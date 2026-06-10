@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { COLORS } from "../constants.js";
 import { mono } from "./XRayView.jsx";
-import { isLookableWord, lookupWord } from "../word-dictionary.js";
+import { isLookableWord, lookupWord, buildConceptFromWord, normWord } from "../word-dictionary.js";
 
 /**
  * Tap-to-define dictionary. One document-level selection listener covers the
@@ -15,6 +15,7 @@ export default function WordLookup({ trackCall }) {
   const [popup, setPopup] = useState(null);   // { word, sentence, x, y }
   const [state, setState] = useState({ status: "idle", entry: null });
   const [attempt, setAttempt] = useState(0);
+  const [saved, setSaved] = useState(false);
   const debounceRef = useRef(null);
   const popupOpenRef = useRef(false);
   popupOpenRef.current = !!popup;
@@ -64,7 +65,14 @@ export default function WordLookup({ trackCall }) {
     let alive = true;
     setState({ status: "loading", entry: null });
     lookupWord({ word: popup.word, sentence: popup.sentence }, { trackCall })
-      .then(entry => { if (alive) setState({ status: "loaded", entry }); })
+      .then(entry => {
+        if (!alive) return;
+        setState({ status: "loaded", entry });
+        try {
+          const concepts = JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]");
+          setSaved(concepts.some(c => c.wordKey === normWord(popup.word)));
+        } catch (e) { setSaved(false); }
+      })
       .catch(() => { if (alive) setState({ status: "error", entry: null }); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,7 +86,23 @@ export default function WordLookup({ trackCall }) {
     setBubble(null);
     try { window.getSelection().removeAllRanges(); } catch (err) { /* silent */ }
   };
-  const close = () => { setPopup(null); setState({ status: "idle", entry: null }); };
+  const close = () => { setPopup(null); setState({ status: "idle", entry: null }); setSaved(false); };
+
+  // Save the looked-up word to Saved Concepts (the Saved tab), deduped by word.
+  const handleSaveWord = () => {
+    if (saved || !state.entry || !popup) return;
+    try {
+      const concepts = JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]");
+      const record = buildConceptFromWord(state.entry, { sentence: popup.sentence });
+      if (!concepts.some(c => c.wordKey === record.wordKey)) {
+        concepts.push(record);
+        localStorage.setItem("lyra-saved-concepts", JSON.stringify(concepts));
+      }
+      setSaved(true);
+      // Let StyleLab refresh its "Saved (N)" badge (WordLookup lives outside it).
+      try { window.dispatchEvent(new Event("lyra-concepts-changed")); } catch (e) { /* silent */ }
+    } catch (e) { /* silent */ }
+  };
 
   const vw = typeof window !== "undefined" ? window.innerWidth : 360;
   const vh = typeof window !== "undefined" ? window.innerHeight : 640;
@@ -103,7 +127,7 @@ export default function WordLookup({ trackCall }) {
             boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
           }}
         >
-          📖 {bubble.word} · 中文意思
+          📖 {bubble.word}
         </button>
       )}
 
@@ -129,10 +153,10 @@ export default function WordLookup({ trackCall }) {
             }}
           >
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.heading }}>{popup.word.toLowerCase()}</span>
                 {state.entry && (state.entry.pos_en || state.entry.pos_zh) && (
-                  <span style={{ fontSize: 10, color: COLORS.muted, whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: COLORS.blue, border: `1px solid ${COLORS.blue}`, borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap", letterSpacing: 0.3 }}>
                     {[state.entry.pos_en, state.entry.pos_zh].filter(Boolean).join(" · ")}
                   </span>
                 )}
@@ -161,6 +185,15 @@ export default function WordLookup({ trackCall }) {
                     {state.entry.example_zh && <div style={{ fontSize: 11, lineHeight: 1.6, marginTop: 2, opacity: 0.85 }}>{state.entry.example_zh}</div>}
                   </div>
                 )}
+                <div style={{ marginTop: 8, textAlign: "right" }}>
+                  <button
+                    onClick={handleSaveWord}
+                    disabled={saved}
+                    style={{ fontSize: 10, fontFamily: mono, padding: "4px 12px", borderRadius: 8, border: `1px solid ${saved ? COLORS.accent1 : COLORS.border}`, background: saved ? "#F0EDE8" : COLORS.card, color: saved ? COLORS.accent1 : COLORS.muted, cursor: saved ? "default" : "pointer" }}
+                  >
+                    {saved ? "★ Saved · 已儲存" : "☆ Save · 儲存"}
+                  </button>
+                </div>
               </>
             )}
           </div>
