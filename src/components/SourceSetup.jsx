@@ -8,6 +8,7 @@ import { getRouteConfig } from "../ai-router.js";
 import { buildStyleProfilerPrompt } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
 import XRayView, { parseProfileSections, extractAuthor, saveStyleSkill, mono } from "./XRayView.jsx";
+import { prepareImageForOCR } from "../image-utils.js";
 
 export default function SourceSetup({
   userName, setUserName,
@@ -54,75 +55,85 @@ export default function SourceSetup({
   // ── Photo upload for source text OCR ──
   const handleSourcePhotoUpload = useCallback(async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = reader.result.split(",")[1];
-      const mediaType = file.type || "image/jpeg";
-      setUploadedImage(reader.result);
-      setScanning(true);
-      try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 2000,
-            messages: [{
-              role: "user",
-              content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-                { type: "text", text: "Extract ALL the text from this image. Return ONLY the extracted text — no commentary, no explanation. Preserve paragraphs and line breaks." }
-              ]
-            }]
-          }),
-        });
-        const data = await res.json();
-        const extracted = data.content?.map(b => b.text || "").filter(Boolean).join("\n") || "";
-        if (extracted) setSourceText(extracted);
-      } catch (err) { /* silent */ }
-      setScanning(false);
-    };
-    reader.readAsDataURL(file);
+    // Reset FIRST (synchronously) so picking the SAME photo twice re-fires
+    // onChange even when this attempt fails.
     e.target.value = "";
+    if (!file) return;
+    setScanning(true);
+    setError("");
+    try {
+      // Transcode (HEIC→JPEG) + downscale (>2000px long edge) when needed.
+      const { dataUrl, mediaType } = await prepareImageForOCR(file);
+      setUploadedImage(dataUrl);
+      const base64 = dataUrl.split(",")[1];
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 2000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+              { type: "text", text: "Extract ALL the text from this image. Return ONLY the extracted text — no commentary, no explanation. Preserve paragraphs and line breaks." }
+            ]
+          }]
+        }),
+      });
+      const data = await res.json();
+      const extracted = data.content?.map(b => b.text || "").filter(Boolean).join("\n") || "";
+      if (extracted) {
+        setSourceText(extracted);
+      } else {
+        setError("Couldn't read any text in that photo — try a clearer shot or a screenshot.");
+      }
+    } catch (err) {
+      setError("Couldn't read that photo — try a screenshot instead.");
+    }
+    setScanning(false);
   }, [setSourceText]);
 
   // ── Photo upload for exam question (mission step) ──
   const topicGalleryRef = useRef(null);
   const topicCameraRef = useRef(null);
   const [topicScanning, setTopicScanning] = useState(false);
+  const [topicScanError, setTopicScanError] = useState("");
   const handleTopicPhotoUpload = useCallback(async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // reset first — same-photo re-pick must re-fire
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = reader.result.split(",")[1];
-      const mediaType = file.type || "image/jpeg";
-      setTopicScanning(true);
-      try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 1000,
-            messages: [{
-              role: "user",
-              content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-                { type: "text", text: "Extract the writing task, essay question, or assignment prompt from this image. Return ONLY the text of the task/question — no commentary, no explanation. If there are multiple questions, extract all of them." }
-              ]
-            }]
-          }),
-        });
-        const data = await res.json();
-        const extracted = data.content?.map(b => b.text || "").filter(Boolean).join("\n") || "";
-        if (extracted) setTopic(prev => prev ? prev + "\n\n" + extracted : extracted);
-      } catch (err) { /* silent */ }
-      setTopicScanning(false);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
+    setTopicScanning(true);
+    setTopicScanError("");
+    try {
+      const { dataUrl, mediaType } = await prepareImageForOCR(file);
+      const base64 = dataUrl.split(",")[1];
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+              { type: "text", text: "Extract the writing task, essay question, or assignment prompt from this image. Return ONLY the text of the task/question — no commentary, no explanation. If there are multiple questions, extract all of them." }
+            ]
+          }]
+        }),
+      });
+      const data = await res.json();
+      const extracted = data.content?.map(b => b.text || "").filter(Boolean).join("\n") || "";
+      if (extracted) {
+        setTopic(prev => prev ? prev + "\n\n" + extracted : extracted);
+      } else {
+        setTopicScanError("Couldn't read any text in that photo — try a clearer shot.");
+      }
+    } catch (err) {
+      setTopicScanError("Couldn't read that photo — try a screenshot instead.");
+    }
+    setTopicScanning(false);
   }, [setTopic]);
 
   // ── Analyse source text (X-Ray) ──
@@ -448,6 +459,9 @@ export default function SourceSetup({
                     <input ref={topicGalleryRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleTopicPhotoUpload} />
                     <input ref={topicCameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleTopicPhotoUpload} />
                   </div>
+                  {topicScanError && (
+                    <div style={{ fontSize: 11, color: COLORS.red, fontFamily: mono, marginTop: 4, textAlign: "right" }}>{topicScanError}</div>
+                  )}
                 </div>
 
                 {/* Writing type */}
