@@ -17,7 +17,7 @@ import GrammarLog from "./components/GrammarLog.jsx";
 import StyleLab from "./components/StyleLab.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import TrainingSession from "./components/TrainingSession.jsx";
-import { generateTitle } from "./titleGenerator.js";
+import { generateTitle, topicBrief } from "./titleGenerator.js";
 import { detectFormatCue, typeLabelOf } from "./genre-cues.js";
 
 export default function Lyra() {
@@ -427,7 +427,7 @@ Rules:
         const skillNote = !sourceAnalysis && appliedSkill ? `\n\nI see you've been studying ${appliedSkill.authorName}'s style — great choice for this piece! I'll weave in their techniques as we work.` : "";
         const techNote = !sourceAnalysis && writingTechniques?.length ? `\n\nI've researched ${writingTechniques.length} writing techniques for your ${typeLabel.toLowerCase()} — check the ✦ Tips button in the editor to review them anytime.` : "";
         const examNote = purpose && purpose !== "personal" && purpose !== "school" ? `\n\nI'm following ${purpose.toUpperCase()} exam conventions — my suggestions will respect the marking criteria.` : "";
-        const msg = `${nameGreeting}I'm Lyra, your writing coach. You're working on a ${typeLabel.toLowerCase()} about "${topic}" — aiming for ${wcLabel} words. I'll guide you through every step, but remember: every word will be yours.${sourceNote}${skillNote}${techNote}${examNote}\n\nLet's start! Would you like me to outline the structure for your ${typeLabel.toLowerCase()}, or do you want to brainstorm ideas first?`;
+        const msg = `${nameGreeting}I'm Lyra, your writing coach. You're working on a ${typeLabel.toLowerCase()}: ${topicBrief(topic, 120) || topic} — aiming for ${wcLabel} words. I'll guide you through every step, but remember: every word will be yours.${sourceNote}${skillNote}${techNote}${examNote}\n\nLet's start! Would you like me to outline the structure for your ${typeLabel.toLowerCase()}, or do you want to brainstorm ideas first?`;
         setWelcomeText(msg);
       }, 100);
     }

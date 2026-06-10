@@ -1,5 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { generateTitle } from "../src/titleGenerator.js";
+import { generateTitle, topicBrief } from "../src/titleGenerator.js";
+
+describe("topicBrief — canned-welcome echo fix", () => {
+  it("drops the instruction verb from the exact screenshot topic", () => {
+    const brief = topicBrief("write a letter to editor about cell phones should be fully banned at schools", 120);
+    expect(brief).toBe("Letter to editor about cell phones should be fully banned at schools");
+    expect(/^write /i.test(brief)).toBe(false);
+  });
+
+  it("returns empty for empty/filler-only topics", () => {
+    expect(topicBrief("")).toBe("");
+    expect(topicBrief("Write a")).toBe("");
+  });
+
+  it("respects a custom max length on a word boundary", () => {
+    const brief = topicBrief("Write an essay about the history of Hong Kong public transport systems", 30);
+    expect(brief.length).toBeLessThanOrEqual(30);
+    expect(brief.endsWith("...")).toBe(true);
+  });
+});
 
 describe("generateTitle", () => {
   it("combines writing type label with topic", () => {
