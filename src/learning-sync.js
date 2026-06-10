@@ -286,6 +286,59 @@ export function syncLearningData(data, ctx) {
 }
 
 /**
+ * One-time purge (v1) of junk growth that predates the authenticity gate:
+ * entries/cards whose before/after/reportText is third-person meta-commentary
+ * about the student (the META check only — traceability can't be evaluated
+ * retroactively, the student's session texts are gone). Idempotent via the
+ * lyra-growth-purge-v1 flag. Does NOT touch grammar-log/vocabulary/structures
+ * and does not recompute lyra-growth-pending (the next regen resets it).
+ * Call at app boot AFTER autoRestoreFromBackup; snapshots after cleaning so
+ * the backup reflects the cleaned state.
+ *
+ * @param {{ snapshot?: Function }} deps - injectable snapshotBackup for tests
+ * @returns {{ ran: boolean, removedLog: number, removedReports: number }}
+ */
+export function purgeInauthenticGrowthV1({ snapshot } = {}) {
+  try {
+    if (localStorage.getItem("lyra-growth-purge-v1")) return { ran: false, removedLog: 0, removedReports: 0 };
+    const removedAfters = [];
+
+    let removedLog = 0;
+    try {
+      const log = JSON.parse(localStorage.getItem("lyra-growth-log") || "[]");
+      const bad = (e) => isMetaGrowthText(e.before) || isMetaGrowthText(e.after);
+      const keep = log.filter(e => !bad(e));
+      removedLog = log.length - keep.length;
+      if (removedLog) {
+        log.filter(bad).forEach(e => removedAfters.push(e.after || ""));
+        localStorage.setItem("lyra-growth-log", JSON.stringify(keep));
+      }
+    } catch (e) { /* silent */ }
+
+    let removedReports = 0;
+    try {
+      const reports = JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]");
+      const bad = (r) => isMetaGrowthText(r.before) || isMetaGrowthText(r.after) || isMetaGrowthText(r.reportText);
+      const keep = reports.filter(r => !bad(r));
+      removedReports = reports.length - keep.length;
+      if (removedReports) {
+        reports.filter(bad).forEach(r => removedAfters.push(r.after || r.technique || ""));
+        localStorage.setItem("lyra-masterclass-reports", JSON.stringify(keep));
+      }
+    } catch (e) { /* silent */ }
+
+    localStorage.setItem("lyra-growth-purge-v1", "done");
+    if (removedAfters.length) {
+      console.info(`[lyra-purge] removed ${removedLog} growth-log entr${removedLog === 1 ? "y" : "ies"} + ${removedReports} report card(s) with meta-commentary:`, removedAfters);
+      if (snapshot) snapshot();
+    }
+    return { ran: true, removedLog, removedReports };
+  } catch (e) {
+    return { ran: false, removedLog: 0, removedReports: 0 };
+  }
+}
+
+/**
  * Detect a visible MASTERCLASS REPORT in a Lyra coaching message and save it
  * as a freeform Achievements card. This is the robust fallback for when the
  * AI prints a full report in the chat (numbered SKILLS DEPLOYED / SENTENCE
