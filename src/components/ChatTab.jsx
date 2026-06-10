@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { COLORS } from "../constants.js";
+import { COLORS, QUICK_ACTION_MESSAGES } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { useTypewriter } from "../hooks.js";
 import { FeatherIcon } from "./Icons.jsx";
@@ -214,9 +214,9 @@ export default function ChatTab({
           </button>
         )}
         {[
-          { label: "Outline structure", msg: `Please outline the full structure for my ${typeLabel.toLowerCase()}. Show me the framework I should follow.` },
-          { label: "Brainstorm ideas", msg: "Help me brainstorm the main points and arguments for my writing." },
-          { label: "Search for facts", msg: `Search the web for relevant facts, statistics, or examples I could use in my ${typeLabel.toLowerCase()} about "${topic}".`, search: true },
+          { label: "Outline structure", msg: `${QUICK_ACTION_MESSAGES[0]} ${typeLabel.toLowerCase()}. Show me the framework I should follow.` },
+          { label: "Brainstorm ideas", msg: QUICK_ACTION_MESSAGES[1] },
+          { label: "Search for facts", msg: `${QUICK_ACTION_MESSAGES[2]} ${typeLabel.toLowerCase()} about "${topic}".`, search: true },
         ].map((chip, i) => (
           <button
             key={i}

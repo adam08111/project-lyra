@@ -40,6 +40,17 @@ export function defaultXraySections(typeId) {
   return XRAY_SECTION_DEFAULTS[typeId] || XRAY_SECTION_DEFAULTS._default;
 }
 
+// Canned quick-action chip messages (STATIC PREFIXES — ChatTab appends the
+// topic/type-specific tail). Single source of truth: ChatTab builds its chips
+// from these, and learning-sync rejects any "growth" entry whose `before` is
+// one of them — chips are sent AS user messages, so provenance alone would
+// wrongly authenticate them as student writing.
+export const QUICK_ACTION_MESSAGES = [
+  "Please outline the full structure for my",
+  "Help me brainstorm the main points and arguments for my writing.",
+  "Search the web for relevant facts, statistics, or examples I could use in my",
+];
+
 export const wordCounts = [50, 100, 150, 200, 300, 400, 500, "600+"];
 
 // ── NEW: Writing purpose / exam context ──

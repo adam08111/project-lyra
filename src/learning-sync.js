@@ -8,7 +8,65 @@
  * The student never sees this. The app strips it before display.
  */
 
+import { reportWords, reportSameMoment } from "./report-utils.js";
+import { QUICK_ACTION_MESSAGES } from "./constants.js";
+
 const MARKER = /<!--LYRA_LEARNING_DATA\n?([\s\S]*?)\nLYRA_LEARNING_DATA-->/;
+
+// ── Authentic-growth validation ───────────────────────────────────────
+// A growth entry is a trophy ONLY if it records a literal sentence rewrite:
+// `before` must trace to text the student actually typed, and `after` must be
+// a sentence — not third-person meta-commentary about the student. Without
+// this, conversational "wins" (the model coupling rule fires on any insight)
+// minted fake Achievements cards and fed the Growth Report fake practices.
+
+const normGrowthText = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+
+const META_PATTERNS = [
+  /\b(the|this)\s+(student|learner)\b/i,
+  /\bstudent (now )?(understands|realises|realizes|learned|knows)\b/i,
+];
+
+/** Third-person observation about the student, not student writing. */
+export const isMetaGrowthText = (s) => META_PATTERNS.some(re => re.test(s || ""));
+
+/**
+ * Pure provenance validator for one growth entry. ALL checks must pass:
+ *  1. before/after non-empty and different (normalized)
+ *  2. before is not a canned quick-action chip message (chips arrive AS user
+ *     messages, so the traceability check alone would pass them)
+ *  3. before traces to something the student actually authored this session:
+ *     substring of a studentText, or ≥0.6 content-word overlap with one
+ *     (same threshold as the practice-moment dedup). No provenance, no trophy.
+ *  4. neither side is meta-commentary ("The student understands…")
+ *  5. after is sentence-shaped (≤600 chars — a rewrite, not a pasted paragraph)
+ *
+ * @param {{before, after}} g - one growth entry from LYRA_LEARNING_DATA
+ * @param {string[]} studentTexts - texts the student authored this session
+ */
+export function isAuthenticGrowth(g, studentTexts) {
+  if (!g) return false;
+  const before = normGrowthText(g.before);
+  const after = normGrowthText(g.after);
+  // 1. non-empty, genuinely different
+  if (!before || !after || before === after) return false;
+  // 2. not a canned chip message (equals or contains a chip prefix)
+  if (QUICK_ACTION_MESSAGES.some(m => {
+    const n = normGrowthText(m);
+    return n && (before === n || before.includes(n));
+  })) return false;
+  // 4. not meta-commentary on either side
+  if (isMetaGrowthText(g.before) || isMetaGrowthText(g.after)) return false;
+  // 5. a rewrite, not a paragraph dump
+  if ((g.after || "").length > 600) return false;
+  // 3. traceable to the student's own words — fail closed on no provenance
+  const texts = (studentTexts || []).filter(t => typeof t === "string" && t.trim());
+  if (!texts.length) return false;
+  const beforeWords = reportWords(g.before);
+  return texts.some(t =>
+    normGrowthText(t).includes(before) || reportSameMoment(beforeWords, reportWords(t))
+  );
+}
 
 /**
  * Extract hidden learning data from an AI response.
