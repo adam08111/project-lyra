@@ -844,3 +844,34 @@ Return ONLY valid JSON — no markdown fences, no preamble, no commentary:
   "try_example_zh": "繁體中文 version"
 }`;
 }
+
+/**
+ * Define ONE English word for a 14-year-old Hong Kong learner, using the
+ * sentence it was found in to pick the right sense. Lite tier, no LYRA_BRAIN.
+ * @param {string} word - the selected word
+ * @param {string} sentence - surrounding sentence/snippet (may be empty)
+ */
+export function buildWordLookupPrompt(word, sentence = "") {
+  return `You are a tiny dictionary for a 14-year-old English learner in Hong Kong.
+
+The student selected the word "${word}"${sentence ? ` while reading: "${sentence}"` : ""}.
+
+Rules:
+- Define the sense USED IN THAT SENTENCE (fall back to the most common sense if the sentence is missing or unclear).
+- Plain everyday English — a definition a 14-year-old reads in one breath. No jargon.
+- All *_zh fields: Traditional Chinese (繁體中文) ONLY — never Simplified. STANDARD WRITTEN Chinese (書面語) — natural Hong Kong/Taiwan written style. NEVER Cantonese colloquial/spoken forms: no 係/嘅/唔/嚟/嗰/咁/啲/喺/畀. Write 是 not 係, 的 not 嘅.
+- "example_en" is ONE new simple sentence using the word in the SAME sense, on an everyday school-life topic.
+- HARD CAP: about 60 words across all English fields combined.
+
+Return ONLY valid JSON — no markdown fences, no preamble:
+{
+  "word": "the word, lowercase",
+  "pos_en": "part of speech in plain words, e.g. verb",
+  "pos_zh": "詞性, e.g. 動詞",
+  "zh": "the Chinese equivalent of the word AS USED HERE, e.g. 嘲諷",
+  "meaning_en": "one short plain-English definition",
+  "meaning_zh": "一句繁體中文解釋",
+  "example_en": "one new simple example sentence",
+  "example_zh": "繁體中文 version of the example"
+}`;
+}

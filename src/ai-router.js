@@ -173,6 +173,13 @@ const ROUTE_CONFIG = {
     brain: false,
   },
 
+  // Word dictionary lookup (select an unknown word anywhere in the app)
+  word_lookup: {
+    model: MODELS.lite,
+    thinkingBudget: 0,
+    brain: false,
+  },
+
   // Source text translation (English → Traditional Chinese)
   translate: {
     model: MODELS.lite,
