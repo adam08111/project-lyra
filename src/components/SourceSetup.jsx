@@ -9,6 +9,7 @@ import { buildStyleProfilerPrompt } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
 import XRayView, { parseProfileSections, extractAuthor, saveStyleSkill, mono } from "./XRayView.jsx";
 import { prepareImageForOCR } from "../image-utils.js";
+import { detectFormatCue, typeLabelOf } from "../genre-cues.js";
 
 export default function SourceSetup({
   userName, setUserName,
@@ -483,6 +484,26 @@ export default function SourceSetup({
                       </button>
                     ))}
                   </div>
+                  {/* Genre-mismatch nudge: the topic contains an explicit format
+                      instruction that contradicts the selected type. Non-blocking
+                      — Next stays enabled, the student keeps final say. */}
+                  {(() => {
+                    const cue = detectFormatCue(topic);
+                    if (!cue || !type || cue.typeId === type) return null;
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontFamily: mono }}>
+                        <span style={{ flex: 1, fontSize: 12, color: COLORS.amber, lineHeight: 1.5 }}>
+                          Your question asks for a {cue.cueLabel} — {typeLabelOf(cue.typeId)} fits best
+                        </span>
+                        <button
+                          onClick={() => setType(cue.typeId)}
+                          style={{ fontSize: 11, fontFamily: mono, padding: "4px 12px", borderRadius: 8, border: `1.5px solid ${COLORS.amber}`, background: "transparent", color: COLORS.amber, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}
+                        >
+                          Use it
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <button
