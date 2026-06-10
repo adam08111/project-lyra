@@ -53,6 +53,11 @@ describe("isLookableWord / normWord", () => {
     expect(normWord("Mock,")).toBe("mock");
     expect(normWord("MOCK")).toBe(normWord("mock"));
   });
+  it("normWord unifies curly/straight apostrophes and strips possessives", () => {
+    expect(normWord("don’t")).toBe(normWord("don't")); // one cache entry, one AI call
+    expect(normWord("students’")).toBe("students");
+    expect(normWord("‘quote’")).toBe("quote");
+  });
 });
 
 describe("lookupWord — cache before call", () => {

@@ -39,16 +39,22 @@ export default function WordLookup({ trackCall }) {
         const full = (node.textContent || "");
         const at = Math.max(0, (sel.getRangeAt(0).startOffset || 0) - 120);
         const sentence = full.slice(at, (sel.getRangeAt(0).startOffset || 0) + text.length + 120).trim();
-        setBubble({ word: text, sentence, x: rect.left + rect.width / 2, y: rect.top });
+        // Anchor BELOW the selection: iOS/Android native selection menus render
+        // above it, so a bubble up there gets buried on the primary platform.
+        setBubble({ word: text, sentence, x: rect.left + rect.width / 2, yBottom: rect.bottom });
       }, 250);
     };
     const onScroll = () => { if (!popupOpenRef.current) setBubble(null); };
+    // Rotation/resize invalidates every captured coordinate — just dismiss.
+    const onResize = () => { setBubble(null); setPopup(null); setState({ status: "idle", entry: null }); };
     document.addEventListener("selectionchange", onSelectionChange);
     window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
     return () => {
       clearTimeout(debounceRef.current);
       document.removeEventListener("selectionchange", onSelectionChange);
       window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
     };
   }, []);
 
@@ -87,7 +93,7 @@ export default function WordLookup({ trackCall }) {
           onMouseDown={openPopup}
           style={{
             position: "fixed",
-            top: Math.max(8, bubble.y - 44),
+            top: Math.min(vh - 48, bubble.yBottom + 10),
             left: Math.min(Math.max(8, bubble.x - 60), vw - 130),
             zIndex: 200,
             display: "flex", alignItems: "center", gap: 6,
@@ -110,7 +116,7 @@ export default function WordLookup({ trackCall }) {
             style={{
               position: "fixed",
               zIndex: 200,
-              top: Math.min(Math.max(12, popup.y + 16), vh - 260),
+              top: Math.min(Math.max(12, popup.yBottom + 12), Math.max(12, vh - 260)),
               left: Math.min(Math.max(12, popup.x - 150), Math.max(12, vw - 312)),
               width: Math.min(300, vw - 24),
               background: COLORS.card,

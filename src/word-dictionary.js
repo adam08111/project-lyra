@@ -19,8 +19,14 @@ export const DICTIONARY_VERSION = 1;
 
 // Cache key: the word alone (lowercase, stripped) — the same word looked up
 // anywhere is instant. The first lookup's sentence picks the sense; acceptable
-// for this audience's vocabulary level.
-export const normWord = (w) => (w || "").toLowerCase().replace(/[^a-z'’-]/g, "").trim();
+// for this audience's vocabulary level. Curly apostrophes normalize to straight
+// (Guardian text uses ’, editor text uses ') and possessive/edge apostrophes
+// are stripped, so "don't"/"don’t" and "students"/"students’" share one entry.
+export const normWord = (w) => (w || "")
+  .toLowerCase()
+  .replace(/’/g, "'")
+  .replace(/[^a-z'-]/g, "")
+  .replace(/^['-]+|['-]+$/g, "");
 
 // A lookable word: a single English word, 2-30 letters (apostrophe/hyphen ok).
 export const isLookableWord = (s) => /^[A-Za-z][A-Za-z'’-]{1,29}$/.test((s || "").trim());
