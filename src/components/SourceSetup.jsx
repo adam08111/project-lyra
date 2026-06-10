@@ -135,7 +135,7 @@ export default function SourceSetup({
             return techs.map(t => t.technique);
           }).filter(Boolean);
           if (skillList.length > 0) {
-            existingSkillsCtx = `\n\nCROSS-REFERENCE: The student has previously studied these techniques from other authors: ${skillList.join(", ")}. If this new text uses any of the SAME techniques, mention the connection: "This writer also uses [technique] (like in your previous analysis), but [how they use it differently]." Only mention genuine overlaps — do not force connections.`;
+            existingSkillsCtx = `\n\nCROSS-REFERENCE: The student has previously studied these techniques from other authors: ${skillList.join(", ")}. If this new text uses any of the SAME techniques, mention the connection: "This writer also uses [technique] (like in your previous analysis), but [how they use it differently]." Only mention genuine overlaps — do not force connections. Refer to the connection by TECHNIQUE NAME ONLY — never "Writer A", "Writer B" or any Writer label (the student never sees those labels here).`;
           }
         }
       } catch (e) { /* silent */ }

@@ -301,4 +301,13 @@ describe("buildStyleProfilerPrompt — name-based section selection", () => {
     expect(XRAY_ALL_SECTIONS[8]).toBe("SIGNATURE STYLE");
     expect(XRAY_ALL_SECTIONS).toContain("WHEN TO USE THIS STYLE");
   });
+
+  it("forbids anonymous Writer labels in student-facing analysis (§Writer-A leak fix)", () => {
+    // LYRA_BRAIN (prepended) tells the model to use "Writer A/B" labels for the
+    // coaching surface, where a display layer substitutes them. The X-Ray has no
+    // such layer, so the profiler must explicitly override that instruction.
+    const p = buildStyleProfilerPrompt(["WORD CHOICES"]);
+    expect(p).toContain("NO WRITER LABELS");
+    expect(p).toContain("NEVER write \"Writer A\"");
+  });
 });

@@ -252,6 +252,8 @@ SECTION COUNT — CRITICAL: Produce ONLY these sections, in this exact order, th
 
 IMPORTANT: The student is learning English. Avoid grammar jargon. Use everyday words. When you must use a writing term, explain it in brackets: "metaphor (comparing two things without using 'like' or 'as')".
 
+NO WRITER LABELS — OVERRIDES EVERYTHING ABOVE: This analysis is shown to the student EXACTLY as you write it — there is NO substitution layer on this surface. NEVER write "Writer A", "Writer B" or any anonymous Writer label anywhere in this analysis. If you reference a technique the student studied before (cross-reference), name ONLY the technique itself — e.g. "(like the Concession Then Punch you studied before)" — never which writer it came from.
+
 STEP 1 — WHO WROTE THIS?
 Guess who wrote this text. If you recognise the author, say their name. If not, write "Unknown Author".
 
