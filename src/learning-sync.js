@@ -118,6 +118,19 @@ export function syncLearningData(data, ctx) {
 
   const { setGrammarLog, topic, forcedTechnique } = ctx;
 
+  // Provenance gate: only growth entries that trace to the student's own
+  // writing reach the growth log, the regen counter, and the Achievements
+  // card. Grammar/vocabulary/structures/skills sync UNCHANGED below — they
+  // have their own dedup and the Growth Report brain judges them by rate.
+  const growthAll = data.growth || [];
+  const authentic = growthAll.filter(g => isAuthenticGrowth(g, ctx.studentTexts || []));
+  if (growthAll.length && !authentic.length) {
+    console.warn("[lyra-sync] rejected inauthentic growth:", growthAll.map(g => ({
+      before: (g.before || "").slice(0, 80),
+      after: (g.after || "").slice(0, 80),
+    })));
+  }
+
   // 1. Grammar → existing Grammar Log
   if (data.grammar?.length && setGrammarLog) {
     const newEntries = data.grammar.map(g => ({
@@ -153,11 +166,11 @@ export function syncLearningData(data, ctx) {
     } catch (e) { /* silent */ }
   }
 
-  // 3. Growth → before/after evolution log
-  if (data.growth?.length) {
+  // 3. Growth → before/after evolution log (authentic entries only)
+  if (authentic.length) {
     try {
       const existing = JSON.parse(localStorage.getItem("lyra-growth-log") || "[]");
-      const newEntries = data.growth.map(g => ({
+      const newEntries = authentic.map(g => ({
         id: "growth_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
         date: new Date().toISOString(),
         before: g.before,
@@ -231,8 +244,8 @@ export function syncLearningData(data, ctx) {
   //    still record everything; this is the curated trophy view. Returns
   //    true so the caller knows a structured report was saved and can skip
   //    the visible-report fallback.
-  if (data.growth?.length) {
-    const g = data.growth[0];
+  if (authentic.length) {
+    const g = authentic[0];
     saveMasterclassReport({
       source: "auto",
       topic: topic?.slice(0, 80) || "",
@@ -299,6 +312,11 @@ export function maybeSaveVisibleReport(displayText, ctx) {
 
   const afterMatch = displayText.match(/After:\s*([^\n]+)/i);
   const after = afterMatch ? afterMatch[1].trim().replace(/^["“]|["”]$/g, "") : "";
+  // A visible report whose "After:" line is meta-commentary about the student
+  // ("The student understands…") is a conversational summary, not a rewrite —
+  // it must not become a card. (The manual ★ Save button is untouched: that's
+  // the student-controlled override.)
+  if (after && isMetaGrowthText(after)) return null;
   const techMatch = displayText.match(/(?:You used|deployed|technique)\s+(?:the\s+)?["'“]?([A-Z][\w '\-]{2,40})["'”]?/);
   return saveMasterclassReport({
     source: "auto-visible",

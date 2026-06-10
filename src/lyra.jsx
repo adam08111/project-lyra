@@ -545,7 +545,15 @@ Rules:
       const { displayText, learningData } = extractLearningData(result);
       let savedReport = false;
       if (learningData) {
-        const syncResult = syncLearningData(learningData, { setGrammarLog, topic });
+        // Provenance for the authentic-growth gate: everything the student
+        // actually authored this session — prior user messages, the message
+        // just sent, and the current draft.
+        const studentTexts = [
+          ...messages.filter(m => m.role === "user").map(m => m.text),
+          userMsg.text,
+          draft || "",
+        ];
+        const syncResult = syncLearningData(learningData, { setGrammarLog, topic, studentTexts });
         savedReport = !!(syncResult && syncResult.savedReport);
       }
       // Fallback: if the structured learning-data path didn't save an

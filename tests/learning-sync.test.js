@@ -94,7 +94,9 @@ describe("syncLearningData", () => {
       type: "learning_sync",
       growth: [{ before: "It was bad.", after: "It was devastating.", technique_used: "Word upgrade", why_better: "Stronger emotion" }],
     };
-    syncLearningData(data, { setGrammarLog: mockSetGrammarLog, topic: "climate" });
+    // Provenance is now mandatory: the entry only syncs because `before`
+    // traces to a text the student actually typed this session.
+    syncLearningData(data, { setGrammarLog: mockSetGrammarLog, topic: "climate", studentTexts: ["It was bad."] });
 
     const stored = JSON.parse(localStorage.getItem("lyra-growth-log"));
     expect(stored).toHaveLength(1);

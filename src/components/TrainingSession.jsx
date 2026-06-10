@@ -370,7 +370,11 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
       const practisedName = (activeTechIdx !== null && techniques[activeTechIdx]) ? (techniques[activeTechIdx].title || techniques[activeTechIdx].technique) : "";
       let savedReport = false;
       if (learningData) {
-        const syncResult = syncLearningData(learningData, { topic: skill?.authorName || "", forcedTechnique: practisedName });
+        // Provenance for the authentic-growth gate: the student's chat inputs
+        // for this technique (their rewrite attempts ride in `conversation`
+        // as role:'student' turns).
+        const studentTexts = conversation.filter(m => m.role === "student").map(m => m.text);
+        const syncResult = syncLearningData(learningData, { topic: skill?.authorName || "", forcedTechnique: practisedName, studentTexts });
         savedReport = !!(syncResult && syncResult.savedReport);
       }
       const message = synced
