@@ -420,9 +420,9 @@ export function AnnotationExplainCard({ request, trackCall, sectionTitle, onSave
           {entry.try_zh && <div style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.7, marginTop: 2 }}>{entry.try_zh}</div>}
           {(entry.try_example_en || entry.try_example_zh) && (
             <div style={{ marginTop: 8, background: "#FFF6E5", border: `1px solid #E8D8B4`, borderRadius: 6, padding: "6px 10px", color: "#6B4A20" }}>
-              <span style={{ fontWeight: 700, color: "#A6701F" }}>For example · 例如: </span>
-              {entry.try_example_en && <div style={{ fontSize: 12, lineHeight: 1.7, marginTop: 2 }}>{entry.try_example_en}</div>}
-              {entry.try_example_zh && <div style={{ fontSize: 12, lineHeight: 1.7, marginTop: 2, opacity: 0.85 }}>{entry.try_example_zh}</div>}
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#A6701F", letterSpacing: 0.5, marginBottom: 2 }}>For example · 例如</div>
+              {entry.try_example_en && <div style={{ fontSize: 11, lineHeight: 1.6 }}>{entry.try_example_en}</div>}
+              {entry.try_example_zh && <div style={{ fontSize: 11, lineHeight: 1.6, marginTop: 2, opacity: 0.85 }}>{entry.try_example_zh}</div>}
             </div>
           )}
         </div>
