@@ -425,20 +425,43 @@ function SavedConcepts() {
     );
   }
 
+  // Two kinds of saved resources live here — dictionary words and writing
+  // concepts (techniques + grammar patterns). Group them under separate
+  // headers so vocab review and concept review don't blur into one list.
+  // Indices stay ORIGINAL (into `concepts`) so remove/expand keep working.
+  const entries = concepts.map((c, i) => ({ c, i }));
+  const words = entries.filter(e => e.c.kind === "word");
+  const others = entries.filter(e => e.c.kind !== "word");
+
+  const sectionHeader = (label) => (
+    <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, margin: "14px 0 8px" }}>
+      {label}
+    </div>
+  );
+  const renderCards = (list) => list.map(({ c, i }) => (
+    <SavedConceptCard
+      key={i}
+      concept={c}
+      isExpanded={expanded === i}
+      onToggle={() => setExpanded(expanded === i ? null : i)}
+      onRemove={() => remove(i)}
+    />
+  ));
+
   return (
     <div>
-      <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 12, fontFamily: mono }}>
-        {concepts.length} saved concept{concepts.length !== 1 ? "s" : ""}
-      </div>
-      {concepts.map((c, i) => (
-        <SavedConceptCard
-          key={i}
-          concept={c}
-          isExpanded={expanded === i}
-          onToggle={() => setExpanded(expanded === i ? null : i)}
-          onRemove={() => remove(i)}
-        />
-      ))}
+      {words.length > 0 && (
+        <>
+          {sectionHeader(`📖 Words · 生字 (${words.length})`)}
+          {renderCards(words)}
+        </>
+      )}
+      {others.length > 0 && (
+        <>
+          {sectionHeader(`✦ Concepts · 概念 (${others.length})`)}
+          {renderCards(others)}
+        </>
+      )}
     </div>
   );
 }
