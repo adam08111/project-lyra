@@ -1238,3 +1238,24 @@ A review workflow (4 dimensions → per-finding adversarial verification, 16 fin
 ### 22.6 Notes / out of scope (unchanged)
 With fewer techniques per skill, `applySkillWithEnrichment`'s PEEL coverage check triggers web-search enrichment more often — expected, not a bug. Not built (deferred by spec): teacher-dashboard depth setting; task-specific top-up after the Mission step picks a type.
 
+---
+
+## 23. UPDATE — 10 June 2026 — Tappable annotation labels + the "Writer A" leak fix (branch `claude/vigorous-zhukovsky-413664`)
+
+Annotation labels in the X-Ray quote cards ("appositive", "ironic cliché"…) were shown but never explained. Now tapping an annotated phrase opens a small bilingual explanation card directly below the quote card — AI-generated on first tap (Lite tier), cached forever, savable to Saved Concepts. Plus: found and fixed the leak that put "(like in your previous analysis of Writer A)" into student-facing analysis prose.
+
+### 23.1 Route + prompt + cached glossary (commit `fb51604`)
+New `annotation_explain` route (Lite, `brain:false`). `buildAnnotationExplainPrompt(label, phrase, sentence, sourceLang)` demands JSON-only bilingual output (`term/what/here/try ×en/zh`), forces the student's exact tapped phrase as the worked example with effect-on-the-reader framing, ~120-word EN cap, warm 繁體中文. `src/annotation-glossary.js`: localStorage cache (`lyra-annotation-glossary`) keyed `normKey(label, phrase)` (case/space/punct-insensitive, CJK kept); cache-before-call; ~150-entry cap with oldest eviction; defensive parse (fences/preamble tolerated; garbage throws and is **not** cached — retap retries); shared-promise in-flight guard; deliberately **not** in backup CRITICAL_KEYS (regenerable). `buildConceptFromExplanation` maps an entry onto the **existing** saved-concepts record shape.
+
+### 23.2 Tap UI (commit `d99847b`)
+`AnnotatedQuote` gains optional `onAnnotationTap`/`activeKey` — both render paths (English ruby + CJK inline) become tappable only when wired (unwired sites unchanged, no dead cursors); the open annotation's highlight brightens. `AnnotationExplainCard` mounts below the tapped quote card (loading / error+retry / loaded; term header with the annotation's colour accent; what→here→try; ☆ Save → ★ Saved into `lyra-saved-concepts`, deduped). SectionCard wires the English FROM THE TEXT card and the 譯文 card (sourceLang `zh`, per-line sentence), each one-open-at-a-time (retap closes, other tap swaps), with the muted bilingual hint "點一下螢光字詞看解釋 · Tap a highlighted phrase to learn it" under any quote card with ≥1 annotation. The Skills tab is covered automatically (SavedSkillDetail renders via SectionCard); SavedConceptCard's source quote is plain text (no AnnotatedQuote) so there was nothing to wire there.
+
+### 23.3 The "Writer A" leak — investigated then fixed (commit `6f50e64`)
+A live X-Ray rendered "(like in your previous analysis of Writer A)". Trace: the profiler is `brain:true`, so LYRA_BRAIN is prepended — and LYRA_BRAIN instructs the model to refer to prior skills via anonymous Writer labels, expecting a display-side substitution layer that exists only on the coaching surface. The profiler's CROSS-REFERENCE context sends prior **technique names only** — nothing is anonymised on that path, so no mapping exists and `restoreAuthorNames` could never apply. The model obeyed LYRA_BRAIN, and the label leaked. Restoring was impossible (the label is the model's invention) and dropping the cross-reference context would kill the connection feature, so the fix is a **banlist**: "NO WRITER LABELS — OVERRIDES EVERYTHING ABOVE" in `buildStyleProfilerPrompt` (after LYRA_BRAIN, so it wins; one place covers both call sites) + the technique-name-only rule appended to both CROSS-REFERENCE snippets. Regression test pins it.
+
+### 23.4 Verification + review (commit `702e156`)
+**152 unit tests** (was 138): prompt contents, normKey, cache-hit-skips-AI, garbage→error-not-cached, fenced/preamble parse, eviction, concept-shape conformance, the banlist. Build clean. **Live-verified** in the Skills tab: tapped "ironic cliché" → real Lite call → bilingual card in warm HK register with the phrase "one big happy family" as the worked example → Save wrote a conforming concept ("Ironic Cliché — 諷刺性老套語") → retap closed → second tap served **instantly from cache** (no second AI call). An adversarial review (3 dimensions → per-finding verification) confirmed 4 real issues, all fixed: Save not refreshing StyleLab's "Saved (N)" badge (onSaved threaded), missing `trackCall` on the Analyse-tab SectionCard (annotation calls were uncounted), a one-frame stale flash when swapping annotations (card now keyed by normKey), and no keyboard access on the tappable spans (tabIndex + Enter/Space).
+
+### 23.5 Out of scope (per spec)
+No LYRA_LEARNING_DATA from this surface; Grammar Log mini-lesson flow untouched; no pre-seeded static glossary.
+
