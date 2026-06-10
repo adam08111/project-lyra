@@ -103,7 +103,7 @@ export default function WordLookup({ trackCall }) {
             boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
           }}
         >
-          📖 {bubble.word} · 中文?
+          📖 {bubble.word} · 中文意思
         </button>
       )}
 
