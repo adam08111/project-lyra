@@ -1280,5 +1280,13 @@ Mirrors the proven annotation-glossary pattern. `word_lookup` route (Lite, `brai
 **165 unit tests** (was 155): prompt contents + register banlist, normWord (incl. curly-apostrophe unification), isLookableWord, cache-hit-skips-AI, garbage→error-not-cached, defensive parse, eviction. Build clean. **Live-verified:** selected "photograph" in "Paste or photograph a piece of writing…" → bubble → card chose the **verb** sense (拍攝 · 動詞) with formal register and a school-life example; cached; backdrop-tap closed; bubble confirmed rendering below the selection. An adversarial review (3 dimensions → per-finding verification, 8 rejected) confirmed 3 real issues, all fixed (commit `d01e7fe`): the bubble's original above-the-selection position collided with the native selection menus (major — moved below); stale viewport clamps on rotation (resize dismisses; clamp floor added); apostrophe cache-key duplication.
 
 ### 24.4 Notes
-Cache key is the word alone — the first lookup's sentence picks the sense (acceptable at this vocabulary level; a polysemy-aware key would defeat the instant-cache goal). Possible future: surface looked-up words to the Growth Report as vocabulary signals; a "my words" review list.
+Cache key is the word alone — the first lookup's sentence picks the sense (acceptable at this vocabulary level; a polysemy-aware key would defeat the instant-cache goal). Possible future: surface looked-up words to the Growth Report as vocabulary signals.
+
+### 24.5 Phone-feedback round (same session)
+- **Bubble label (commits `9ae1228`, `c6201c7`):** "中文?" read oddly as a question → briefly "中文意思" → final: just **📖 {word}**.
+- **Save vocab (commit `c6201c7`):** ☆ Save → ★ Saved on the definition card writes a `kind:"word"` record to `lyra-saved-concepts` via `buildConceptFromWord` (word · 中文 name, pos, bilingual meanings + example, legacy concept fields for graceful degradation), deduped by `wordKey`. `SavedConceptCard` gained a dedicated compact word-card render (blue accent, pos badge, no translate button — already bilingual). WordLookup lives outside StyleLab, so saves dispatch a `lyra-concepts-changed` window event and StyleLab listens to keep its "Saved (N)" badge fresh.
+- **Part of speech (commit `c6201c7`):** now an explicit bordered badge (**verb · 動詞**) beside the word in the popup and on the saved card — the user wanted noun/verb/adj stated clearly.
+- **Saved tab classification (commit `23f4121`):** words and concepts no longer share one flat list — grouped under **📖 Words · 生字 (N)** and **✦ Concepts · 概念 (N)** headers, sections shown only when non-empty, original indices preserved for expand/remove.
+
+166 unit tests green; all rounds live-verified in the preview ("admire · 欣賞 / verb · 動詞" under Words, "Ironic Cliché" under Concepts).
 
