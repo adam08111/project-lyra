@@ -225,8 +225,10 @@ export function AnnotatedQuote({ text, onAnnotationTap, activeKey }) {
   const tappable = typeof onAnnotationTap === "function";
   const tapProps = (seg) => tappable ? {
     role: "button",
+    tabIndex: 0,
     "aria-label": `Explain ${seg.label}`,
     onClick: (e) => { e.preventDefault(); e.stopPropagation(); onAnnotationTap({ phrase: seg.text, label: seg.label }); },
+    onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onAnnotationTap({ phrase: seg.text, label: seg.label }); } },
   } : {};
   // Bump the highlight alpha on the annotation whose explanation is open, so
   // the student sees which one the card below belongs to.
@@ -328,7 +330,7 @@ export function AnnotationHint() {
  * quote card that was tapped; fetches (cache-first, Lite tier) on mount and
  * whenever the tapped annotation changes. Savable to the Saved Concepts tab.
  */
-export function AnnotationExplainCard({ request, trackCall, sectionTitle }) {
+export function AnnotationExplainCard({ request, trackCall, sectionTitle, onSaved }) {
   const { phrase, label, sentence = "", sourceLang = "en" } = request || {};
   const key = normKey(label, phrase);
   const [state, setState] = useState({ status: "loading", entry: null });
@@ -384,6 +386,9 @@ export function AnnotationExplainCard({ request, trackCall, sectionTitle }) {
         localStorage.setItem("lyra-saved-concepts", JSON.stringify(concepts));
       }
       setSaved(true);
+      // Notify the parent (mirrors the Sentence-breakdown Save) so StyleLab's
+      // "Saved (N)" tab badge refreshes.
+      if (onSaved) onSaved();
     } catch (e) { /* silent */ }
   };
 
@@ -1020,7 +1025,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
           ))}
         </div>
         {zhHasAnnotations && <AnnotationHint />}
-        {openAnnoZh && <AnnotationExplainCard request={openAnnoZh} trackCall={trackCall} sectionTitle={section.title} />}
+        {openAnnoZh && <AnnotationExplainCard key={normKey(openAnnoZh.label, openAnnoZh.phrase)} request={openAnnoZh} trackCall={trackCall} sectionTitle={section.title} onSaved={onSave} />}
       </>
     );
   };
@@ -1302,7 +1307,7 @@ export function SectionCard({ section, onSave, trackCall, index }) {
             </div>
           )}
           {parts.example && parseAnnotations(parts.example).some(s => s.label) && <AnnotationHint />}
-          {openAnnoEn && <AnnotationExplainCard request={openAnnoEn} trackCall={trackCall} sectionTitle={section.title} />}
+          {openAnnoEn && <AnnotationExplainCard key={normKey(openAnnoEn.label, openAnnoEn.phrase)} request={openAnnoEn} trackCall={trackCall} sectionTitle={section.title} onSaved={onSave} />}
           {renderExampleTranslation()}
           {parts.breakdown && (() => {
             const raw = parts.breakdown;

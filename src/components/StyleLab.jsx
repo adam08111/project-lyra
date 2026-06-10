@@ -1523,7 +1523,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
 
                 {/* Section cards (exclude WHEN TO USE — it has its own tab) */}
                 {profileSections.filter(s => s.title !== "WHEN TO USE THIS STYLE").map((section, i) => (
-                  <SectionCard key={i} section={section} onSave={() => setSavedCount(JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]").length)} />
+                  <SectionCard key={i} section={section} trackCall={trackCall} onSave={() => setSavedCount(JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]").length)} />
                 ))}
                 <div ref={analyseEndRef} />
 
