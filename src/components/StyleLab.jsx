@@ -670,7 +670,7 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
           onClick={onBack}
           style={{ background: "none", border: "none", color: COLORS.heading, fontFamily: mono, fontSize: 13, cursor: "pointer", padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }}
         >
-          ← Back to skills
+          ← Back to writers
         </button>
       </div>
       <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${COLORS.border}` }}>
@@ -1080,7 +1080,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
       <div style={{ textAlign: "center", padding: "40px 20px" }}>
         <FeatherIcon size={24} color={COLORS.accent2} />
         <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 12, lineHeight: 1.5, fontFamily: mono }}>
-          No style skills yet. Analyse a passage to save your first skill.
+          No writers yet. Analyse a passage to learn your first writer's skills.
         </div>
       </div>
     );
@@ -1109,7 +1109,7 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
   return (
     <div>
       <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 12, fontFamily: mono }}>
-        {skills.length} skill{skills.length !== 1 ? "s" : ""} saved
+        {skills.length} writer{skills.length !== 1 ? "s" : ""} saved — tap one to see their skills
       </div>
       {skills.map((sk, i) => (
         <div
@@ -1144,9 +1144,18 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
             ) : (
               <>
                 <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, fontFamily: mono, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sk.authorName}</div>
+                {(() => {
+                  // Each row is a WRITER; show how many of their skills live inside.
+                  const n = (sk.sections?.length) || (sk.analysedTechniques?.length) || (sk.techniques?.length) || 0;
+                  return n > 0 ? (
+                    <span style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono, whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "1px 7px" }}>
+                      {n} skill{n !== 1 ? "s" : ""}
+                    </span>
+                  ) : null;
+                })()}
                 <button
                   onClick={e => { e.stopPropagation(); setEditingIdx(i); setEditName(sk.authorName); }}
-                  title="Rename skill"
+                  title="Rename writer"
                   style={{ background: "none", border: "none", fontSize: 11, color: COLORS.muted, cursor: "pointer", padding: "1px 4px", opacity: 0.5, lineHeight: 1, flexShrink: 0 }}
                 >✎</button>
               </>
@@ -1431,7 +1440,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
             { key: "practice", label: "Practice", needsProfile: true },
             { key: "useit", label: "Use It", needsProfile: true },
             { key: "saved", label: savedCount > 0 ? `Saved (${savedCount})` : "Saved" },
-            { key: "skills", label: skillCount > 0 ? `Skills (${skillCount})` : "Skills" },
+            { key: "skills", label: skillCount > 0 ? `Writers (${skillCount})` : "Writers" },
             { key: "achievements", label: achievementCount > 0 ? `Achievements (${achievementCount})` : "Achievements" },
             { key: "report", label: "Report" },
           ].map(t => {
@@ -1540,20 +1549,20 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                   <div style={{ ...s.card, marginBottom: 12, padding: "10px 14px", borderLeft: `3px solid ${COLORS.green}`, background: "#F0F6F1", display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 14 }}>&#10003;</span>
                     <div style={{ fontSize: 11, color: COLORS.heading, fontFamily: mono, lineHeight: 1.5 }}>
-                      <strong>Writing skill saved</strong> — check the Skills tab to review and reuse
+                      <strong>Writer saved</strong> — their skills are in the Writers tab to review and reuse
                     </div>
                   </div>
                 )}
                 {skillSaved === "saved" && !skillInStore && (
                   <div style={{ ...s.card, marginBottom: 12, padding: "10px 14px", borderLeft: `3px solid ${COLORS.accent1}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                     <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, lineHeight: 1.5 }}>
-                      This skill isn't in your Skills tab right now.
+                      This writer isn't in your Writers tab right now.
                     </div>
                     <button
                       onClick={handleAddToSkills}
                       style={{ ...s.chip, flexShrink: 0, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}
                     >
-                      &#10022; Add to Skills
+                      &#10022; Add to Writers
                     </button>
                   </div>
                 )}

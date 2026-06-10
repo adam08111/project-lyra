@@ -1790,7 +1790,7 @@ export default function XRayView({ profileSections, authorName, referenceText, s
         <div style={{ ...sharedCard, marginBottom: 12, padding: "10px 14px", borderLeft: `3px solid ${COLORS.green}`, background: "#F0F6F1", display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 14 }}>&#10003;</span>
           <div style={{ fontSize: 11, color: COLORS.heading, fontFamily: mono, lineHeight: 1.5 }}>
-            <strong>Writing skill saved</strong> — check the Skills tab to review and reuse
+            <strong>Writer saved</strong> — their skills are in Style Lab's Writers tab to review and reuse
           </div>
         </div>
       )}
