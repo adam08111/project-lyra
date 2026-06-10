@@ -21,6 +21,7 @@ const FAKE_JSON = JSON.stringify({
   what_en: "A renaming phrase next to a noun.", what_zh: "緊貼名詞的補充說明。",
   here_en: "It adds detail without a new sentence.", here_zh: "不用另起一句就補充細節。",
   try_en: "[Name], [who they are], [did something].", try_zh: "[名字]，[身份]，[做了什麼]。",
+  try_example_en: "Mr Chan, our canteen uncle, makes the best noodles.", try_example_zh: "陳先生，我們的飯堂叔叔，煮的麵最好吃。",
 });
 
 beforeEach(() => store.clear());
@@ -44,6 +45,13 @@ describe("buildAnnotationExplainPrompt", () => {
     expect(p).toContain("書面語");
     expect(p).toContain("NEVER Cantonese colloquial");
     expect(p).toContain("是 not 係");
+  });
+
+  it("requests a completed try_example alongside the fill-in pattern", () => {
+    const p = buildAnnotationExplainPrompt("appositive", "x", "y", "en");
+    expect(p).toContain("try_example_en");
+    expect(p).toContain("try_example_zh");
+    expect(p).toContain("completed sentence");
   });
 });
 
@@ -137,6 +145,9 @@ describe("buildConceptFromExplanation — conforms to the saved-concepts shape",
     expect(concept.grammar).toContain("renaming phrase");
     expect(concept.grammar).toContain("補充說明");
     expect(concept.useIt).toContain("[Name]");
+    // pattern → example, so SavedConceptCard's splitUseIt renders the example box
+    expect(concept.useIt).toContain("→");
+    expect(concept.useIt).toContain("canteen uncle");
     expect(concept.example).toContain("Mr Smith, the headmaster");
     expect(concept.section).toBe("SENTENCE PATTERNS");
     expect(typeof concept.savedAt).toBe("number");

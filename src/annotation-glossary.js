@@ -15,10 +15,11 @@ import { buildAnnotationExplainPrompt } from "./prompts.js";
 export const GLOSSARY_KEY = "lyra-annotation-glossary";
 export const GLOSSARY_MAX_ENTRIES = 150;
 // Bump when the explanation prompt changes in a way that invalidates cached
-// entries (e.g. v2: register fix — 書面語 instead of Cantonese colloquial).
+// entries (v2: register fix — 書面語 instead of Cantonese colloquial;
+// v3: try_example fields — worked example under the Give-it-a-go pattern).
 // Entries with an older/missing version are treated as cache misses and
 // regenerated on next tap, overwriting the stale copy.
-export const GLOSSARY_VERSION = 2;
+export const GLOSSARY_VERSION = 3;
 
 // Cache key: case/whitespace/punctuation-insensitive on both label and phrase.
 // \p{L}\p{N} keeps CJK characters (Chinese labels/phrases are first-class).
@@ -127,11 +128,14 @@ export async function explainAnnotation({ label, phrase, sentence = "", sourceLa
  */
 export function buildConceptFromExplanation(entry, { phrase, sentence = "", sectionTitle = "" } = {}) {
   const join = (en, zh) => [en, zh].filter(Boolean).join(" — ");
+  // useIt carries "pattern → example": SavedConceptCard splits on the arrow and
+  // renders the example in its own "For example" box.
+  const tryExample = join(entry.try_example_en, entry.try_example_zh);
   return {
     name: join(entry.term_en, entry.term_zh),
     grammar: join(entry.what_en, entry.what_zh),
     function: join(entry.here_en, entry.here_zh),
-    useIt: join(entry.try_en, entry.try_zh),
+    useIt: tryExample ? `${join(entry.try_en, entry.try_zh)} → ${tryExample}` : join(entry.try_en, entry.try_zh),
     example: sentence ? `"${phrase}" — ${sentence}` : `"${phrase}"`,
     section: sectionTitle || "X-Ray annotation",
     savedAt: Date.now(),
