@@ -6,6 +6,7 @@ import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt } from "./prompts.js";
 import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
+import WordLookup from "./components/WordLookup.jsx";
 import { snapshotBackup } from "./backup.js";
 import { LyraAvatar } from "./components/Icons.jsx";
 import Onboarding from "./components/Onboarding.jsx";
@@ -770,6 +771,7 @@ Rules:
           onOpenTraining={openTrainingSession}
         />
         <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
+        <WordLookup trackCall={trackCall} />
         {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
       </>
     );
@@ -792,6 +794,7 @@ Rules:
           sidebarProps={sidebarProps}
         />
         <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
+        <WordLookup trackCall={trackCall} />
         {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
       </>
     );
@@ -915,6 +918,7 @@ Rules:
 
       {/* Style Lab Overlay */}
       <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
+        <WordLookup trackCall={trackCall} />
 
       {/* Training Session Overlay */}
       {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
