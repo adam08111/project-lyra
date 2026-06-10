@@ -14,6 +14,11 @@ import { buildAnnotationExplainPrompt } from "./prompts.js";
 
 export const GLOSSARY_KEY = "lyra-annotation-glossary";
 export const GLOSSARY_MAX_ENTRIES = 150;
+// Bump when the explanation prompt changes in a way that invalidates cached
+// entries (e.g. v2: register fix — 書面語 instead of Cantonese colloquial).
+// Entries with an older/missing version are treated as cache misses and
+// regenerated on next tap, overwriting the stale copy.
+export const GLOSSARY_VERSION = 2;
 
 // Cache key: case/whitespace/punctuation-insensitive on both label and phrase.
 // \p{L}\p{N} keeps CJK characters (Chinese labels/phrases are first-class).
@@ -39,13 +44,15 @@ function writeGlossary(glossary) {
 }
 
 export function getCachedExplanation(label, phrase) {
-  return readGlossary()[normKey(label, phrase)] || null;
+  const entry = readGlossary()[normKey(label, phrase)] || null;
+  // Stale-version entries (pre-register-fix) read as misses → refetched.
+  return entry && entry.v === GLOSSARY_VERSION ? entry : null;
 }
 
 /** Write an entry; on overflow evict the oldest by savedAt. */
 export function cacheExplanation(label, phrase, parsed) {
   const glossary = readGlossary();
-  glossary[normKey(label, phrase)] = { ...parsed, label, phrase, savedAt: Date.now() };
+  glossary[normKey(label, phrase)] = { ...parsed, label, phrase, savedAt: Date.now(), v: GLOSSARY_VERSION };
   const keys = Object.keys(glossary);
   if (keys.length > GLOSSARY_MAX_ENTRIES) {
     keys

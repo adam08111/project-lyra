@@ -827,7 +827,7 @@ Write a tiny, friendly explanation:
 - You MUST use the student's exact tapped phrase "${phrase}" as the worked example. Explain what the technique DOES in this sentence — the effect on the reader — not just what it is.
 - "try" is a short reusable pattern the student can copy (a fill-in pattern, NOT a completed sentence about their topic).
 - HARD CAP: about 120 words across all English fields combined. Shorter is better.
-- All *_zh fields: Traditional Chinese (繁體中文) ONLY — never Simplified. Warm, natural Hong Kong register, not stiff textbook 書面語. Technical terms may stay bilingual.
+- All *_zh fields: Traditional Chinese (繁體中文) ONLY — never Simplified. Use STANDARD WRITTEN Chinese (書面語) — clear, friendly, natural Hong Kong/Taiwan written style. NEVER Cantonese colloquial/spoken forms: no 係/嘅/唔/嚟/嗰/咁/啲/喺/畀/乜. Write 是 not 係, 的 not 嘅, 不 not 唔. Technical terms may stay bilingual.
 
 Return ONLY valid JSON — no markdown fences, no preamble, no commentary:
 {

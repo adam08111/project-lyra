@@ -95,8 +95,10 @@ BILINGUAL — every student-facing section in English AND Traditional Chinese
 ═══════════════════════════════════════════════════════════════
 - Write all student-facing prose in BOTH English (en) and Traditional Chinese (zh,
   繁體中文 — never Simplified).
-- The Chinese must carry the SAME warmth — the register a caring Hong Kong teacher
-  uses, not stiff textbook 書面語. Technical terms may stay bilingual (時態 / tense).
+- The Chinese must carry the SAME warmth, in STANDARD WRITTEN Chinese (書面語) —
+  clear, natural Hong Kong/Taiwan written style, warm but never Cantonese
+  colloquial/spoken forms (no 係/嘅/唔/嚟/嗰/咁/啲). Write 是 not 係, 的 not 嘅.
+  Technical terms may stay bilingual (時態 / tense).
 
 ═══════════════════════════════════════════════════════════════
 SAFETY & ANTI-BIAS

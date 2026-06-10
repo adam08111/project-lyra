@@ -38,6 +38,13 @@ describe("buildAnnotationExplainPrompt", () => {
   it("notes the Chinese card context for sourceLang zh", () => {
     expect(buildAnnotationExplainPrompt("同位語", "史密斯先生", "", "zh")).toContain("Traditional Chinese translation card");
   });
+
+  it("demands standard written Chinese, forbidding Cantonese colloquial forms", () => {
+    const p = buildAnnotationExplainPrompt("appositive", "x", "y", "en");
+    expect(p).toContain("書面語");
+    expect(p).toContain("NEVER Cantonese colloquial");
+    expect(p).toContain("是 not 係");
+  });
 });
 
 describe("normKey — case/space/punctuation-insensitive", () => {
@@ -63,6 +70,19 @@ describe("explainAnnotation — cache before call", () => {
     const second = await explainAnnotation({ label: "Appositive", phrase: "mr smith the headmaster" }, { call: fakeCall });
     expect(second.term_en).toBe("Appositive");
     expect(calls).toBe(1);
+  });
+
+  it("a stale-version cached entry reads as a miss and is regenerated", async () => {
+    // Simulate a v1 (pre-register-fix) entry: cached without the current version.
+    const glossary = {};
+    glossary[normKey("old label", "old phrase")] = { term_en: "Stale", savedAt: 1, v: 1 };
+    localStorage.setItem(GLOSSARY_KEY, JSON.stringify(glossary));
+    expect(getCachedExplanation("old label", "old phrase")).toBeNull();
+    let calls = 0;
+    const fresh = await explainAnnotation({ label: "old label", phrase: "old phrase" }, { call: async () => { calls++; return FAKE_JSON; } });
+    expect(calls).toBe(1); // refetched despite the stale entry
+    expect(fresh.term_en).toBe("Appositive"); // overwrote the stale copy
+    expect(getCachedExplanation("old label", "old phrase").term_en).toBe("Appositive");
   });
 
   it("garbage output throws and is NOT cached", async () => {
