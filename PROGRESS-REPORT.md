@@ -1341,5 +1341,24 @@ Two always-mounted inputs per surface — a capture-less gallery picker + a `cap
 `src/image-utils.js`: `prepareImageForOCR` transcodes non-jpeg/png/webp (Android can deliver HEIC) and downscales >2000px long edge via one canvas pass (createImageBitmap → JPEG 0.9); safe-and-small files pass through byte-identical. Failures now SURFACE — scanning always resolves to a filled textarea or a visible error ("Couldn't read that photo — try a screenshot instead"; the Mission scanner gained its own inline error line). `e.target.value` resets synchronously at the top of each handler so the same photo re-picks even after a failure. **190 tests** (+7: transcode decisions, downscale math).
 
 ### 27.4 Verified
-Preview DOM: both buttons render; exactly two inputs mounted (capture-less + environment). Phone verification (gallery opens / camera opens / same-photo-twice / PNG+HEIC OCR) is in the user's hands on the LAN preview.
+Preview DOM: both buttons render; exactly two inputs mounted (capture-less + environment). Phone verification (gallery opens / camera opens / same-photo-twice / PNG+HEIC OCR) is in the user's hands on the LAN preview. Follow-up (commit `a92622e`): the 🖼/📷 emoji were replaced with line-art SVG icons (CameraIcon/GalleryIcon in Icons.jsx) matching the app's stroke style, per user feedback.
+
+---
+
+## 28. UPDATE — 11 June 2026 — Genre-mismatch tripwire + non-destructive type switch
+
+### 28.1 The bug (live screenshot) and why a deterministic layer
+Topic "write a letter to editor about cell phones should be fully banned at schools", declared type Formal Business Email. The session header read **0 API calls** — the canned welcome is a template with no model in the loop, so nothing could ever catch the contradiction: it echoed it verbatim ("a formal business email about 'write a letter to editor…'") and coaching ran under the wrong HKDSE convention block, session-fatally. Hence layer 1 is a free deterministic regex, not a model call.
+
+### 28.2 The four layers
+1. **Detector (`0362802`)** — `detectFormatCue(topic)` in `src/genre-cues.js`: regex over explicit format instructions only; ≥2 cues to different types → null (silent). **Taxonomy patch:** letter-to-editor/speech → `persuasive` is a deliberate nearest-fit until the genre taxonomy expands (out of scope).
+2. **Mission nudge (`6836871`)** — amber one-liner under the type grid + [Use it] chip; re-evaluates on edits; non-blocking.
+3. **In-session banner + switch (`0e1589e`)** — dismissible banner above the chat with [Switch to X]/[Keep Y]; decision persisted per writing (`genreCueDecision` via autoSave) so it never re-nags. The switch is **non-destructive** (setType only — verified in code: `typeLabel`/`examRules` are derived per render and the coach prompt is built at send time, so the next turn carries the right convention block automatically). A local no-API confirmation message is appended and a one-time context note rides the next sendChat. The header type chip is now tappable → 6-type picker → same path (covers cue-less student-initiated changes).
+4. **Model rule (`7661fbb`)** — GENRE CHECK block in buildCoachPrompt (coach surface only): name the contradiction in the first reply, ask once, then respect the decision — catches implicit cases the regex can't see.
+
+### 28.3 Welcome echo fix (`fa847f9`)
+`topicBrief` extracted from generateTitle (instruction verbs/articles stripped, first clause); the welcome now reads "working on a {type}: {brief}" instead of `about "<raw instruction>"`.
+
+### 28.4 Verified (preview, exact screenshot scenario)
+Nudge appeared naming Letter to the Editor → ignored → banner appeared in-session → [Switch to Persuasive Writing]: banner gone, chip updated, local confirmation appended, chat intact → record shows `type:"persuasive"`, `genreCueDecision:"switched:persuasive"` → re-open: **no re-nag** → header-chip picker → switched to Report: both ack messages and draft preserved in the record. **201 tests green** (+11: detector incl. the exact topic, ambiguity, story-which-begins; topicBrief). Real-AI checks (first-reply acknowledgment, unit-4 implicit case) left to live phone use.
 
