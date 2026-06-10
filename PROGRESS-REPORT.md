@@ -1327,3 +1327,19 @@ The MANDATORY DATA EMISSION rule was amended in place: growth entries exist ONLY
 ### 26.6 Tests
 **183 unit tests green** (170 → +13): the exact screenshot junk as a fixture (canned and meta each independently sufficient), traceable-rewrite pass, fail-closed, 0.6-overlap paraphrase, gating (invalid-only ⇒ nothing written but vocab still syncs; mixed ⇒ only valid logged), meta visible-report ⇒ null, migration (junk removed/legit kept/flag/idempotent). One pre-existing test updated to supply provenance — the new contract.
 
+---
+
+## 27. UPDATE — 10 June 2026 — Photo upload: gallery wouldn't open on phones
+
+### 27.1 Investigation (mechanism A)
+Both SourceSetup file inputs carried `capture="environment"` — on Android that's a hard fork (camera app directly, gallery never offered; iOS likewise forces the camera UI). Ruled out: B (the `.click()` was already synchronous, input always mounted), C (no getUserMedia anywhere — noted for the future: the LAN-IP preview `http://192.168.0.x` is an insecure context where getUserMedia silently fails), D (no label/overlay issues). The Mission-step "Scan exam question" input had the identical bug; Onboarding's legacy upload has no `capture` and needed no change.
+
+### 27.2 Fix (commit `86f7d1b`)
+Two always-mounted inputs per surface — a capture-less gallery picker + a `capture="environment"` camera input — behind two compact chip buttons ("🖼 Gallery" / "📷 Take photo" on the Source step; "🖼 Gallery" / "📷 Scan exam question" on the Mission step). Synchronous `.click()` in onClick, shared OCR pipeline. On iOS the capture-less input natively offers Photo Library / Take Photo; the split is for Android's hard fork.
+
+### 27.3 Hardening (commit `7b80a6a`)
+`src/image-utils.js`: `prepareImageForOCR` transcodes non-jpeg/png/webp (Android can deliver HEIC) and downscales >2000px long edge via one canvas pass (createImageBitmap → JPEG 0.9); safe-and-small files pass through byte-identical. Failures now SURFACE — scanning always resolves to a filled textarea or a visible error ("Couldn't read that photo — try a screenshot instead"; the Mission scanner gained its own inline error line). `e.target.value` resets synchronously at the top of each handler so the same photo re-picks even after a failure. **190 tests** (+7: transcode decisions, downscale math).
+
+### 27.4 Verified
+Preview DOM: both buttons render; exactly two inputs mounted (capture-less + environment). Phone verification (gallery opens / camera opens / same-photo-twice / PNG+HEIC OCR) is in the user's hands on the LAN preview.
+
