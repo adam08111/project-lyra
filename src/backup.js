@@ -66,6 +66,14 @@ export function snapshotBackup() {
     localStorage.setItem(BACKUP_KEY, JSON.stringify({ ts: new Date().toISOString(), data }));
     return true;
   } catch (e) {
+    // The safety net must never fail silently — when quota is hit, the FIRST
+    // thing to die is the backup itself, and §17.3 exists because silent data
+    // loss already happened once. Console-only by design (no student UI).
+    if (e?.name === "QuotaExceededError" || e?.code === 22) {
+      console.warn("[lyra-backup] snapshot failed — localStorage quota exceeded; backups are NOT being updated");
+    } else {
+      console.warn("[lyra-backup] snapshot failed:", e?.name, e?.message);
+    }
     return false;
   }
 }
@@ -94,6 +102,7 @@ export function autoRestoreFromBackup() {
     }
     return { restored, ts: parsed.ts };
   } catch (e) {
+    console.warn("[lyra-backup] auto-restore failed:", e?.name, e?.message);
     return { restored: [], ts: null };
   }
 }
@@ -110,6 +119,7 @@ export function getBackupInfo() {
     const data = parsed.data || {};
     return { ts: parsed.ts, keys: Object.keys(data).filter(k => !isEmptyVal(data[k])) };
   } catch (e) {
+    console.warn("[lyra-backup] backup info unreadable:", e?.name, e?.message);
     return null;
   }
 }
