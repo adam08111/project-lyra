@@ -1290,3 +1290,18 @@ Cache key is the word alone — the first lookup's sentence picks the sense (acc
 
 166 unit tests green; all rounds live-verified in the preview ("admire · 欣賞 / verb · 動詞" under Words, "Ironic Cliché" under Concepts).
 
+---
+
+## 25. UPDATE — 10 June 2026 — Housekeeping: mainline consolidation, sourceText cap, backup quota warns
+
+### 25.1 Push + consolidate
+§21–§24 lived only as local commits. Pushed `claude/vigorous-zhukovsky-413664` and fast-forwarded **`main`** (the remote's default branch; no local checkout existed, none in any worktree — `git fetch . branch:main` + push): `origin/main` 30e4010 → `0ed80be` at consolidation time; the FF means the 166-green test tree IS the mainline tree. **Stale-branch report (no deletions made — user decides):** fully merged into main and deletable when ready: `claude/growth-report`, `claude/youthful-wing-17a2f6`, `claude/nifty-ritchie-06acd9`, `claude/sleepy-murdock-09c5ec`, `claude/clever-swartz`, `claude/agitated-blackwell`, `claude/competent-poincare-f5a68e`, `claude/intelligent-elion-31b626`, `claude/magical-lichterman-1f54e8`, `claude/objective-leakey-8dea9a`, plus `master`/`unified-app`/`worktree-*`. NOT merged (diverged): `claude/objective-ramanujan-974c10`.
+
+### 25.2 sourceText cap (commit `5648845`)
+`saveStyleSkill` now bounds the persisted passage at `SOURCE_TEXT_MAX_CHARS = 50000` (≈8–10k words — longer than any real paste; quiet `.slice`, no warning), applied INSIDE the function since §22.5 proved call sites drift. `analyseMoreOfWriter`/`remainingSections` read the field as an opaque string — no change. Size audit from the live preview: `lyra-backup-v1` 56.7k and `lyra-style-skills` 35.1k dominate (the double-storage the cap bounds); the Austen skill's sourceText intact at 477 chars.
+
+### 25.3 Backup failures un-silenced (commit `19d9242`)
+`snapshotBackup` swallowed every error — when quota is hit, the safety net itself dies first, invisibly (§17.3 exists because silent loss already happened once). Its catch now `console.warn`s, with an explicit "localStorage quota exceeded; backups are NOT being updated" for `QuotaExceededError`/code 22; same one-line warns in `autoRestoreFromBackup` and `getBackupInfo`. Console-only by design.
+
+**170 unit tests green** (166 → +2 cap, +2 quota). Build clean.
+
