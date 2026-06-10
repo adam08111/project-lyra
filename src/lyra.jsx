@@ -18,6 +18,7 @@ import StyleLab from "./components/StyleLab.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import TrainingSession from "./components/TrainingSession.jsx";
 import { generateTitle } from "./titleGenerator.js";
+import { detectFormatCue, typeLabelOf } from "./genre-cues.js";
 
 export default function Lyra() {
   // Core state
@@ -106,6 +107,14 @@ export default function Lyra() {
   // Welcome
   const typedWelcome = useRef(false);
   const [welcomeText, setWelcomeText] = useState("");
+
+  // Genre-mismatch tripwire: the student's decision for THIS writing
+  // ("switched:<type>" | "kept:<type>" | null), persisted on the writing
+  // record so the banner never re-nags on remount. pendingTypeSwitchNote
+  // carries a one-time context line into the NEXT sendChat after a switch.
+  const [genreCueDecision, setGenreCueDecision] = useState(null);
+  const [showTypePicker, setShowTypePicker] = useState(false);
+  const pendingTypeSwitchNote = useRef(null);
 
   // Derived values
   const typeLabel = type ? writingTypes.find(w => w.id === type)?.label : "";
@@ -210,10 +219,10 @@ export default function Lyra() {
     setProjects(prev => prev.map(p => ({
       ...p,
       writings: p.writings.map(w => w.id === activeWritingId ? {
-        ...w, title, draft, messages, topic, type, wordCount, purpose, updatedAt: new Date().toISOString(),
+        ...w, title, draft, messages, topic, type, wordCount, purpose, genreCueDecision, updatedAt: new Date().toISOString(),
       } : w)
     })));
-  }, [activeWritingId, title, draft, messages, topic, type, wordCount, purpose, screen]);
+  }, [activeWritingId, title, draft, messages, topic, type, wordCount, purpose, genreCueDecision, screen]);
 
   const saveTimer = useRef(null);
   useEffect(() => {
@@ -242,6 +251,7 @@ export default function Lyra() {
   const loadWriting = useCallback((writing) => {
     setTopic(writing.topic || "");
     setType(writing.type || null);
+    setGenreCueDecision(writing.genreCueDecision || null);
     setWordCount(writing.wordCount || null);
     setPurpose(writing.purpose || null);
     setTitle(writing.title || "Untitled");
@@ -311,6 +321,9 @@ export default function Lyra() {
     setScreen("source-setup");
     setTopic("");
     setType(null);
+    setGenreCueDecision(null);
+    setShowTypePicker(false);
+    pendingTypeSwitchNote.current = null;
     setWordCount(null);
     setMessages([]);
     setDraft("");
@@ -335,6 +348,23 @@ export default function Lyra() {
     // (and the Lyra logo) would clear the fields but leave you on the same sub-step.
     setHomeKey(k => k + 1);
   }, []);
+
+  // Non-destructive mid-session type switch (genre banner / header chip):
+  // updates type state only — draft, chat history, skills all untouched.
+  // typeLabel + examRules are derived per render and the coach prompt is
+  // built at send time, so the next turn automatically carries the right
+  // convention block. Appends a LOCAL (no-API) confirmation message and arms
+  // a one-time context note for the next sendChat.
+  const switchWritingType = useCallback((newTypeId) => {
+    if (!newTypeId || newTypeId === type) { setShowTypePicker(false); return; }
+    const oldLabel = typeLabel || "(none)";
+    const newLabel = writingTypes.find(w => w.id === newTypeId)?.label || newTypeId;
+    setType(newTypeId);
+    setGenreCueDecision("switched:" + newTypeId);
+    setShowTypePicker(false);
+    pendingTypeSwitchNote.current = { from: oldLabel, to: newLabel };
+    setMessages(prev => [...prev, { role: "ai", text: `Switched to ${newLabel}. I'll coach for that now — the conventions are different.` }]);
+  }, [type, typeLabel]);
 
   const startEditingTitle = useCallback(() => {
     setEditingTitle(true);
@@ -514,7 +544,14 @@ Rules:
       const techCtx = writingTechniques?.length
         ? `\n\n[WRITING TECHNIQUES: The student was shown these researched techniques for this task:\n${writingTechniques.map((t, i) => `${i + 1}. "${t.technique}" — ${t.description}`).join("\n")}\nReference these techniques when coaching the student.]`
         : "";
-      const fullMsg = `${history}Student says: ${text.trim()}${ctx}${skillCtx}${techCtx}${allSkillsCtx}`;
+      // One-time note after a mid-session type switch, then dropped.
+      let switchNote = "";
+      if (pendingTypeSwitchNote.current) {
+        const { from, to } = pendingTypeSwitchNote.current;
+        switchNote = `\n\n[NOTE: the writing type was changed from ${from} to ${to} mid-session; acknowledge briefly and coach for ${to}.]`;
+        pendingTypeSwitchNote.current = null;
+      }
+      const fullMsg = `${history}Student says: ${text.trim()}${ctx}${skillCtx}${techCtx}${allSkillsCtx}${switchNote}`;
       const chatRoute = getRouteConfig(scaffolding ? "scaffolding" : "chat_coaching");
       trackCall();
       // Build source context for prompt grounding (if source text was analysed)
@@ -839,10 +876,63 @@ Rules:
               >✎</button>
             </div>
           )}
-          <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 2 }}>{typeLabel}{purpose && purpose !== "personal" ? ` · ${purpose.toUpperCase()}` : ""} · {wcLabel} words · {apiCalls} API calls</div>
+          <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 2, position: "relative" }}>
+            {/* Tappable type chip → small picker → non-destructive switch */}
+            <button
+              onClick={() => setShowTypePicker(v => !v)}
+              title="Change writing type"
+              style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontSize: 11, color: COLORS.muted, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}
+            >
+              {typeLabel}
+            </button>
+            {purpose && purpose !== "personal" ? ` · ${purpose.toUpperCase()}` : ""} · {wcLabel} words · {apiCalls} API calls
+            {showTypePicker && (
+              <div style={{ position: "absolute", top: 18, left: 0, zIndex: 90, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
+                {writingTypes.map(wt => (
+                  <button
+                    key={wt.id}
+                    onClick={() => switchWritingType(wt.id)}
+                    style={{ textAlign: "left", fontSize: 12, fontFamily: "'Courier Prime', monospace", padding: "6px 10px", borderRadius: 8, border: "none", background: wt.id === type ? COLORS.bg3 : "transparent", color: COLORS.heading, fontWeight: wt.id === type ? 700 : 400, cursor: "pointer" }}
+                  >
+                    {wt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <button onClick={() => { autoSave(); resetToNew(); }} style={{ padding: "6px 14px", borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 12, cursor: "pointer", color: COLORS.muted, marginTop: 2 }}>New</button>
       </div>
+
+      {/* Genre-mismatch banner: explicit format cue in the topic contradicts
+          the declared type. Dismiss persists per writing (genreCueDecision). */}
+      {(() => {
+        if (genreCueDecision) return null;
+        const cue = detectFormatCue(topic);
+        if (!cue || !type || cue.typeId === type) return null;
+        const mappedLabel = typeLabelOf(cue.typeId);
+        return (
+          <div style={{ margin: "8px 16px 0", padding: "10px 14px", borderRadius: 12, border: `1px solid ${COLORS.border}`, borderLeft: `3px solid ${COLORS.amber}`, background: "#FFF8EE", fontFamily: "'Courier Prime', monospace", flexShrink: 0 }}>
+            <div style={{ fontSize: 12, color: COLORS.heading, lineHeight: 1.55 }}>
+              Your question asks for a <strong>{cue.cueLabel}</strong>, but we're set up for <strong>{typeLabel}</strong>. The examiner looks for different things.
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button
+                onClick={() => switchWritingType(cue.typeId)}
+                style={{ fontSize: 11, fontFamily: "'Courier Prime', monospace", padding: "5px 12px", borderRadius: 8, border: "none", background: COLORS.amber, color: "#fff", fontWeight: 700, cursor: "pointer" }}
+              >
+                Switch to {mappedLabel}
+              </button>
+              <button
+                onClick={() => setGenreCueDecision("kept:" + type)}
+                style={{ fontSize: 11, fontFamily: "'Courier Prime', monospace", padding: "5px 12px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
+              >
+                Keep {typeLabel}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Content Area */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
