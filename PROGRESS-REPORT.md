@@ -1259,3 +1259,26 @@ A live X-Ray rendered "(like in your previous analysis of Writer A)". Trace: the
 ### 23.5 Out of scope (per spec)
 No LYRA_LEARNING_DATA from this surface; Grammar Log mini-lesson flow untouched; no pre-seeded static glossary.
 
+### 23.6 Follow-ups landed same session (user feedback from the phone)
+- **Register fix, universal (commit `7967210`):** the explain card's Chinese came out as spoken Cantonese (係指/嘅/唔). Both prompts carrying the "warm HK register, not stiff 書面語" line (annotation explain + REPORT_CARD_BRAIN) now demand standard written 書面語 with an explicit colloquial banlist (係/嘅/唔/嚟/嗰/咁/啲…); `GLOSSARY_VERSION` introduced so stale cached entries regenerate on next tap on every device. Live-verified: 「老套語」係指… → 「陳腔濫調」是指….
+- **Worked example under Give-it-a-go (commit `6536bcb`):** the try-it pattern alone left no model answer; the prompt now returns `try_example_en/zh` (one completed sentence on an everyday school-life topic), rendered in the cream For-example box and carried into saved concepts as "pattern → example" (SavedConceptCard splits on the arrow natively). Cache v3.
+- **Example-box typography (commit `4f89910`):** label inherited a large font; now the 10px sub-label idiom with 11px lines.
+
+---
+
+## 24. UPDATE — 10 June 2026 — Tap-to-define word dictionary (branch `claude/vigorous-zhukovsky-413664`)
+
+Students hit unknown vocabulary everywhere in the app, not just in annotated quotes. Now selecting any single English word (double-tap or long-press — the native mobile gestures) anywhere in the app shows a 📖 bubble; tapping it opens a small bilingual definition card. One Lite-tier call per word ever; cached forever.
+
+### 24.1 Architecture
+Mirrors the proven annotation-glossary pattern. `word_lookup` route (Lite, `brain:false`). `buildWordLookupPrompt(word, sentence)` defines the sense **used in the given sentence** (±120 chars of context captured around the selection), plain-English + 書面語 (same Cantonese-colloquial banlist), one everyday example, ~60-word EN cap, JSON-only. `src/word-dictionary.js`: cache `lyra-word-dictionary` keyed by `normWord` (word alone — instant anywhere; curly→straight apostrophe unification, possessives stripped), 300-entry cap oldest-evicted, versioned, defensive parse (failures not cached), shared-promise in-flight guard. Not in backup CRITICAL_KEYS (regenerable).
+
+### 24.2 UI — zero per-card wiring
+`src/components/WordLookup.jsx`, mounted once per screen in lyra.jsx: ONE document-level `selectionchange` listener (debounced 250ms) covers every surface. Selection must be a lookable single word (`isLookableWord`), outside inputs/textareas/contenteditable/our own UI. The 📖 bubble anchors **below** the selection (above is where iOS/Android native selection menus render); pointerdown opens the card (wins the race against selection-clearing). The card is fixed, viewport-clamped: word + part of speech, the Chinese equivalent as the headline, EN+ZH meanings, everyday example in the For-example idiom; loading/error+retry; backdrop tap or × closes; scroll hides a stale bubble; resize/rotation dismisses (coordinates would be stale).
+
+### 24.3 Verification + review
+**165 unit tests** (was 155): prompt contents + register banlist, normWord (incl. curly-apostrophe unification), isLookableWord, cache-hit-skips-AI, garbage→error-not-cached, defensive parse, eviction. Build clean. **Live-verified:** selected "photograph" in "Paste or photograph a piece of writing…" → bubble → card chose the **verb** sense (拍攝 · 動詞) with formal register and a school-life example; cached; backdrop-tap closed; bubble confirmed rendering below the selection. An adversarial review (3 dimensions → per-finding verification, 8 rejected) confirmed 3 real issues, all fixed (commit `d01e7fe`): the bubble's original above-the-selection position collided with the native selection menus (major — moved below); stale viewport clamps on rotation (resize dismisses; clamp floor added); apostrophe cache-key duplication.
+
+### 24.4 Notes
+Cache key is the word alone — the first lookup's sentence picks the sense (acceptable at this vocabulary level; a polysemy-aware key would defeat the instant-cache goal). Possible future: surface looked-up words to the Growth Report as vocabulary signals; a "my words" review list.
+
