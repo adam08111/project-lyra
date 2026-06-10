@@ -29,7 +29,12 @@ export default function SourceSetup({
   const [authorName, setAuthorName] = useState("");
   const [skillSaved, setSkillSaved] = useState(null);
   const [error, setError] = useState("");
-  const fileInputRef = useRef(null);
+  // TWO inputs, both always mounted: `capture` on a file input is a hard fork
+  // on Android (camera app directly, gallery never offered — the live bug), so
+  // the gallery picker must be a separate capture-less input. Both .click()
+  // calls stay SYNCHRONOUS in their onClick so mobile user-activation holds.
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const [uploadedImage, setUploadedImage] = useState(null);
   const [scanning, setScanning] = useState(false);
 
@@ -83,7 +88,8 @@ export default function SourceSetup({
   }, [setSourceText]);
 
   // ── Photo upload for exam question (mission step) ──
-  const topicFileRef = useRef(null);
+  const topicGalleryRef = useRef(null);
+  const topicCameraRef = useRef(null);
   const [topicScanning, setTopicScanning] = useState(false);
   const handleTopicPhotoUpload = useCallback(async (e) => {
     const file = e.target.files?.[0];
@@ -297,17 +303,30 @@ export default function SourceSetup({
               style={{ width: "100%", minHeight: 180, padding: 16, borderRadius: 14, border: `1.5px solid ${COLORS.border}`, background: COLORS.bg2, fontFamily: mono, fontSize: 13, color: COLORS.text, resize: "vertical", lineHeight: 1.7, boxSizing: "border-box" }}
             />
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: sourceWordCount >= 80 ? COLORS.green : COLORS.muted, fontFamily: mono }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, marginBottom: 16, gap: 8 }}>
+              <div style={{ fontSize: 11, color: sourceWordCount >= 80 ? COLORS.green : COLORS.muted, fontFamily: mono, flex: 1, minWidth: 0 }}>
                 {sourceWordCount} word{sourceWordCount !== 1 ? "s" : ""}{sourceWordCount < 80 ? ` (need ${80 - sourceWordCount} more)` : " — ready"}
               </div>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                style={{ fontSize: 11, fontFamily: mono, padding: "6px 12px", borderRadius: 10, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
-              >
-                {scanning ? "Scanning..." : "📷 Upload photo"}
-              </button>
-              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleSourcePhotoUpload} />
+              {scanning ? (
+                <span style={{ fontSize: 11, fontFamily: mono, color: COLORS.muted, padding: "6px 12px" }}>Scanning…</span>
+              ) : (
+                <>
+                  <button
+                    onClick={() => galleryInputRef.current?.click()}
+                    style={{ fontSize: 11, fontFamily: mono, padding: "6px 10px", borderRadius: 10, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    🖼 Gallery
+                  </button>
+                  <button
+                    onClick={() => cameraInputRef.current?.click()}
+                    style={{ fontSize: 11, fontFamily: mono, padding: "6px 10px", borderRadius: 10, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    📷 Take photo
+                  </button>
+                </>
+              )}
+              <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleSourcePhotoUpload} />
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleSourcePhotoUpload} />
             </div>
 
             {/* Lyra curates the most useful lessons — frames the 2-3 section output
@@ -407,14 +426,27 @@ export default function SourceSetup({
                     placeholder="Describe your topic, or paste an exam question..."
                     style={{ width: "100%", minHeight: 80, padding: 14, borderRadius: 14, border: `1.5px solid ${COLORS.border}`, background: COLORS.bg2, fontFamily: mono, fontSize: 13, color: COLORS.text, resize: "vertical", lineHeight: 1.6, boxSizing: "border-box" }}
                   />
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                    <button
-                      onClick={() => topicFileRef.current?.click()}
-                      style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
-                    >
-                      {topicScanning ? "Scanning..." : "📷 Scan exam question"}
-                    </button>
-                    <input ref={topicFileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleTopicPhotoUpload} />
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 6 }}>
+                    {topicScanning ? (
+                      <span style={{ fontSize: 10, fontFamily: mono, color: COLORS.muted, padding: "4px 10px" }}>Scanning…</span>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => topicGalleryRef.current?.click()}
+                          style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
+                        >
+                          🖼 Gallery
+                        </button>
+                        <button
+                          onClick={() => topicCameraRef.current?.click()}
+                          style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.muted, cursor: "pointer" }}
+                        >
+                          📷 Scan exam question
+                        </button>
+                      </>
+                    )}
+                    <input ref={topicGalleryRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleTopicPhotoUpload} />
+                    <input ref={topicCameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleTopicPhotoUpload} />
                   </div>
                 </div>
 
