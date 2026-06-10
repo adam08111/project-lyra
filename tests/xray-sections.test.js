@@ -1,6 +1,15 @@
-import { describe, it, expect } from "vitest";
-import { remainingSections, mergeNewSectionsIntoSkill } from "../src/components/XRayView.jsx";
+import { describe, it, expect, beforeEach } from "vitest";
+import { remainingSections, mergeNewSectionsIntoSkill, saveStyleSkill, SOURCE_TEXT_MAX_CHARS } from "../src/components/XRayView.jsx";
 import { XRAY_ALL_SECTIONS } from "../src/prompts.js";
+
+// saveStyleSkill touches localStorage at call time — stub it for the node env.
+const store = new Map();
+globalThis.localStorage = globalThis.localStorage || {
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => store.set(k, String(v)),
+  removeItem: (k) => store.delete(k),
+  clear: () => store.clear(),
+};
 
 const TECHNIQUE = XRAY_ALL_SECTIONS.filter(n => n !== "WHEN TO USE THIS STYLE" && n !== "SIGNATURE STYLE");
 
@@ -73,6 +82,29 @@ describe("mergeNewSectionsIntoSkill — append without duplicates", () => {
     mergeNewSectionsIntoSkill(skill, [{ title: "GRAMMAR TRICKS", content: "KEY IDEA: g" }]);
     expect(skill.sections).toHaveLength(1);
     expect(skill.analysedTechniques).toHaveLength(0);
+  });
+});
+
+describe("saveStyleSkill — sourceText cap", () => {
+  const TWO_SECTIONS = [
+    { title: "SENTENCE PATTERNS", content: "KEY IDEA: short sentences punch" },
+    { title: "WORD CHOICES", content: "KEY IDEA: strong verbs do real work" },
+  ];
+  beforeEach(() => localStorage.clear());
+
+  it("stores a pathological paste truncated to exactly SOURCE_TEXT_MAX_CHARS", () => {
+    const huge = "a".repeat(SOURCE_TEXT_MAX_CHARS + 5000);
+    const skill = saveStyleSkill("Cap Test Author", TWO_SECTIONS, huge);
+    expect(skill).not.toBeNull();
+    expect(skill.sourceText).toHaveLength(SOURCE_TEXT_MAX_CHARS);
+    const stored = JSON.parse(localStorage.getItem("lyra-style-skills")).find(s => s.authorName === "Cap Test Author");
+    expect(stored.sourceText).toHaveLength(SOURCE_TEXT_MAX_CHARS);
+  });
+
+  it("stores a normal-length passage byte-identical", () => {
+    const normal = "It is a truth universally acknowledged that articles are shorter than the cap. ".repeat(10);
+    const skill = saveStyleSkill("Normal Author", TWO_SECTIONS, normal);
+    expect(skill.sourceText).toBe(normal);
   });
 });
 

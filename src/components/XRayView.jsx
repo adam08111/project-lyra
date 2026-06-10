@@ -1485,6 +1485,13 @@ export function extractAuthor(text) {
   return match ? match[1].trim() : "Unknown Author";
 }
 
+// Quiet upper bound on the persisted source passage (≈8-10k words — longer
+// than any article a student pastes, so truncation is invisible in practice).
+// The skill store is snapshotted wholesale by backup.js, so every byte here is
+// stored twice; the cap lives INSIDE saveStyleSkill because call sites drift
+// (§22.5: the recovery path forgot sourceText entirely).
+export const SOURCE_TEXT_MAX_CHARS = 50000;
+
 export function saveStyleSkill(authorName, profileSections, sourceText) {
   try {
     // All 7 technique sections (sections 1-7 in the styleProfilerPrompt).
@@ -1545,7 +1552,8 @@ export function saveStyleSkill(authorName, profileSections, sourceText) {
       coveredSections: XRAY_ALL_SECTIONS.filter(name => profileSections.some(s => s.title === name)),
       // The analysed passage, kept so "Analyse more of this writer" can re-run the
       // missing sections later. Legacy skills lack this and just hide the button.
-      sourceText: sourceText || "",
+      // Quietly capped — see SOURCE_TEXT_MAX_CHARS.
+      sourceText: (sourceText || "").slice(0, SOURCE_TEXT_MAX_CHARS),
       savedAt: new Date().toISOString(),
     };
 
