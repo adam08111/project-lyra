@@ -45,7 +45,11 @@ export function topicBrief(topic, maxLen = 50) {
 
 export function generateTitle(topic, typeId) {
   const typeLabel = writingTypes.find(w => w.id === typeId)?.label || "";
-  const brief = topicBrief(topic, 50);
+  // Store the FULL brief (generous 200-char guard against pasted paragraphs).
+  // Truncating at save time baked a literal "..." into the record, so editing
+  // the title showed the chopped string with the full sentence unrecoverable.
+  // Display surfaces wrap/ellipsize on their own.
+  const brief = topicBrief(topic, 200);
   if (!brief) return typeLabel || "Untitled";
   // Combine: "Complaint Letter — Dog Bit Me"
   if (typeLabel) return `${typeLabel} — ${brief}`;

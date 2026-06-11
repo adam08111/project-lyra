@@ -52,10 +52,17 @@ describe("generateTitle", () => {
     expect(result).toBe("Report — Dogs are dangerous");
   });
 
-  it("truncates long topics to ~50 chars", () => {
+  it("keeps a typical full topic intact — no baked-in '...' (title-edit fix)", () => {
     const longTopic = "The extraordinary adventures of a young boy who discovered a mysterious cave behind his grandmothers garden shed";
     const result = generateTitle(longTopic, "story");
-    expect(result.length).toBeLessThanOrEqual(80); // type label + " — " + 50ish
+    expect(result).toContain("grandmothers garden shed"); // full sentence survives
+    expect(result).not.toContain("...");
+  });
+
+  it("still guards against pasted-paragraph topics (>200 chars)", () => {
+    const pasted = "word ".repeat(80); // ~400 chars
+    const result = generateTitle(pasted, "story");
+    expect(result.length).toBeLessThanOrEqual(220);
     expect(result).toContain("...");
   });
 
