@@ -361,7 +361,9 @@ export default function Lyra() {
     const newLabel = writingTypes.find(w => w.id === newTypeId)?.label || newTypeId;
     setType(newTypeId);
     setGenreCueDecision("switched:" + newTypeId);
-    setShowTypePicker(false);
+    // Let the picker's highlight visibly jump to the chosen type before it
+    // closes — instant close swallowed the feedback for the tap.
+    setTimeout(() => setShowTypePicker(false), 280);
     pendingTypeSwitchNote.current = { from: oldLabel, to: newLabel };
     setMessages(prev => [...prev, { role: "ai", text: `Switched to ${newLabel}. I'll coach for that now — the conventions are different.` }]);
   }, [type, typeLabel]);
@@ -886,6 +888,9 @@ Rules:
               {typeLabel}
             </button>
             {purpose && purpose !== "personal" ? ` · ${purpose.toUpperCase()}` : ""} · {wcLabel} words · {apiCalls} API calls
+            {showTypePicker && (
+              <div onClick={() => setShowTypePicker(false)} style={{ position: "fixed", inset: 0, zIndex: 89 }} />
+            )}
             {showTypePicker && (
               <div style={{ position: "absolute", top: 18, left: 0, zIndex: 90, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
                 {writingTypes.map(wt => (
