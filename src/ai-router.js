@@ -20,6 +20,14 @@
  *   Pro:        ~$1.25 / $10.00
  *   Flash:      ~$0.50 / $3.00
  *   Flash Lite: ~$0.25 / $1.50
+ *
+ * Search grounding (useSearch=true) bills PER REQUEST on top of tokens:
+ *   Gemini 3.x models: 5,000 grounded prompts/month free, then $14 / 1,000
+ *   queries — and one prompt can execute (and bill) MULTIPLE search queries.
+ *   (2.5-era models: $35 / 1,000.) Verified on the AI Studio pricing page,
+ *   June 2026. Grounded requests also run WITHOUT thinking (proxy drops
+ *   thinkingBudget when useSearch is on — thinking makes the model skip
+ *   Google Search).
  */
 
 const MODELS = {
