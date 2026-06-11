@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { COLORS, QUICK_ACTION_MESSAGES } from "../constants.js";
+import { formatSources } from "../utils.js";
 import { sharedStyles as s } from "../styles.js";
 import { useTypewriter } from "../hooks.js";
 import { FeatherIcon } from "./Icons.jsx";
@@ -120,20 +121,17 @@ export default function ChatTab({
                   the actual article — empowers the student to read it
                   themselves and use it as a verifiable example. */}
               {m.role === "ai" && Array.isArray(m.sources) && m.sources.length > 0 && editingMsgIdx !== i && (
-                <div style={{ marginTop: 6, paddingLeft: 4, fontSize: 11, color: COLORS.muted, fontFamily: "'Courier Prime', monospace", lineHeight: 1.5 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5, fontSize: 10 }}>Sources</div>
-                  {m.sources.map((src, si) => (
-                    <div key={si} style={{ display: "flex", gap: 6, marginBottom: 2 }}>
-                      <span style={{ color: COLORS.muted, flexShrink: 0 }}>{si + 1}.</span>
-                      <a
-                        href={src.uri}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: COLORS.blue || COLORS.heading, textDecoration: "underline", wordBreak: "break-word", overflowWrap: "anywhere" }}
-                      >
-                        {src.title || src.uri}
-                      </a>
-                    </div>
+                <div style={{ marginTop: 6, paddingLeft: 4, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                  {formatSources(m.sources).map((src, si) => (
+                    <a
+                      key={si}
+                      href={src.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: 10, fontFamily: "'Courier Prime', monospace", color: COLORS.muted, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "2px 9px", textDecoration: "none", background: COLORS.card, whiteSpace: "nowrap" }}
+                    >
+                      {src.label}
+                    </a>
                   ))}
                 </div>
               )}

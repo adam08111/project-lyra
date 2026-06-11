@@ -237,3 +237,29 @@ export function parseTechniques(result) {
 
   return techniques.length >= 1 ? techniques.slice(0, 5) : null;
 }
+
+/**
+ * Compact source pills for grounded chat replies: [{label, url}], capped at 4,
+ * deduped by label, malformed entries skipped. Gemini grounding chunks carry
+ * the real domain in `title` ("scmp.com") while `uri` is a Google redirect
+ * (vertexaisearch…), so a hostname-looking title wins over the uri's hostname.
+ */
+export function formatSources(sources) {
+  const out = [];
+  const seen = new Set();
+  const hostFromUrl = (u) => {
+    try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; }
+  };
+  for (const s of Array.isArray(sources) ? sources : []) {
+    if (!s) continue;
+    const url = s.uri || s.url || "";
+    const title = (s.title || "").trim();
+    const label = (/^[\w-]+(\.[\w-]+)+$/.test(title) ? title.replace(/^www\./, "") : "") || hostFromUrl(url);
+    if (!label || !url) continue;
+    if (seen.has(label)) continue;
+    seen.add(label);
+    out.push({ label, url });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
