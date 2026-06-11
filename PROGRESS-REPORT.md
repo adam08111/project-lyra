@@ -1362,3 +1362,27 @@ Topic "write a letter to editor about cell phones should be fully banned at scho
 ### 28.4 Verified (preview, exact screenshot scenario)
 Nudge appeared naming Letter to the Editor → ignored → banner appeared in-session → [Switch to Persuasive Writing]: banner gone, chip updated, local confirmation appended, chat intact → record shows `type:"persuasive"`, `genreCueDecision:"switched:persuasive"` → re-open: **no re-nag** → header-chip picker → switched to Report: both ack messages and draft preserved in the record. **201 tests green** (+11: detector incl. the exact topic, ambiguity, story-which-begins; topicBrief). Real-AI checks (first-reply acknowledgment, unit-4 implicit case) left to live phone use.
 
+### 28.5 Same-session follow-ups (user feedback)
+Title truncation: stored titles no longer bake in "..." (commit `2912750`) and a one-time boot migration heals pre-fix records from their full topic (`ca9b657` — the user's live record verified healed). Nav bar (☰ · Chat/My Writing · ···) moved from bottom to top (`55a5210`). Type picker: highlight follows the pointer like a classic menu, tick removed, outside-tap closes (`78e8e2f` after two feedback rounds `096c89e`/`6820fe5`).
+
+---
+
+## 29. UPDATE — 12 June 2026 — Search-grounded Brainstorm + claim-anchored Find-an-example
+
+### 29.1 Plumbing findings (verified before building, commit `02adbb1`)
+The proxy applies `google_search` grounding for ANY whitelisted model when `useSearch=true` (pro-tier coaching included) and honors the per-request model; quirk: `thinkingBudget` is deliberately dropped on grounded requests (thinking makes the model skip search). Sources already survive end-to-end (proxy `groundingMetadata` → `{text, sources}` → message record → ChatTab). **Grounding price (AI Studio pricing page, June 2026): Gemini 3.x = 5,000 grounded prompts/month free, then $14/1k queries — one prompt can bill multiple queries** (2.5-era: $35/1k); recorded in the router comment.
+
+### 29.2 The two chips (commits `992ab09`, `d511fd1`, `ab9a1b5`)
+"Search for facts" retired. **Brainstorm ideas** (divergent, pre-writing) and **Find an example** (convergent, mid-draft) both run grounded through the normal pro+LYRA_BRAIN coaching turn. Prompt modes: brainstorm = exactly 3-4 angles, each one Socratic question + a real anchor as a fragment with source name, HK-preferred, statistics only from results soft-attributed, ends asking which angle is theirs; find-an-example = identify the claim (named → recent → weakest-evidenced; none → ASK, never search blind), 1-2 real examples as fragment+source, each followed by a "how would you show this proves your point?" question — the linking sentence is never written for the student (the mark-bearing four-element skill). **Live test caught a real failure: "Search the web" in the canned message is LOAD-BEARING** — without it the model returned zero groundingChunks and invented plausible anchors from memory. Both messages now lead with it, and the prompt block adds execute-search-before-answering. Re-verified: `[Grounding] 6 sources found`.
+
+### 29.3 QUICK_ACTION_MESSAGES coupling
+The registry now has an active section (chips build from it) and a RETIRED section kept forever — old sessions still contain the facts/old-brainstorm strings and the §26 authenticity validator must keep rejecting them as growth `before`s. Both new strings registered (chips are sent AS user messages).
+
+### 29.4 Sources UI (commit `2760629`)
+Pure `formatSources` → hostname pills (a hostname-looking grounding `title` like "scmp.com" wins over the redirect uri's hostname), capped at 4, deduped, malformed skipped; rendered as small tappable bordered pills under grounded bubbles. Live: scmp.com · thestandard.com.hk · weforum.org · teachermagazine.com.
+
+### 29.5 Switch warts (commit `bda3aa1`)
+`upsertSwitchNotice` replaces a directly-preceding "Switched to…" notice instead of stacking four; `swapTitleTypePrefix` retargets the auto-generated "{Type} — " title prefix on switch, leaving customised titles untouched.
+
+**220 unit tests green** (204 → +16). Build clean.
+
