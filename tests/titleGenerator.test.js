@@ -1,5 +1,40 @@
-import { describe, it, expect } from "vitest";
-import { generateTitle, topicBrief } from "../src/titleGenerator.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import { generateTitle, topicBrief, migrateTruncatedTitlesV1 } from "../src/titleGenerator.js";
+
+// localStorage stub for the migration tests (node env).
+const store = new Map();
+globalThis.localStorage = globalThis.localStorage || {
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => store.set(k, String(v)),
+  removeItem: (k) => store.delete(k),
+  clear: () => store.clear(),
+};
+
+describe("migrateTruncatedTitlesV1 — heal pre-fix truncated titles", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("regenerates '...' titles from the full topic, leaves custom titles alone", () => {
+    localStorage.setItem("lyra-projects", JSON.stringify([{
+      id: "default", name: "My Writings", writings: [
+        { id: "w1", title: "Report — Letter to editor about cell phones should be...", topic: "write a letter to editor about cell phones should be fully banned at schools", type: "report" },
+        { id: "w2", title: "My custom name", topic: "anything", type: "essay" },
+      ],
+    }]));
+    const healed = migrateTruncatedTitlesV1();
+    expect(healed).toBe(1);
+    const w = JSON.parse(localStorage.getItem("lyra-projects"))[0].writings;
+    expect(w[0].title).toBe("Report — Letter to editor about cell phones should be fully banned at schools");
+    expect(w[0].title).not.toContain("...");
+    expect(w[1].title).toBe("My custom name");
+    expect(localStorage.getItem("lyra-title-detrunc-v1")).toBe("done");
+  });
+
+  it("is idempotent — second run is a no-op", () => {
+    localStorage.setItem("lyra-projects", JSON.stringify([{ id: "d", writings: [{ id: "w", title: "Essay — something long that was cut...", topic: "something long that was cut short by the old limit", type: "essay" }] }]));
+    expect(migrateTruncatedTitlesV1()).toBe(1);
+    expect(migrateTruncatedTitlesV1()).toBe(0);
+  });
+});
 
 describe("topicBrief — canned-welcome echo fix", () => {
   it("drops the instruction verb from the exact screenshot topic", () => {

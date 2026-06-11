@@ -43,6 +43,39 @@ export function topicBrief(topic, maxLen = 50) {
   return brief;
 }
 
+/**
+ * One-time heal (v1) for writings saved before the title-truncation fix:
+ * any stored title that ends in "..." but still has its full topic gets its
+ * title regenerated from topic+type. Custom titles without "..." untouched.
+ * Idempotent via the lyra-title-detrunc-v1 flag. Run at boot.
+ * @returns {number} how many titles were healed
+ */
+export function migrateTruncatedTitlesV1() {
+  try {
+    if (localStorage.getItem("lyra-title-detrunc-v1")) return 0;
+    const projects = JSON.parse(localStorage.getItem("lyra-projects") || "[]");
+    let healed = 0;
+    const next = projects.map(p => ({
+      ...p,
+      writings: (p.writings || []).map(w => {
+        if (w && typeof w.title === "string" && w.title.endsWith("...") && w.topic) {
+          const full = generateTitle(w.topic, w.type);
+          if (full && full !== w.title) { healed++; return { ...w, title: full }; }
+        }
+        return w;
+      }),
+    }));
+    if (healed) {
+      localStorage.setItem("lyra-projects", JSON.stringify(next));
+      console.info(`[lyra-titles] healed ${healed} truncated title(s)`);
+    }
+    localStorage.setItem("lyra-title-detrunc-v1", "done");
+    return healed;
+  } catch (e) {
+    return 0;
+  }
+}
+
 export function generateTitle(topic, typeId) {
   const typeLabel = writingTypes.find(w => w.id === typeId)?.label || "";
   // Store the FULL brief (generous 200-char guard against pasted paragraphs).
