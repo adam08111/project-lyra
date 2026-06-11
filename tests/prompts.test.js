@@ -264,6 +264,22 @@ describe("exam rules integration", () => {
   });
 });
 
+describe("buildCoachPrompt — search-grounded request modes", () => {
+  const p = buildCoachPrompt("cell phones at school", "Persuasive Writing", 500);
+  it("contains both mode blocks", () => {
+    expect(p).toContain("BRAINSTORM MODE");
+    expect(p).toContain("FIND-AN-EXAMPLE MODE");
+  });
+  it("brainstorm caps angles at 3-4 and forbids essay-ready prose", () => {
+    expect(p).toContain("exactly 3-4 ANGLES");
+    expect(p).toContain("NEVER thesis statements");
+  });
+  it("example mode forbids writing the linking sentence and blind searches", () => {
+    expect(p).toContain("NEVER write the linking sentence");
+    expect(p).toContain("do not search blind");
+  });
+});
+
 describe("buildStyleProfilerPrompt — name-based section selection", () => {
   // The single SECTION COUNT line carries the chosen-section list; assert against
   // it specifically, since the format TEMPLATE below still names all 9 sections.
