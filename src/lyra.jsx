@@ -904,6 +904,30 @@ Rules:
         <button onClick={() => { autoSave(); resetToNew(); }} style={{ padding: "6px 14px", borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 12, cursor: "pointer", color: COLORS.muted, marginTop: 2 }}>New</button>
       </div>
 
+      {/* Top Navigation (was bottom — thumb-reach put it under the keyboard
+          and the user wants the mode switch visible up top) */}
+      <div style={{ padding: "8px 18px 10px", borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, color: COLORS.muted }}>☰</button>
+
+        <div style={{ display: "flex", background: COLORS.bg3, borderRadius: 20, padding: 3, position: "relative" }}>
+          {["chat", "preview"].map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{ padding: "7px 16px", borderRadius: 17, border: "none", background: tab === t ? COLORS.card : "transparent", fontFamily: "'Courier Prime', monospace", fontSize: 13, color: tab === t ? COLORS.heading : COLORS.muted, fontWeight: tab === t ? 700 : 400, cursor: "pointer", position: "relative", boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.06)" : "none", transition: "all 0.2s" }}>
+              {t === "chat" ? "Chat" : "My Writing"}
+              {t === "preview" && draft.trim() && tab !== "preview" && (
+                <div style={{ position: "absolute", top: 5, right: 8, width: 7, height: 7, borderRadius: "50%", background: COLORS.blue }} />
+              )}
+            </button>
+          ))}
+        </div>
+
+        <button onClick={() => setShowGrammarLog(true)} style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: COLORS.muted, letterSpacing: 2, position: "relative" }}>
+          ···
+          {grammarLog.length > 0 && (
+            <div style={{ position: "absolute", top: -2, right: -2, width: 16, height: 16, borderRadius: 8, background: checkFlash ? COLORS.green : COLORS.red, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.3s" }}>{grammarLog.length > 99 ? "99" : grammarLog.length}</div>
+          )}
+        </button>
+      </div>
+
       {/* Genre-mismatch banner: explicit format cue in the topic contradicts
           the declared type. Dismiss persists per writing (genreCueDecision). */}
       {(() => {
@@ -1021,28 +1045,6 @@ Rules:
       {/* Training Session Overlay */}
       {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
 
-      {/* Bottom Navigation */}
-      <div style={{ padding: "10px 18px 16px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, color: COLORS.muted }}>☰</button>
-
-        <div style={{ display: "flex", background: COLORS.bg3, borderRadius: 20, padding: 3, position: "relative" }}>
-          {["chat", "preview"].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ padding: "7px 16px", borderRadius: 17, border: "none", background: tab === t ? COLORS.card : "transparent", fontFamily: "'Courier Prime', monospace", fontSize: 13, color: tab === t ? COLORS.heading : COLORS.muted, fontWeight: tab === t ? 700 : 400, cursor: "pointer", position: "relative", boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.06)" : "none", transition: "all 0.2s" }}>
-              {t === "chat" ? "Chat" : "My Writing"}
-              {t === "preview" && draft.trim() && tab !== "preview" && (
-                <div style={{ position: "absolute", top: 5, right: 8, width: 7, height: 7, borderRadius: "50%", background: COLORS.blue }} />
-              )}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={() => setShowGrammarLog(true)} style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: COLORS.muted, letterSpacing: 2, position: "relative" }}>
-          ···
-          {grammarLog.length > 0 && (
-            <div style={{ position: "absolute", top: -2, right: -2, width: 16, height: 16, borderRadius: 8, background: checkFlash ? COLORS.green : COLORS.red, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.3s" }}>{grammarLog.length > 99 ? "99" : grammarLog.length}</div>
-          )}
-        </button>
-      </div>
     </div>
   );
 }
