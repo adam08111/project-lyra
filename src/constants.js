@@ -40,13 +40,19 @@ export function defaultXraySections(typeId) {
   return XRAY_SECTION_DEFAULTS[typeId] || XRAY_SECTION_DEFAULTS._default;
 }
 
-// Canned quick-action chip messages (STATIC PREFIXES — ChatTab appends the
-// topic/type-specific tail). Single source of truth: ChatTab builds its chips
-// from these, and learning-sync rejects any "growth" entry whose `before` is
-// one of them — chips are sent AS user messages, so provenance alone would
-// wrongly authenticate them as student writing.
+// Canned quick-action chip messages. Single source of truth: ChatTab builds
+// its chips from the ACTIVE entries (first three; [0] is a static prefix the
+// chip appends a type tail to), and learning-sync rejects any "growth" entry
+// whose `before` is ANY entry here — chips are sent AS user messages, so
+// provenance alone would wrongly authenticate them as student writing.
+// RETIRED entries stay registered forever: old sessions still contain them
+// and the validator must keep rejecting them.
 export const QUICK_ACTION_MESSAGES = [
+  // — active —
   "Please outline the full structure for my",
+  "Help me brainstorm angles for this topic — ground them in real, recent examples I could build on.",
+  "Find me a real example I could use to develop the point I'm working on.",
+  // — retired (validator-only) —
   "Help me brainstorm the main points and arguments for my writing.",
   "Search the web for relevant facts, statistics, or examples I could use in my",
 ];

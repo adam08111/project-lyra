@@ -215,8 +215,10 @@ export default function ChatTab({
         )}
         {[
           { label: "Outline structure", msg: `${QUICK_ACTION_MESSAGES[0]} ${typeLabel.toLowerCase()}. Show me the framework I should follow.` },
-          { label: "Brainstorm ideas", msg: QUICK_ACTION_MESSAGES[1] },
-          { label: "Search for facts", msg: `${QUICK_ACTION_MESSAGES[2]} ${typeLabel.toLowerCase()} about "${topic}".`, search: true },
+          // Both grounded chips go through the normal coaching turn (pro +
+          // LYRA_BRAIN) with useSearch — the pedagogy stays in the loop.
+          { label: "Brainstorm ideas", msg: QUICK_ACTION_MESSAGES[1], search: true },
+          { label: "Find an example", msg: QUICK_ACTION_MESSAGES[2], search: true },
         ].map((chip, i) => (
           <button
             key={i}

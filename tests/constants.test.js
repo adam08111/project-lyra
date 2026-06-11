@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { COLORS, writingTypes, wordCounts, placeholders, writingPurposes, EXAM_CONVENTIONS, getExamRules, XRAY_SECTION_DEFAULTS, defaultXraySections } from "../src/constants.js";
+import { COLORS, writingTypes, wordCounts, placeholders, writingPurposes, EXAM_CONVENTIONS, getExamRules, XRAY_SECTION_DEFAULTS, defaultXraySections, QUICK_ACTION_MESSAGES } from "../src/constants.js";
 import { XRAY_ALL_SECTIONS } from "../src/prompts.js";
 
 describe("COLORS", () => {
@@ -142,6 +142,17 @@ describe("getExamRules", () => {
   it("returns empty string for personal with no type-specific rules", () => {
     const rules = getExamRules("personal", "essay");
     expect(rules).toContain("Personal Writing");
+  });
+});
+
+describe("QUICK_ACTION_MESSAGES — canned-chip registry (validator coupling)", () => {
+  it("contains both new grounded chip messages", () => {
+    expect(QUICK_ACTION_MESSAGES).toContain("Help me brainstorm angles for this topic — ground them in real, recent examples I could build on.");
+    expect(QUICK_ACTION_MESSAGES).toContain("Find me a real example I could use to develop the point I'm working on.");
+  });
+  it("keeps the RETIRED facts + old-brainstorm strings (old sessions still contain them)", () => {
+    expect(QUICK_ACTION_MESSAGES).toContain("Search the web for relevant facts, statistics, or examples I could use in my");
+    expect(QUICK_ACTION_MESSAGES).toContain("Help me brainstorm the main points and arguments for my writing.");
   });
 });
 
