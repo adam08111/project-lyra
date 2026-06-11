@@ -146,9 +146,9 @@ describe("getExamRules", () => {
 });
 
 describe("QUICK_ACTION_MESSAGES — canned-chip registry (validator coupling)", () => {
-  it("contains both new grounded chip messages", () => {
-    expect(QUICK_ACTION_MESSAGES).toContain("Help me brainstorm angles for this topic — ground them in real, recent examples I could build on.");
-    expect(QUICK_ACTION_MESSAGES).toContain("Find me a real example I could use to develop the point I'm working on.");
+  it("contains both new grounded chip messages (with the load-bearing search phrase)", () => {
+    expect(QUICK_ACTION_MESSAGES).toContain("Search the web and help me brainstorm angles for this topic — ground them in real, recent examples I could build on.");
+    expect(QUICK_ACTION_MESSAGES).toContain("Search the web and find me a real example I could use to develop the point I'm working on.");
   });
   it("keeps the RETIRED facts + old-brainstorm strings (old sessions still contain them)", () => {
     expect(QUICK_ACTION_MESSAGES).toContain("Search the web for relevant facts, statistics, or examples I could use in my");

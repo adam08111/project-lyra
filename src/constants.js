@@ -48,13 +48,16 @@ export function defaultXraySections(typeId) {
 // RETIRED entries stay registered forever: old sessions still contain them
 // and the validator must keep rejecting them.
 export const QUICK_ACTION_MESSAGES = [
-  // — active —
+  // — active — ("Search the web" is load-bearing: without the explicit phrase
+  // the model skips executing the grounding tool and answers from memory)
   "Please outline the full structure for my",
-  "Help me brainstorm angles for this topic — ground them in real, recent examples I could build on.",
-  "Find me a real example I could use to develop the point I'm working on.",
+  "Search the web and help me brainstorm angles for this topic — ground them in real, recent examples I could build on.",
+  "Search the web and find me a real example I could use to develop the point I'm working on.",
   // — retired (validator-only) —
   "Help me brainstorm the main points and arguments for my writing.",
   "Search the web for relevant facts, statistics, or examples I could use in my",
+  "Help me brainstorm angles for this topic — ground them in real, recent examples I could build on.",
+  "Find me a real example I could use to develop the point I'm working on.",
 ];
 
 export const wordCounts = [50, 100, 150, 200, 300, 400, 500, "600+"];

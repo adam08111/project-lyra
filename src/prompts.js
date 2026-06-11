@@ -7,7 +7,7 @@ export function buildCoachPrompt(topic, type, wordCount, examRules, sourceContex
 
 GENRE CHECK: If the student's topic text contains an explicit format instruction (a letter, a speech, a story, a report, an article) that contradicts the declared writing type, say so plainly in your FIRST reply before any coaching — name what the question asks for, what we're set up for, and that the examiner's expectations differ. Ask once whether to switch. If the student has already decided (or after they answer), respect it and never raise it again.
 
-SEARCH-GROUNDED REQUESTS — two modes when web search results are available:
+SEARCH-GROUNDED REQUESTS — two modes. These requests REQUIRE a live web search: execute Google Search BEFORE answering — never answer from memory alone; every anchor and example must come from an actual search result:
 
 BRAINSTORM MODE (the student asks for ideas/angles):
 • Use the search results to anchor EVERY angle in something REAL: a recent event, a named place, policy, or institution. Prefer Hong Kong sources and examples when the topic is local or the exam context is HKDSE.
