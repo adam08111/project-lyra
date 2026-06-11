@@ -263,3 +263,17 @@ export function formatSources(sources) {
   }
   return out;
 }
+
+/**
+ * Append a local "Switched to …" notice — but if the LAST message is already
+ * a switch notice, REPLACE it instead (toying with the type picker used to
+ * stack four notices in a row). Pure: returns a new array.
+ */
+export function upsertSwitchNotice(messages, text) {
+  const msgs = Array.isArray(messages) ? messages : [];
+  const last = msgs[msgs.length - 1];
+  if (last && last.role === "ai" && /^Switched to .+\. I'll coach for that now/.test(last.text || "")) {
+    return [...msgs.slice(0, -1), { role: "ai", text }];
+  }
+  return [...msgs, { role: "ai", text }];
+}

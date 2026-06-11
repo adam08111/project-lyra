@@ -4,7 +4,7 @@ import { keyframes, sharedStyles as s } from "./styles.js";
 import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt } from "./prompts.js";
-import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK } from "./utils.js";
+import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import WordLookup from "./components/WordLookup.jsx";
 import { snapshotBackup } from "./backup.js";
@@ -17,7 +17,7 @@ import GrammarLog from "./components/GrammarLog.jsx";
 import StyleLab from "./components/StyleLab.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import TrainingSession from "./components/TrainingSession.jsx";
-import { generateTitle, topicBrief } from "./titleGenerator.js";
+import { generateTitle, topicBrief, swapTitleTypePrefix } from "./titleGenerator.js";
 import { detectFormatCue, typeLabelOf } from "./genre-cues.js";
 
 export default function Lyra() {
@@ -367,7 +367,12 @@ export default function Lyra() {
     // so the student thought the click hadn't registered.
     setTimeout(() => setShowTypePicker(false), 700);
     pendingTypeSwitchNote.current = { from: oldLabel, to: newLabel };
-    setMessages(prev => [...prev, { role: "ai", text: `Switched to ${newLabel}. I'll coach for that now — the conventions are different.` }]);
+    // Replace a directly-preceding switch notice instead of stacking them
+    // (toying with the picker used to leave four in a row).
+    setMessages(prev => upsertSwitchNotice(prev, `Switched to ${newLabel}. I'll coach for that now — the conventions are different.`));
+    // If the title still carries the OLD auto-generated "{Type} — " prefix
+    // (never customised), track the new type; custom titles stay untouched.
+    setTitle(prev => swapTitleTypePrefix(prev, oldLabel, newLabel));
   }, [type, typeLabel]);
 
   const startEditingTitle = useCallback(() => {

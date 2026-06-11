@@ -76,6 +76,19 @@ export function migrateTruncatedTitlesV1() {
   }
 }
 
+/**
+ * On a mid-session type switch: if the title still begins with the OLD
+ * auto-generated "{oldTypeLabel} — " prefix (i.e. the user never customised
+ * it), swap the prefix to the new type label; otherwise leave the user's
+ * title untouched. Pure.
+ */
+export function swapTitleTypePrefix(title, oldLabel, newLabel) {
+  if (!title || !oldLabel || !newLabel) return title;
+  const prefix = `${oldLabel} — `;
+  if (title.startsWith(prefix)) return `${newLabel} — ${title.slice(prefix.length)}`;
+  return title;
+}
+
 export function generateTitle(topic, typeId) {
   const typeLabel = writingTypes.find(w => w.id === typeId)?.label || "";
   // Store the FULL brief (generous 200-char guard against pasted paragraphs).
