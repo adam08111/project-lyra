@@ -114,6 +114,7 @@ export default function Lyra() {
   // carries a one-time context line into the NEXT sendChat after a switch.
   const [genreCueDecision, setGenreCueDecision] = useState(null);
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const [hoverTypeId, setHoverTypeId] = useState(null); // picker row under the pointer
   const pendingTypeSwitchNote = useRef(null);
 
   // Derived values
@@ -893,17 +894,23 @@ Rules:
               <div onClick={() => setShowTypePicker(false)} style={{ position: "fixed", inset: 0, zIndex: 89 }} />
             )}
             {showTypePicker && (
-              <div style={{ position: "absolute", top: 18, left: 0, zIndex: 90, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
-                {writingTypes.map(wt => (
-                  <button
-                    key={wt.id}
-                    onClick={() => switchWritingType(wt.id)}
-                    style={{ textAlign: "left", fontSize: 12, fontFamily: "'Courier Prime', monospace", padding: "6px 10px", borderRadius: 8, border: "none", background: wt.id === type ? COLORS.bg3 : "transparent", color: COLORS.heading, fontWeight: wt.id === type ? 700 : 400, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, transition: "background 0.15s" }}
-                  >
-                    <span>{wt.label}</span>
-                    {wt.id === type && <span style={{ color: COLORS.green, fontWeight: 700 }}>✓</span>}
-                  </button>
-                ))}
+              <div onMouseLeave={() => setHoverTypeId(null)} style={{ position: "absolute", top: 18, left: 0, zIndex: 90, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
+                {writingTypes.map(wt => {
+                  // The highlight FOLLOWS the pointer (classic menu behaviour);
+                  // with no pointer inside, it rests on the current type. Bold
+                  // always marks the current type.
+                  const highlighted = hoverTypeId ? wt.id === hoverTypeId : wt.id === type;
+                  return (
+                    <button
+                      key={wt.id}
+                      onClick={() => switchWritingType(wt.id)}
+                      onMouseEnter={() => setHoverTypeId(wt.id)}
+                      style={{ textAlign: "left", fontSize: 12, fontFamily: "'Courier Prime', monospace", padding: "6px 10px", borderRadius: 8, border: "none", background: highlighted ? COLORS.bg3 : "transparent", color: COLORS.heading, fontWeight: wt.id === type ? 700 : 400, cursor: "pointer", transition: "background 0.1s" }}
+                    >
+                      {wt.label}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
