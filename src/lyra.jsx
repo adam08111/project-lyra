@@ -361,9 +361,10 @@ export default function Lyra() {
     const newLabel = writingTypes.find(w => w.id === newTypeId)?.label || newTypeId;
     setType(newTypeId);
     setGenreCueDecision("switched:" + newTypeId);
-    // Let the picker's highlight visibly jump to the chosen type before it
-    // closes — instant close swallowed the feedback for the tap.
-    setTimeout(() => setShowTypePicker(false), 280);
+    // Let the picker's highlight + ✓ visibly land on the chosen type before
+    // it closes — 280ms was imperceptible on phones (tap latency + refocus),
+    // so the student thought the click hadn't registered.
+    setTimeout(() => setShowTypePicker(false), 700);
     pendingTypeSwitchNote.current = { from: oldLabel, to: newLabel };
     setMessages(prev => [...prev, { role: "ai", text: `Switched to ${newLabel}. I'll coach for that now — the conventions are different.` }]);
   }, [type, typeLabel]);
@@ -897,9 +898,10 @@ Rules:
                   <button
                     key={wt.id}
                     onClick={() => switchWritingType(wt.id)}
-                    style={{ textAlign: "left", fontSize: 12, fontFamily: "'Courier Prime', monospace", padding: "6px 10px", borderRadius: 8, border: "none", background: wt.id === type ? COLORS.bg3 : "transparent", color: COLORS.heading, fontWeight: wt.id === type ? 700 : 400, cursor: "pointer" }}
+                    style={{ textAlign: "left", fontSize: 12, fontFamily: "'Courier Prime', monospace", padding: "6px 10px", borderRadius: 8, border: "none", background: wt.id === type ? COLORS.bg3 : "transparent", color: COLORS.heading, fontWeight: wt.id === type ? 700 : 400, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, transition: "background 0.15s" }}
                   >
-                    {wt.label}
+                    <span>{wt.label}</span>
+                    {wt.id === type && <span style={{ color: COLORS.green, fontWeight: 700 }}>✓</span>}
                   </button>
                 ))}
               </div>
