@@ -1614,10 +1614,43 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                   )}
                 </details>
 
-                {/* Section cards (exclude WHEN TO USE — it has its own tab) */}
+                {/* Section cards (WHEN TO USE renders as its own card below) */}
                 {profileSections.filter(s => s.title !== "WHEN TO USE THIS STYLE").map((section, i) => (
                   <SectionCard key={i} section={section} trackCall={trackCall} onSave={() => setSavedCount(JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]").length)} />
                 ))}
+
+                {/* When-to-use card — rehomed from the removed "Use It" tab
+                    (same parsing/markup; renders only when the analysis
+                    included the section). */}
+                {(() => {
+                  const useItSection = profileSections.find(s => s.title === "WHEN TO USE THIS STYLE");
+                  if (!useItSection) return null;
+                  const parts = parseSectionContent(useItSection.content);
+                  // Cut at NOT SUITABLE FOR so its label doesn't bleed into
+                  // the last PERFECT FOR bullet.
+                  const bodyText = ((parts.body || "") + "\n" + (useItSection.content || "")).split(/NOT\s+SUITABLE\s+FOR/i)[0];
+                  const bullets = bodyText.match(/•[^•]+/g) || [];
+                  return (
+                    <>
+                      <div style={{ ...s.card, marginBottom: 16, textAlign: "center", padding: 20, background: COLORS.bg2 }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.heading, fontFamily: "'Courier Prime', monospace", marginBottom: 6 }}>When to Use This Style</div>
+                        {parts.keyIdea && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, fontFamily: mono }}>{parts.keyIdea}</div>}
+                      </div>
+                      {bullets.map((bullet, i) => {
+                        const cleaned = bullet.replace(/^•\s*/, "").trim();
+                        const dashIdx = cleaned.indexOf("—");
+                        const situation = dashIdx > 0 ? cleaned.substring(0, dashIdx).trim() : cleaned;
+                        const description = dashIdx > 0 ? cleaned.substring(dashIdx + 1).trim() : "";
+                        return (
+                          <div key={i} style={{ background: COLORS.card, borderTop: `1px solid ${COLORS.border}`, borderRight: `1px solid ${COLORS.border}`, borderBottom: `1px solid ${COLORS.border}`, borderLeft: `3px solid ${COLORS.accent1}`, borderRadius: 14, marginBottom: 12, padding: 16, fontFamily: mono }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, marginBottom: 6 }}>{situation}</div>
+                            {description && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{description}</div>}
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
                 <div ref={analyseEndRef} />
 
                 <div style={{ display: "flex", gap: 10, marginTop: 16, marginBottom: 8 }}>
