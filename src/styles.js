@@ -34,5 +34,7 @@ export const sharedStyles = {
   btnDisabled: { opacity: 0.4, cursor: "not-allowed" },
   card: { background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: 16 },
   chip: { padding: "8px 18px", borderRadius: 20, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 13, cursor: "pointer", transition: "all 0.2s" },
-  chipActive: { background: COLORS.heading, color: "#fff", borderColor: COLORS.heading },
+  // Full border shorthand, not borderColor: chip sets shorthand `border`, and
+  // mixing the two across renders trips React's conflicting-style warning (§18.7).
+  chipActive: { background: COLORS.heading, color: "#fff", border: `1.5px solid ${COLORS.heading}` },
 };

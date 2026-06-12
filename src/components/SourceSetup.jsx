@@ -493,7 +493,9 @@ export default function SourceSetup({
                     return (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontFamily: mono }}>
                         <span style={{ flex: 1, fontSize: 12, color: COLORS.amber, lineHeight: 1.5 }}>
-                          Your question asks for a {cue.cueLabel} — {typeLabelOf(cue.typeId)} fits best
+                          {/* Cue label and type label coincide now that letter-to-editor
+                              and speech are real types — don't say the name twice. */}
+                          Your question asks for a {cue.cueLabel}{typeLabelOf(cue.typeId) !== cue.cueLabel ? ` — ${typeLabelOf(cue.typeId)} fits best` : ""}
                         </span>
                         <button
                           onClick={() => setType(cue.typeId)}
