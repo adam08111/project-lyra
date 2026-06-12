@@ -54,11 +54,19 @@ describe("buildStructuralPrompt", () => {
   });
 
   it("flags formality for all formal types", () => {
-    const formalTypes = ["Complaint Letter", "Formal Business Email", "Exam Essay", "Report", "Persuasive Writing"];
+    const formalTypes = ["Complaint Letter", "Formal Business Email", "Exam Essay", "Report", "Persuasive Writing", "Letter to the Editor"];
     for (const type of formalTypes) {
       const result = buildStructuralPrompt("test", type);
       expect(result).toContain("FORMAL");
     }
+  });
+
+  it("uses the spoken-register branch for speeches (not formal, not creative)", () => {
+    const result = buildStructuralPrompt("recycling", "Speech / Talk");
+    expect(result).toContain("SPOKEN register");
+    expect(result).toContain("Contractions and direct audience address");
+    expect(result).not.toContain("FORMAL piece of writing");
+    expect(result).not.toContain("creative/narrative");
   });
 });
 
@@ -101,6 +109,19 @@ describe("buildProofreadPrompt", () => {
   it("detects formality correctly for formal types", () => {
     const result = buildProofreadPrompt("test", "Formal Business Email", []);
     expect(result).toContain("FORMAL writing");
+  });
+
+  it("treats letters to the editor as formal", () => {
+    const result = buildProofreadPrompt("phone ban", "Letter to the Editor", []);
+    expect(result).toContain("FORMAL writing");
+  });
+
+  it("uses the spoken-register branch for speeches", () => {
+    const result = buildProofreadPrompt("recycling", "Speech / Talk", []);
+    expect(result).toContain("SPOKEN register");
+    expect(result).toContain("never flag them");
+    expect(result).not.toContain("FORMAL writing");
+    expect(result).not.toContain("creative/narrative");
   });
 
   it("detects formality correctly for creative types", () => {

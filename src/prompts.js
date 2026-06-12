@@ -157,8 +157,9 @@ SKILL CONTEXT NOTE: If skill cards are included below, they use anonymous Writer
 }
 
 export function buildStructuralPrompt(topic, typeLabel, activeSkillCtx, examRules, sourceContext) {
-  const formalTypes = ["Complaint Letter", "Formal Business Email", "Exam Essay", "Report", "Persuasive Writing"];
+  const formalTypes = ["Complaint Letter", "Formal Business Email", "Exam Essay", "Report", "Persuasive Writing", "Letter to the Editor"];
   const isFormal = formalTypes.includes(typeLabel);
+  const isSpoken = typeLabel === "Speech / Talk";
 
   const examBlock = examRules ? `\n\nEXAM RULES — OVERRIDE ALL SUGGESTIONS:\n${examRules}\nEvery suggestion MUST comply with these exam rules. If a technique would violate exam conventions (e.g. suggesting balanced arguments when the exam requires a clear stance), do NOT suggest it. Replace it with a technique that serves the student's exam performance.` : "";
 
@@ -181,7 +182,7 @@ RULES WHEN A SKILL IS DEPLOYED:
   const sourceBlock = sourceContext ? `\nSOURCE TEXT: The student studied a reference text (${sourceContext.authorName}). Suggestions should align with the ${sourceContext.techniqueCount || 0} techniques they extracted.` : "";
 
   return `You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).${skillBlock}${examBlock}${sourceBlock}
-${isFormal ? `\nFORMALITY: This is a FORMAL piece of writing. Flag any informal, colloquial, or slang words (e.g. "weird", "stuff", "a lot", "things", "kid", "guy", "cool", "big deal") and replace them with formal academic equivalents that carry the SAME meaning the student intended. For example: "weird" → "unusual" or "peculiar", "stuff" → "factors" or "elements", "a lot" → "significantly" or "numerous".` : `\nFORMALITY: This is a creative/narrative piece. Casual or conversational language is acceptable if it fits the student's voice and intent.`}
+${isSpoken ? `\nFORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address ("you", inclusive "we") are appropriate and should NOT be flagged. Flag slang or chat-style words (e.g. "gonna", "kinda", "super cool") that would undermine a school occasion, but do not push the student toward stiff academic diction — spoken rhythm matters more than formality here.` : isFormal ? `\nFORMALITY: This is a FORMAL piece of writing. Flag any informal, colloquial, or slang words (e.g. "weird", "stuff", "a lot", "things", "kid", "guy", "cool", "big deal") and replace them with formal academic equivalents that carry the SAME meaning the student intended. For example: "weird" → "unusual" or "peculiar", "stuff" → "factors" or "elements", "a lot" → "significantly" or "numerous".` : `\nFORMALITY: This is a creative/narrative piece. Casual or conversational language is acceptable if it fits the student's voice and intent.`}
 
 Analyse the student's latest paragraph. Return ONLY valid JSON (no markdown fences) with this structure:
 {"suggestions":[{"technique":"Name","description":"One line diagnosis of the issue","original":"Original sentence from text","vocabulary":["word1","word2","word3","word4"],"template":"Fill-in-the-blank structure using ____________ for blanks","explanation":"Why this technique helps and what effect it creates"}]}
@@ -204,8 +205,9 @@ OTHER RULES:
 }
 
 export function buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, sourceContext) {
-  const formalTypes = ["Complaint Letter", "Formal Business Email", "Exam Essay", "Report", "Persuasive Writing"];
+  const formalTypes = ["Complaint Letter", "Formal Business Email", "Exam Essay", "Report", "Persuasive Writing", "Letter to the Editor"];
   const isFormal = formalTypes.includes(typeLabel);
+  const isSpoken = typeLabel === "Speech / Talk";
   const examBlock = examRules ? `\n\nEXAM RULES:\n${examRules}\nWhen proofreading, flag any content that violates these exam conventions as a style observation. For example, if an essay for HKDSE presents both sides equally without a clear stance, flag this as a critical style issue.` : "";
   const appliedCtx = appliedSuggestions.length > 0
     ? `\n\nIMPORTANT — The following sentence structure improvements were ALREADY APPLIED by our style coach. Do NOT flag, contradict, reverse, or suggest undoing any of these changes. Treat them as correct and intentional:\n${appliedSuggestions.map((s, i) => `${i + 1}. [${s.technique}] Changed "${s.original}" → "${s.improved}"`).join("\n")}`
@@ -231,7 +233,7 @@ RULES WHEN A SKILL IS DEPLOYED:
   const sourceBlock = sourceContext ? `\nSOURCE TEXT: The student studied a reference text (${sourceContext.authorName}). When proofreading, consider alignment with the ${sourceContext.techniqueCount || 0} techniques they extracted.` : "";
 
   return `You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).
-${isFormal ? `FORMALITY: This is FORMAL writing. In vocabulary upgrades, flag any informal, colloquial, or slang words and suggest formal academic equivalents that preserve the student's exact intended meaning.` : `FORMALITY: This is creative/narrative writing. Vocabulary suggestions should improve vividness and precision, but casual language is acceptable if it fits the student's voice.`}${appliedCtx}${skillCtx}${examBlock}${sourceBlock}
+${isSpoken ? `FORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address are correct for this genre — never flag them. In vocabulary upgrades, flag slang or chat-style words, but keep suggestions natural to say aloud rather than stiffly academic.` : isFormal ? `FORMALITY: This is FORMAL writing. In vocabulary upgrades, flag any informal, colloquial, or slang words and suggest formal academic equivalents that preserve the student's exact intended meaning.` : `FORMALITY: This is creative/narrative writing. Vocabulary suggestions should improve vividness and precision, but casual language is acceptable if it fits the student's voice.`}${appliedCtx}${skillCtx}${examBlock}${sourceBlock}
 
 Analyse the student's writing. Return ONLY valid JSON (no markdown fences):
 {"grammar":[{"phrase":"flagged text","correction":"corrected text","rule":"Rule Name","explanation":"2-3 sentence explanation of why this is wrong and how to avoid it","example_wrong":"An example sentence showing the WRONG usage","example_correct":"The same example sentence CORRECTED"}],"style":[{"observation":"what you noticed","suggestion":"specific actionable advice"}],"vocabulary":[{"weak":"weak word","stronger":"better word","reason":"contextual reasoning explaining why this synonym matches the student's intended meaning"}],"strengths":"One sentence about what they did well","nextFocus":"One clear next task"}
