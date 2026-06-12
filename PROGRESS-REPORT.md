@@ -1386,3 +1386,23 @@ Pure `formatSources` → hostname pills (a hostname-looking grounding `title` li
 
 **220 unit tests green** (204 → +16). Build clean.
 
+---
+
+## 30. UPDATE — 12 June 2026 — Style Lab nav cleanup: five-noun tab bar, actions rehomed onto cards
+
+### 30.1 Unit-0 findings (verify-then-rehome — the brief's fears tested against the code)
+- **The Practice tab was NOT the home of training threads.** It was an ephemeral, in-memory sentence-rewrite chat against the current analysis (`practice_rewrite` route + `styleCoachPrompt`), plain `useState`, zero persistence, dead on unmount. `lyra-training-chats` appears nowhere in StyleLab — threads belong exclusively to TrainingSession, keyed `[skill.id][techIdx]`, resumed by reopening the same skill+technique. No global thread list existed anywhere, before or after.
+- **The Use It tab had no action to rehome.** It was a read-only renderer of the current analysis's WHEN TO USE THIS STYLE section — no apply/pin, no skill_match, no deployment record (the brief's suspicion was wrong; followed the code). Applying a skill already lives on SavedSkillDetail's "✦ Write with this skill".
+- **Entry points:** all internal — the two tab buttons + ONE `goToTab("practice")` ("Start Practising" on the Analyse tab). `initialTab` was dead plumbing (setter never called); the chat "✦ Skills" chip never targeted a tab; **no tab state persisted anywhere** → no migration needed.
+
+### 30.2 The rehoming map
+| Old path | New home | Commit |
+|---|---|---|
+| Practice actions | Already on technique cards (§15) — verified same props/keying; cards now also show **"Continue · N turns"** when a `lyra-training-chats` thread exists (new pure `countThreadTurns`/`loadTrainingChats` in `src/training-threads.js`) | `9e5dc29` |
+| Use It display | Same parsing/markup as a "When to Use This Style" card at the end of the Analyse tab's section list (renders only when the analysis included the section) | `a44434e` |
+| "Start Practising" CTA | Opens the real **TrainingSession on the just-auto-saved writer** (hidden when too-short/removed) — deviation: the old target was the ephemeral rewrite chat, which held no durable data and duplicated TrainingSession's purpose | `e920a60` |
+| The tabs themselves | Deleted, plus all orphaned machinery (CoachMessage, PracticeTypingBubble, practice state/effects, styleCoachPrompt+useTypewriter imports, needsProfile disabled logic) — −328 lines | `e920a60` |
+
+### 30.3 Tab-bar fit (the original motivation)
+Verified at 430×932: five noun tabs — Analyse Style · Saved · Writers · Achievements · Report — `scrollWidth === clientWidth` (394px, padding tightened 16→6px/side), Achievements and Report directly tappable, all five always-alive with content, zero console errors. Unit-4 tests folded into unit 1 (+6, **226 total**); no tab tests existed to migrate.
+
