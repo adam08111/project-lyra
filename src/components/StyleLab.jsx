@@ -6,170 +6,16 @@ import { COLORS, defaultXraySections } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { buildStyleProfilerPrompt, styleCoachPrompt, translatePrompt } from "../prompts.js";
+import { buildStyleProfilerPrompt, translatePrompt } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
 import { FeatherIcon } from "./Icons.jsx";
-import { useTypewriter } from "../hooks.js";
 import XRayView, {
   parseProfileSections, parseSectionContent, parseAnnotations,
   labelColorIndex, ANNOTATION_COLORS, AnnotatedQuote, SectionCard,
   extractAuthor, saveStyleSkill, mono, parseStructureContent,
-  deriveShortTitle, translateWithGuard, AnalyseMoreButton, remainingSections
+  deriveShortTitle, translateWithGuard, AnalyseMoreButton, remainingSections, loadSavedSkill
 } from "./XRayView.jsx";
 
-function CoachMessage({ text, profileSections }) {
-  const [expandedRef, setExpandedRef] = useState(null);
-
-  // Parse the response into ORIGINAL, REWRITE, CONCEPTS APPLIED
-  const lines = text.split("\n");
-  const parts = { original: "", rewrite: "", concepts: [] };
-  let currentSection = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("ORIGINAL:")) {
-      parts.original = trimmed.replace("ORIGINAL:", "").trim();
-      currentSection = "original";
-    } else if (trimmed.startsWith("REWRITE:")) {
-      parts.rewrite = trimmed.replace("REWRITE:", "").trim();
-      currentSection = "rewrite";
-    } else if (trimmed.startsWith("CONCEPTS APPLIED")) {
-      currentSection = "concepts";
-      // Handle bullets on same line as header: "CONCEPTS APPLIED: • bullet..."
-      const afterHeader = trimmed.replace(/^CONCEPTS APPLIED[:\s]*/i, "");
-      if (afterHeader && /^[•\-*]/.test(afterHeader)) {
-        const bullet = afterHeader.replace(/^[•\-*]\s*/, "");
-        const refMatch = bullet.match(/\(from\s+([^)]+)\)/i);
-        const sectionName = refMatch ? refMatch[1].trim().toUpperCase() : null;
-        parts.concepts.push({ text: bullet, sectionName });
-      }
-    } else if (currentSection === "concepts" && (trimmed.startsWith("•") || trimmed.startsWith("-") || trimmed.startsWith("*"))) {
-      const bullet = trimmed.replace(/^[•\-*]\s*/, "");
-      const refMatch = bullet.match(/\(from\s+([^)]+)\)/i);
-      const sectionName = refMatch ? refMatch[1].trim().toUpperCase() : null;
-      parts.concepts.push({ text: bullet, sectionName });
-    } else if (currentSection === "rewrite" && trimmed && !trimmed.startsWith("CONCEPTS")) {
-      parts.rewrite += " " + trimmed;
-    }
-  }
-
-  // Find matching profile section (exact match first, then partial/fuzzy)
-  const findSection = (name) => {
-    if (!name || !profileSections) return null;
-    const n = name.toUpperCase();
-    return profileSections.find(s => s.title.toUpperCase() === n)
-      || profileSections.find(s => s.title.toUpperCase().includes(n) || n.includes(s.title.toUpperCase()));
-  };
-
-  // If parsing failed, just show raw text
-  if (!parts.original && !parts.rewrite && parts.concepts.length === 0) {
-    return <span>{text}</span>;
-  }
-
-  return (
-    <div style={{ fontSize: 13, lineHeight: 1.7, fontFamily: mono }}>
-      {parts.original && (
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Original</div>
-          <div style={{ color: COLORS.muted, fontStyle: "italic" }}>{parts.original}</div>
-        </div>
-      )}
-      {parts.rewrite && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Rewrite</div>
-          <div style={{ color: COLORS.heading, fontWeight: 600 }}>{parts.rewrite}</div>
-        </div>
-      )}
-      {parts.concepts.length > 0 && (
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Concepts Applied</div>
-          {parts.concepts.map((c, i) => {
-            const matchedSection = findSection(c.sectionName);
-            const isExpanded = expandedRef === i;
-            return (
-              <div key={i} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6 }}>• {(() => {
-                  // Highlight "Grammar pattern: ..." in the bullet
-                  const gpMatch = c.text.match(/^(.*?)(Grammar pattern:\s*"[^"]*")(\.?\s*)(.*)/i);
-                  if (gpMatch) {
-                    return <>
-                      {gpMatch[1]}
-                      <span style={{ background: "#EDE9E5", padding: "1px 4px", borderRadius: 4, fontWeight: 600, fontSize: 11 }}>{gpMatch[2]}</span>
-                      {gpMatch[3]}{gpMatch[4]}
-                    </>;
-                  }
-                  return c.text;
-                })()}</div>
-                {matchedSection && (
-                  <div
-                    onClick={() => setExpandedRef(isExpanded ? null : i)}
-                    style={{ fontSize: 10, color: COLORS.accent1, cursor: "pointer", marginTop: 3, marginLeft: 14, display: "inline-flex", alignItems: "center", gap: 4 }}
-                  >
-                    <span style={{ transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform 0.2s", display: "inline-block" }}>&#9654;</span>
-                    View from analysis: {matchedSection.title}
-                  </div>
-                )}
-                {isExpanded && matchedSection && (() => {
-                  const p = parseSectionContent(matchedSection.content);
-                  return (
-                    <div style={{
-                      marginTop: 6, marginLeft: 14, padding: "10px 12px",
-                      background: "#F5F0EB", borderLeft: `3px solid ${COLORS.accent1}`,
-                      borderRadius: "0 8px 8px 0", fontSize: 11, color: COLORS.text,
-                      lineHeight: 1.6, maxHeight: 220, overflowY: "auto"
-                    }}>
-                      {p.keyIdea && (
-                        <div style={{ fontWeight: 700, color: COLORS.heading, marginBottom: 6 }}>{p.keyIdea}</div>
-                      )}
-                      {p.example && (
-                        <div style={{ fontStyle: "italic", color: COLORS.muted, marginBottom: 6 }}>{p.example}</div>
-                      )}
-                      {(() => {
-                        const raw = p.breakdown;
-                        if (!raw) return null;
-                        const gramMatch = raw.match(/GRAMMAR:\s*(.*?)(?=\s*\|\s*FUNCTION:|$)/i);
-                        const funcMatch = raw.match(/FUNCTION:\s*(.*?)(?=\s*\|\s*USE IT:|$)/i);
-                        return (
-                          <>
-                            {gramMatch?.[1]?.trim() && (
-                              <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700, color: COLORS.heading }}>Grammar: </span>{gramMatch[1].trim()}</div>
-                            )}
-                            {funcMatch?.[1]?.trim() && (
-                              <div><span style={{ fontWeight: 700, color: COLORS.heading }}>Why use it: </span>{funcMatch[1].trim()}</div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  );
-                })()}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PracticeTypingBubble({ msg, onDone }) {
-  const { displayed, done } = useTypewriter(msg.text, 14);
-  const calledDone = useRef(false);
-  useEffect(() => {
-    if (done && !calledDone.current) {
-      calledDone.current = true;
-      onDone(msg);
-    }
-  }, [done, msg, onDone]);
-  return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 14, animation: "fadeUp 0.25s ease" }}>
-      <div style={{ marginTop: 4 }}><FeatherIcon size={16} /></div>
-      <div style={{ background: "#fff", border: `1px solid ${COLORS.border}`, borderRadius: "4px 18px 18px 18px", padding: "12px 16px", fontSize: 13, lineHeight: 1.7, maxWidth: "85%", whiteSpace: "pre-wrap", fontFamily: mono }}>
-        {displayed}{!done && <span style={{ animation: "blink 0.8s infinite", color: COLORS.accent1 }}>|</span>}
-      </div>
-    </div>
-  );
-}
 
 // parseProfileSections, parseSectionContent, parseAnnotations, ANNOTATION_COLORS,
 // labelColorIndex, AnnotatedQuote, SectionCard, extractAuthor, saveStyleSkill, mono
@@ -1252,10 +1098,6 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     setTranslating(false);
   };
 
-  const [practiceMessages, setPracticeMessages] = useState([]);
-  const [practiceInput, setPracticeInput] = useState("");
-  const [practiceLoading, setPracticeLoading] = useState(false);
-  const [typingMsg, setTypingMsg] = useState(null);
 
   const [savedCount, setSavedCount] = useState(() => JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]").length);
 
@@ -1274,15 +1116,8 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
   const [skillCount, setSkillCount] = useState(() => JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);
   const [achievementCount, setAchievementCount] = useState(() => JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]").length);
 
-  const practiceEndRef = useRef(null);
   const analyseEndRef = useRef(null);
   const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (practiceEndRef.current) {
-      practiceEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [practiceMessages, typingMsg]);
 
   // Auto-scroll analyse tab as new sections stream in
   useEffect(() => {
@@ -1321,9 +1156,6 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     setAuthorName("");
     setProfileSections([]);
     setError("");
-    setPracticeMessages([]);
-    setPracticeInput("");
-    setTypingMsg(null);
     setActiveTab("analyze");
     setTabHistory([]);
     setSkillSaved(null);
@@ -1393,30 +1225,6 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     setAnalyzing(false);
   }, [referenceText, trackCall, writingType]);
 
-  const sendPractice = useCallback(async (text) => {
-    if (!text.trim() || !styleProfile) return;
-    const userMsg = { role: "user", text: text.trim() };
-    setPracticeMessages(prev => [...prev, userMsg]);
-    setPracticeInput("");
-    setPracticeLoading(true);
-    setTypingMsg(null);
-    try {
-      const practiceRoute = getRouteConfig("practice_rewrite");
-      trackCall();
-      const result = await callAI(styleCoachPrompt(styleProfile, authorName), text.trim(), false, 6000, practiceRoute.thinkingBudget, undefined, undefined, practiceRoute.model);
-      setPracticeLoading(false);
-      setTypingMsg({ role: "ai", text: result, id: Date.now() });
-    } catch (e) {
-      setPracticeLoading(false);
-      setPracticeMessages(prev => [...prev, { role: "ai", text: "Something went wrong. Please try again." }]);
-    }
-  }, [styleProfile, authorName, trackCall]);
-
-  const handleTypingDone = useCallback((msg) => {
-    setPracticeMessages(prev => [...prev, { role: "ai", text: msg.text }]);
-    setTypingMsg(null);
-  }, []);
-
   if (!showStyleLab) return null;
 
   const hasProfile = profileSections.length > 0;
@@ -1444,26 +1252,22 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
         <div style={{ display: "flex", background: COLORS.bg3, borderRadius: 20, padding: 3 }}>
           {[
             { key: "analyze", label: "Analyse Style" },
-            { key: "practice", label: "Practice", needsProfile: true },
-            { key: "useit", label: "Use It", needsProfile: true },
             { key: "saved", label: savedCount > 0 ? `Saved (${savedCount})` : "Saved" },
             { key: "skills", label: skillCount > 0 ? `Writers (${skillCount})` : "Writers" },
             { key: "achievements", label: achievementCount > 0 ? `Achievements (${achievementCount})` : "Achievements" },
             { key: "report", label: "Report" },
           ].map(t => {
-            const disabled = t.needsProfile && !hasProfile;
             return (
               <button
                 key={t.key}
-                onClick={() => { if (disabled) return; goToTab(t.key); }}
+                onClick={() => goToTab(t.key)}
                 style={{
-                  flex: 1, padding: "8px 16px", borderRadius: 17, border: "none",
+                  flex: 1, padding: "8px 6px", borderRadius: 17, border: "none",
                   background: activeTab === t.key ? COLORS.card : "transparent",
                   fontFamily: "'Courier Prime', monospace", fontSize: 11,
-                  color: disabled ? COLORS.accent2 : (activeTab === t.key ? COLORS.heading : COLORS.muted),
+                  color: activeTab === t.key ? COLORS.heading : COLORS.muted,
                   fontWeight: activeTab === t.key ? 700 : 400,
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  opacity: disabled ? 0.5 : 1,
+                  cursor: "pointer",
                   boxShadow: activeTab === t.key ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
                   transition: "all 0.2s",
                 }}
@@ -1660,50 +1464,23 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
                   >
                     Analyse new text
                   </button>
-                  <button
-                    onClick={() => goToTab("practice")}
-                    style={{ ...s.btn, flex: 1, fontSize: 14 }}
-                  >
-                    Start Practising
-                  </button>
+                  {(() => {
+                    // The Practice tab is gone — practising now opens the real
+                    // TrainingSession on the just-auto-saved writer. Hidden when
+                    // the analysis was too short to save or the writer removed.
+                    const sk = skillSaved === "saved" && skillInStore ? loadSavedSkill(authorName) : null;
+                    return sk && onOpenTraining ? (
+                      <button
+                        onClick={() => { setShowStyleLab(false); onOpenTraining(sk); }}
+                        style={{ ...s.btn, flex: 1, fontSize: 14 }}
+                      >
+                        Start Practising
+                      </button>
+                    ) : null;
+                  })()}
                 </div>
               </>
             )}
-          </div>
-        )}
-
-        {/* USE IT TAB */}
-        {activeTab === "useit" && (
-          <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-            {(() => {
-              const useItSection = profileSections.find(s => s.title === "WHEN TO USE THIS STYLE");
-              if (!useItSection) return <div style={{ textAlign: "center", padding: 40, color: COLORS.muted, fontFamily: mono, fontSize: 12 }}>Run an analysis first to see when to use this style.</div>;
-              const parts = parseSectionContent(useItSection.content);
-              // Parse bullet points from body text — cut at NOT SUITABLE FOR so
-              // its label doesn't bleed into the last PERFECT FOR bullet.
-              const bodyText = ((parts.body || "") + "\n" + (useItSection.content || "")).split(/NOT\s+SUITABLE\s+FOR/i)[0];
-              const bullets = bodyText.match(/•[^•]+/g) || [];
-              return (
-                <>
-                  <div style={{ ...s.card, marginBottom: 16, textAlign: "center", padding: 20, background: COLORS.bg2 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.heading, fontFamily: "'Courier Prime', monospace", marginBottom: 6 }}>When to Use This Style</div>
-                    {parts.keyIdea && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7, fontFamily: mono }}>{parts.keyIdea}</div>}
-                  </div>
-                  {bullets.map((bullet, i) => {
-                    const cleaned = bullet.replace(/^•\s*/, "").trim();
-                    const dashIdx = cleaned.indexOf("—");
-                    const situation = dashIdx > 0 ? cleaned.substring(0, dashIdx).trim() : cleaned;
-                    const description = dashIdx > 0 ? cleaned.substring(dashIdx + 1).trim() : "";
-                    return (
-                      <div key={i} style={{ background: COLORS.card, borderTop: `1px solid ${COLORS.border}`, borderRight: `1px solid ${COLORS.border}`, borderBottom: `1px solid ${COLORS.border}`, borderLeft: `3px solid ${COLORS.accent1}`, borderRadius: 14, marginBottom: 12, padding: 16, fontFamily: mono }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, marginBottom: 6 }}>{situation}</div>
-                        {description && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{description}</div>}
-                      </div>
-                    );
-                  })}
-                </>
-              );
-            })()}
           </div>
         )}
 
@@ -1746,91 +1523,6 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
           </div>
         )}
 
-        {/* PRACTICE TAB */}
-        {activeTab === "practice" && (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            {/* Messages */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-              {/* Original passage reference */}
-              {referenceText && (
-                <details style={{ background: COLORS.card, borderTop: `1px solid ${COLORS.border}`, borderRight: `1px solid ${COLORS.border}`, borderBottom: `1px solid ${COLORS.border}`, borderLeft: `3px solid ${COLORS.accent2}`, borderRadius: 10, marginBottom: 14, padding: 0, cursor: "pointer" }}>
-                  <summary style={{ padding: "8px 12px", fontSize: 10, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 8 }}>&#9654;</span> Original passage{authorName && authorName !== "Unknown Author" ? ` — ${authorName}` : ""}
-                  </summary>
-                  <div style={{ padding: "0 12px 10px", fontSize: 11, color: COLORS.text, lineHeight: 1.7, fontFamily: mono, fontStyle: "italic", borderTop: `1px solid ${COLORS.border}`, paddingTop: 8, maxHeight: 150, overflowY: "auto" }}>
-                    {referenceText}
-                  </div>
-                </details>
-              )}
-
-              {practiceMessages.length === 0 && !typingMsg && (
-                <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                  <FeatherIcon size={24} color={COLORS.accent2} />
-                  <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 12, lineHeight: 1.5, fontFamily: mono }}>
-                    Type a sentence and Lyra will rewrite it in{authorName && authorName !== "Unknown Author" ? ` ${authorName}'s` : " the analysed"} style, explaining every technique used.
-                  </div>
-                </div>
-              )}
-
-              {practiceMessages.map((msg, i) => (
-                msg.role === "user" ? (
-                  <div key={i} style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
-                    <div style={{ background: COLORS.heading, color: "#fff", borderRadius: "18px 18px 4px 18px", padding: "10px 16px", fontSize: 13, lineHeight: 1.6, maxWidth: "85%", whiteSpace: "pre-wrap", fontFamily: mono }}>
-                      {msg.text}
-                    </div>
-                  </div>
-                ) : (
-                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                    <div style={{ marginTop: 4 }}><FeatherIcon size={16} /></div>
-                    <div style={{ background: "#fff", border: `1px solid ${COLORS.border}`, borderRadius: "4px 18px 18px 18px", padding: "12px 16px", maxWidth: "85%", fontFamily: mono }}>
-                      <CoachMessage text={msg.text} profileSections={profileSections} />
-                    </div>
-                  </div>
-                )
-              ))}
-
-              {typingMsg && (
-                <PracticeTypingBubble msg={typingMsg} onDone={handleTypingDone} />
-              )}
-
-              {practiceLoading && !typingMsg && (
-                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                  <div style={{ marginTop: 4 }}><FeatherIcon size={16} /></div>
-                  <div style={{ background: "#fff", border: `1px solid ${COLORS.border}`, borderRadius: "4px 18px 18px 18px", padding: "12px 16px", fontSize: 13, fontFamily: mono }}>
-                    <span style={{ display: "inline-flex", gap: 4 }}>
-                      <span style={{ animation: "bounce 1s infinite 0s" }}>.</span>
-                      <span style={{ animation: "bounce 1s infinite 0.15s" }}>.</span>
-                      <span style={{ animation: "bounce 1s infinite 0.3s" }}>.</span>
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div ref={practiceEndRef} />
-            </div>
-
-            {/* Input */}
-            <div style={{ padding: "12px 18px 16px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  ref={inputRef}
-                  value={practiceInput}
-                  onChange={e => setPracticeInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && practiceInput.trim() && !practiceLoading) sendPractice(practiceInput); }}
-                  placeholder="Type a sentence to transform..."
-                  style={{ flex: 1, padding: "10px 14px", borderRadius: 20, border: `1.5px solid ${COLORS.border}`, background: COLORS.bg2, fontFamily: "'Courier Prime', monospace", fontSize: 13, color: COLORS.text, outline: "none" }}
-                />
-                <button
-                  onClick={() => { if (practiceInput.trim() && !practiceLoading) sendPractice(practiceInput); }}
-                  disabled={!practiceInput.trim() || practiceLoading}
-                  style={{ width: 40, height: 40, borderRadius: 20, border: "none", background: practiceInput.trim() && !practiceLoading ? COLORS.heading : COLORS.bg3, color: "#fff", fontSize: 16, cursor: practiceInput.trim() && !practiceLoading ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
-                >
-                  &#x2192;
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
