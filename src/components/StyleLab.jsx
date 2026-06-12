@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { groupReports } from "../report-utils.js";
+import { loadTrainingChats, countThreadTurns } from "../training-threads.js";
 import GrowthReport from "./GrowthReport.jsx";
 import { COLORS, defaultXraySections } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
@@ -487,7 +488,7 @@ function synthSectionFromTechnique(t) {
 // Click → expand inline to render the full SectionCard. The ✎ button puts
 // the title into inline-edit mode (Enter saves, Escape cancels); the × button
 // removes the technique entirely from the saved skill.
-function CollapsibleTechnique({ section, index, trackCall, selected, selectColor = COLORS.green, onToggleSelect, onRemove, onRename, onPractice }) {
+function CollapsibleTechnique({ section, index, trackCall, selected, selectColor = COLORS.green, onToggleSelect, onRemove, onRename, onPractice, threadTurns = 0 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -528,7 +529,7 @@ function CollapsibleTechnique({ section, index, trackCall, selected, selectColor
             onClick={(e) => { e.stopPropagation(); onPractice(); }}
             style={{ marginTop: 8, width: "100%", fontSize: 12, fontFamily: mono, padding: "9px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.green}`, background: "transparent", color: COLORS.green, cursor: "pointer", fontWeight: 700, letterSpacing: 0.3 }}
           >
-            ▶ Practise this technique
+            {threadTurns > 0 ? `▶ Continue practising · ${threadTurns} turns` : "▶ Practise this technique"}
           </button>
         )}
       </div>
@@ -600,9 +601,9 @@ function CollapsibleTechnique({ section, index, trackCall, selected, selectColor
         {onPractice && !editing && (
           <button
             onClick={(e) => { e.stopPropagation(); onPractice(); }}
-            title="Practise this technique"
+            title={threadTurns > 0 ? "Continue your practice chat" : "Practise this technique"}
             style={{ background: "none", border: `1px solid ${COLORS.green}`, color: COLORS.green, fontSize: 10, fontWeight: 700, cursor: "pointer", padding: "3px 8px", borderRadius: 7, lineHeight: 1, fontFamily: mono, flexShrink: 0 }}
-          >▶ Practise</button>
+          >{threadTurns > 0 ? `▶ Continue · ${threadTurns}` : "▶ Practise"}</button>
         )}
         {removeBtn}
         <span style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, lineHeight: 1.5 }}>›</span>
@@ -702,7 +703,11 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
       )}
 
       {sections.length > 0 ? (
-        sections.map((s, i) => (
+        (() => {
+          // In-progress TrainingSession threads for this skill — the Practice
+          // button on a technique with a live thread reads "Continue · N".
+          const trainingChats = loadTrainingChats();
+          return sections.map((s, i) => (
           <CollapsibleTechnique
             key={i}
             section={s}
@@ -714,8 +719,10 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
             onRemove={!selecting && onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
             onRename={!selecting && onRenameTechnique ? (newTitle) => onRenameTechnique(i, newTitle, hasFullSections) : null}
             onPractice={!selecting && onPracticeTechnique ? () => onPracticeTechnique(i) : null}
+            threadTurns={countThreadTurns(trainingChats, skill.id, i)}
           />
-        ))
+          ));
+        })()
       ) : (
         <div style={{ fontSize: 12, color: COLORS.muted, fontStyle: "italic", padding: "20px 0", fontFamily: mono }}>
           No detail content saved for this skill.
