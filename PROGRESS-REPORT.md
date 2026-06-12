@@ -1406,3 +1406,32 @@ Pure `formatSources` → hostname pills (a hostname-looking grounding `title` li
 ### 30.3 Tab-bar fit (the original motivation)
 Verified at 430×932: five noun tabs — Analyse Style · Saved · Writers · Achievements · Report — `scrollWidth === clientWidth` (394px, padding tightened 16→6px/side), Achievements and Report directly tappable, all five always-alive with content, zero console errors. Unit-4 tests folded into unit 1 (+6, **226 total**); no tab tests existed to migrate.
 
+---
+
+## 31. UPDATE — 13 June 2026 — Genre taxonomy expanded: Letter to the Editor + Speech as first-class types (branch `claude/genre-taxonomy`)
+
+Resolves the §28.2 taxonomy patch. The user's own live bug case WAS a letter to the editor — under the patch it coached as generic Persuasive Writing, with no salutation/sign-off guidance and no spoken-register awareness for speeches. Both genres carry real HKDSE format marks; now they're real types.
+
+### 31.1 The two types (commit `449665a`)
+`writingTypes` gains `editorial` ("Letter to the Editor", newspaper icon) and `speech` ("Speech / Talk", podium icon — the `speech` icon name was already taken by Persuasive's bubble; namespaces are separate but the new name avoids the trap). Task-matched X-Ray defaults: editorial = PERSUADES + IDEAS CONNECTED + WORD CHOICES (argument flow + formal diction); speech = PERSUADES + FEELING + SENTENCE PATTERNS (devices + emotion + rhythm). HKDSE convention blocks carry the mark-bearing formats: editorial — "Dear Editor," / "Yours faithfully," + name ("Chris Wong" if none given), respond-to-the-news opening, one-position rule, the four-element body, call to action; speech — greeting + self-intro naming audience and occasion, "Thank you." close, direct address/inclusive-we/rhetorical questions, signposting + tricolon, the four elements in spoken form. Other purposes (IELTS/TOEFL/Cambridge) fall back to their `_global` rules — those exams don't set these genres.
+
+### 31.2 Detector retarget (commit `63548c8`)
+genre-cues: letter-to-editor → `editorial`, speech → `speech`; the TAXONOMY PATCH comment is gone. The old "speech + letter to the editor → same type" test is now a genuine-ambiguity case (they're distinct genres); the same-type pair is article + essay (both cue → `essay`). **Remaining nearest-fit, noted in the module: article → essay** — the 8-card grid is at its limit.
+
+### 31.3 Formality split (commit `da44b59`)
+Letter to the Editor joins the formal list in both `buildStructuralPrompt` and `buildProofreadPrompt`. Speech / Talk gets a third branch — semi-formal SPOKEN register: contractions and direct audience address are never flagged; slang/chat-style words are; vocabulary upgrades stay natural to say aloud rather than stiffly academic (the old binary would have either flagged every contraction or mislabelled a speech "creative/narrative").
+
+### 31.4 Live verification + two walk-fixes (commit `5a4cc5d`)
+Fresh preview from this worktree at 430×932, full flow at **0 API calls** (nudge is regex; welcome is canned):
+- **Mission grid:** all 8 types on one screen, two clean columns, no overflow; header type-picker shows all 8 rows, current type bold.
+- **The exact §28 screenshot scenario** ("write a letter to editor about cell phones…" + wrong type): nudge names Letter to the Editor → [Use it] selects it → title prefix, header chip ("Letter to the Editor · HKDSE · 300 words"), and welcome all carry the new type. Speech flow likewise ("Speech / Talk · HKDSE · 200 words").
+- **Walk-fix 1:** the nudge stuttered now that cue label can equal the type label ("asks for a Letter to the Editor — Letter to the Editor fits best") — the dash tail renders only when the labels differ (Speech — Speech / Talk keeps it; verified both live).
+- **Walk-fix 2 (pre-existing, §18.7 class):** every Mission-step chip toggle tripped React's conflicting-style warning — `chip` sets shorthand `border`, `chipActive` set `borderColor`. chipActive now uses the full shorthand; fresh toggles add zero new warnings.
+
+**232 unit tests green** (226 → +6: two HKDSE format blocks, speech detection, ambiguity case, spoken-register branch ×2, editorial-is-formal). Build clean.
+
+### 31.5 Notes
+- The legacy Onboarding screen (only renderer of the type icons) has no `setScreen("onboarding")` call site — the two new icons are dormant-but-correct until that screen returns. Nothing can overflow there; it can't render.
+- The §28 in-session banner needed no change: it contrasts the cue against the *current* (wrong) type, so its copy never stutters.
+- Old saved writings keep their `persuasive` type — no migration: the type was correct-as-saved under the old taxonomy, and the §28 banner/picker already covers changing it per-writing.
+
