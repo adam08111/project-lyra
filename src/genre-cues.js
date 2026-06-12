@@ -4,17 +4,16 @@
  * free (no AI call) before/while the session runs under the wrong exam
  * convention block.
  *
- * TAXONOMY PATCH (deliberate nearest-fit): letter-to-editor and speech map to
- * `persuasive` because the app's writingTypes has no dedicated genre for them
- * yet — the real fix is expanding the genre taxonomy (out of scope for now).
+ * Remaining nearest-fit: "article" maps to `essay` — articles aren't a
+ * dedicated writingTypes genre (the 8-card grid is at its limit).
  */
 
 import { writingTypes } from "./constants.js";
 
 const CUES = [
-  { re: /letter to (the )?editor/i, typeId: "persuasive", cueLabel: "Letter to the Editor" },
+  { re: /letter to (the )?editor/i, typeId: "editorial", cueLabel: "Letter to the Editor" },
   { re: /(write|writing) a (short )?story|story (which|that) begins/i, typeId: "story", cueLabel: "Story" },
-  { re: /(write|writing) a speech|speech for/i, typeId: "persuasive", cueLabel: "Speech" },
+  { re: /(write|writing) a speech|speech for/i, typeId: "speech", cueLabel: "Speech" },
   { re: /letter of complaint|complaint letter/i, typeId: "complaint", cueLabel: "Complaint Letter" },
   { re: /(write|writing) a report/i, typeId: "report", cueLabel: "Report" },
   { re: /(write|writing) an? (formal )?email/i, typeId: "email", cueLabel: "Email" },
