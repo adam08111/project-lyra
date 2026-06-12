@@ -9,6 +9,8 @@ export const SVGIcons = ({ type, size = 28 }) => {
     book: <svg {...props}><path d="M4 4.5A2.5 2.5 0 016.5 2H14v24H6.5A2.5 2.5 0 014 23.5z"/><path d="M14 2h7.5A2.5 2.5 0 0124 4.5v19a2.5 2.5 0 01-2.5 2.5H14"/></svg>,
     report: <svg {...props}><rect x="4" y="2" width="20" height="24" rx="2"/><line x1="9" y1="8" x2="19" y2="8"/><line x1="9" y1="12" x2="19" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/><rect x="9" y="19" width="4" height="4" rx="1"/></svg>,
     speech: <svg {...props}><path d="M4 4h20a2 2 0 012 2v12a2 2 0 01-2 2H10l-6 4v-4a2 2 0 01-2-2V6a2 2 0 012-2z"/><line x1="9" y1="10" x2="19" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/></svg>,
+    newspaper: <svg {...props}><path d="M3 6h17v15a2 2 0 002 2H5a2 2 0 01-2-2z"/><path d="M20 10h3a2 2 0 012 2v9a2 2 0 01-2 2"/><rect x="6" y="9" width="5" height="4" rx="0.5"/><line x1="14" y1="9" x2="17" y2="9"/><line x1="14" y1="13" x2="17" y2="13"/><line x1="6" y1="16" x2="17" y2="16"/><line x1="6" y1="19" x2="13" y2="19"/></svg>,
+    podium: <svg {...props}><circle cx="14" cy="5.5" r="2"/><line x1="14" y1="7.5" x2="14" y2="11"/><path d="M6 11h16l-1.5 4.5h-13z"/><path d="M9.5 15.5h9V25h-9z"/></svg>,
   };
   return icons[type] || null;
 };

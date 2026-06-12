@@ -19,8 +19,8 @@ describe("COLORS", () => {
 });
 
 describe("writingTypes", () => {
-  it("has 6 writing types", () => {
-    expect(writingTypes).toHaveLength(6);
+  it("has 8 writing types", () => {
+    expect(writingTypes).toHaveLength(8);
   });
 
   it("each type has id, label, and icon", () => {
@@ -47,6 +47,8 @@ describe("writingTypes", () => {
     expect(ids).toContain("story");
     expect(ids).toContain("report");
     expect(ids).toContain("persuasive");
+    expect(ids).toContain("editorial");
+    expect(ids).toContain("speech");
   });
 });
 
@@ -114,6 +116,18 @@ describe("EXAM_CONVENTIONS", () => {
 
   it("IELTS allows showing multiple perspectives", () => {
     expect(EXAM_CONVENTIONS.ielts_task2.essay).toContain("multiple perspectives IS rewarded");
+  });
+
+  it("HKDSE letter-to-editor rules carry the mark-bearing format conventions", () => {
+    expect(EXAM_CONVENTIONS.hkdse.editorial).toContain("Dear Editor");
+    expect(EXAM_CONVENTIONS.hkdse.editorial).toContain("Yours faithfully");
+    expect(EXAM_CONVENTIONS.hkdse.editorial).toContain("call to action");
+  });
+
+  it("HKDSE speech rules carry greeting + thank-you format and spoken register", () => {
+    expect(EXAM_CONVENTIONS.hkdse.speech).toContain("Good morning");
+    expect(EXAM_CONVENTIONS.hkdse.speech).toContain("Thank you");
+    expect(EXAM_CONVENTIONS.hkdse.speech).toContain("SPOKEN register");
   });
 });
 

@@ -16,6 +16,8 @@ export const writingTypes = [
   { id: "story", label: "Story / Narrative", icon: "book" },
   { id: "report", label: "Report", icon: "report" },
   { id: "persuasive", label: "Persuasive Writing", icon: "speech" },
+  { id: "editorial", label: "Letter to the Editor", icon: "newspaper" },
+  { id: "speech", label: "Speech / Talk", icon: "podium" },
 ];
 
 // Task-matched default X-Ray section sets. The student no longer picks a section
@@ -30,6 +32,8 @@ export const XRAY_SECTION_DEFAULTS = {
   complaint:  ["WORD CHOICES", "HOW IDEAS ARE CONNECTED", "FEELING AND PERSONALITY"],
   email:      ["WORD CHOICES", "HOW IDEAS ARE CONNECTED", "FEELING AND PERSONALITY"],
   report:     ["HOW IDEAS ARE CONNECTED", "WORD CHOICES", "SENTENCE PATTERNS"],
+  editorial:  ["HOW THE WRITER PERSUADES", "HOW IDEAS ARE CONNECTED", "WORD CHOICES"],
+  speech:     ["HOW THE WRITER PERSUADES", "FEELING AND PERSONALITY", "SENTENCE PATTERNS"],
   _default:   ["SENTENCE PATTERNS", "WORD CHOICES", "COMPARING AND DESCRIBING"],
 };
 
@@ -116,6 +120,20 @@ export const EXAM_CONVENTIONS = {
 - A clear narrative arc is expected: setup, rising action, climax, resolution.
 - Show-don't-tell is heavily rewarded — sensory details, dialogue, internal thoughts.
 - Avoid cliché openings ("It was a dark and stormy night") and endings ("It was all a dream").`,
+    editorial: `HKDSE LETTER TO THE EDITOR RULES — CRITICAL:
+- Formal register throughout — no slang, no contractions, no casual expressions.
+- FORMAT IS MARK-BEARING: salutation "Dear Editor," at the top; sign-off "Yours faithfully," followed by a name on its own line (use the name given in the question; "Chris Wong" if none is given).
+- Opening paragraph: identify the issue — usually responding to a recent news story, policy, or an earlier letter ("I am writing in response to…") — and state a CLEAR stance immediately.
+- The student must argue ONE clear position throughout. Counter-arguments are raised ONLY to be rebutted, never to show balance.
+- BODY PARAGRAPH STRUCTURE — the same four mark-bearing elements as persuasive writing: Topic Sentence + Elaboration (2-3 sentences of WHY) + ONE well-developed example with an explicit link back ("What this shows is…") + Closing Sentence. Examples from HK life and common knowledge (named districts, institutions, recent news); NEVER invented statistics or fake citations.
+- Final paragraph: a clear call to action — what the public, the government, or schools should do.`,
+    speech: `HKDSE SPEECH RULES — CRITICAL:
+- Semi-formal SPOKEN register — contractions are acceptable; slang is not.
+- FORMAT IS MARK-BEARING: open with a greeting + self-introduction naming the audience and occasion ("Good morning, Principal, teachers and fellow students. I am [name] from [class], and today I would like to talk about…"); close by thanking the audience ("Thank you.").
+- Direct audience engagement is expected and rewarded: address listeners as "you", use inclusive "we"/"us", rhetorical questions, and brief asides the audience can nod along to.
+- Spoken rhythm: shorter sentences, clear signposting ("First… / What is more… / Finally…"), deliberate repetition and tricolon.
+- ONE clear message throughout — every section must serve it, and the ending must leave the audience with a memorable takeaway or call to action.
+- The four body elements still apply in spoken form: point, why it matters, ONE vivid example the audience can picture, and an explicit link back ("That is exactly why…").`,
   },
 
   ielts_task2: {
