@@ -7,6 +7,7 @@ import { buildTrainingExercisesPrompt, buildTrainingChatPrompt } from "../prompt
 import { anonymiseSkillsForAI, restoreAuthorNames } from "../utils.js";
 import { extractLearningData, syncLearningData, maybeSaveVisibleReport, saveMasterclassReport } from "../learning-sync.js";
 import { parseSectionContent, trimToSentence, deriveShortTitle } from "./XRayView.jsx";
+import { TRAINING_EXERCISES_KEY, mergeExercises } from "../training-threads.js";
 
 const mono = "'Courier Prime', monospace";
 
@@ -57,6 +58,10 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
   const [screen, setScreen] = useState(hasStart ? "exercise" : "overview");
   const [activeTechIdx, setActiveTechIdx] = useState(hasStart ? startTechIdx : null);
   const [exercises, setExercises] = useState(null);
+  // exercises persist per skill (lyra-training-exercises) so the SAME sentence
+  // shows every return — gate generation on hydration so we never regenerate
+  // over a stored set on remount.
+  const [exercisesHydrated, setExercisesHydrated] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [studentAttempt, setStudentAttempt] = useState("");
   const [studentExplanation, setStudentExplanation] = useState("");
@@ -223,6 +228,30 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
     } catch (e) { /* silent */ }
   }, [chatThreads, chatHydrated, skill?.id]);
 
+  // Load persisted exercise sentences for this skill on mount. Without this the
+  // sentence regenerated on every remount — the student would lose the sentence
+  // they were mid-practice on. `exercisesHydrated` gates generation below.
+  useEffect(() => {
+    if (!skill?.id) return;
+    try {
+      const all = JSON.parse(localStorage.getItem(TRAINING_EXERCISES_KEY) || "{}");
+      const stored = all[skill.id];
+      if (Array.isArray(stored) && stored.length) setExercises(stored);
+    } catch (e) { /* first time */ }
+    setExercisesHydrated(true);
+  }, [skill?.id]);
+
+  // Save exercise sentences when they change (after hydration), so a return
+  // visit shows the identical sentence.
+  useEffect(() => {
+    if (!exercisesHydrated || !skill?.id || !exercises) return;
+    try {
+      const all = JSON.parse(localStorage.getItem(TRAINING_EXERCISES_KEY) || "{}");
+      all[skill.id] = exercises;
+      localStorage.setItem(TRAINING_EXERCISES_KEY, JSON.stringify(all));
+    } catch (e) { /* silent */ }
+  }, [exercises, exercisesHydrated, skill?.id]);
+
   // When the student arrives on a technique, auto-open the chat panel if
   // there's already a saved thread (they're returning to a conversation).
   // If no thread, leave the panel closed — they'll click "I'm stuck" or
@@ -291,27 +320,34 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
         .replace(/```json|```/g, "")
         .trim();
       const parsed = JSON.parse(cleaned);
-      const exerciseArr = new Array(techniques.length).fill(null);
-      for (const item of parsed) {
-        if (item.index >= 0 && item.index < techniques.length) {
-          exerciseArr[item.index] = item.sentence;
-        }
-      }
-      setExercises(exerciseArr);
+      // Merge, never overwrite: a persisted sentence the student is practising
+      // stays put; only empty slots (new techniques) get filled.
+      setExercises(prev => mergeExercises(prev, parsed, techniques.length));
     } catch (e) {
       console.error("Exercise generation failed:", e);
-      // Fallback: simple generic sentences
-      setExercises(techniques.map(() => "The student walked to the library and sat down at a table."));
+      // Fallback: fill only the still-empty slots with a generic sentence so we
+      // don't clobber any sentence already stored/shown.
+      setExercises(prev => mergeExercises(
+        prev,
+        techniques.map((_, i) => ({ index: i, sentence: "The student walked to the library and sat down at a table." })),
+        techniques.length
+      ));
     }
     setGenerating(false);
   }, [skill, generating, techniques, trackCall]);
 
-  // Auto-generate exercises on first open
+  // Generate only what's missing, and only after hydration so we never
+  // regenerate over a stored set on remount. Fires on first open (nothing
+  // stored) and to fill new technique slots (e.g. after "Analyse more").
   useEffect(() => {
-    if (skill && !exercises && !generating) {
-      generateExercises();
-    }
-  }, [skill]);
+    if (!exercisesHydrated || !skill || generating || techniques.length === 0) return;
+    const missing = !exercises || techniques.some((_, i) => exercises[i] == null);
+    if (missing) generateExercises();
+    // techniques is recomputed each render (new ref), so it's intentionally
+    // omitted from deps — the `missing` check + `generating` guard make the
+    // body idempotent; exercises/exercisesHydrated drive the real reactivity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercisesHydrated, skill, exercises, generating]);
 
   // Defensive: if launched directly into a technique that doesn't exist
   // (out-of-range startTechIdx from malformed data), fall back to the

@@ -1441,3 +1441,22 @@ A live X-Ray on a 1012-word article produced **9 sections on a 3-section request
 2. **Deterministic clamp:** `filterSectionsToRequested(sections, requestedNames)` (pure, exported from XRayView) applied at all four initial-analysis parse sites — SourceSetup and StyleLab, streaming partial AND final — before display and before `saveStyleSkill`, with ONE hoisted `requestedSections` const per call site shared by prompt + filters so the contract can't drift. Empty/invalid request = passthrough (the Analyse-more path manages its own subsets; its merge already dedupes).
 **238 tests green** (+6: the live 9-on-3 case, compliant passthrough, case-insensitivity, empty-request passthrough, invalid input, prompt FINAL CHECK tail). **Live re-verified** (real Pro call, Austen): header "3 sections analysed", exactly 3 cards, saved skill carries 3 sections + coveredSections ledger of 3 — "Analyse more" still offers the remaining 6. The user's 9-section Marina Hyde skill is left as-is (valid content, student data).
 
+---
+
+## 32. UPDATE — 13 June 2026 — Practice sentence now persists across remounts (user's phone)
+
+### 32.1 The bug
+In the Practice Session, the "Rewrite this sentence" exercise **regenerated every time the student re-entered the page** — exit mid-practice, come back, and you're handed a *different* sentence (the student was practising one sentence with a new skill, then it silently changed under them). Captured live in the proxy log: **four separate `training_exercise` generations** for one skill, each a different red-dress sentence — including the exact screenshot one, "She wore a red dress that looked quite nice at the party last night."
+
+### 32.2 Cause
+`exercises` was component `useState(null)` — never persisted, while sibling state (`lyra-training-progress`, `lyra-training-chats`) was. On every remount `exercises` reset to null, the auto-generate effect (`if (skill && !exercises) generateExercises()`) re-fired, and the AI produced fresh sentences. The exercise sentences were simply the one piece of training state left out of localStorage.
+
+### 32.3 Fix
+Mirror the existing progress/chats persistence pattern, plus a merge so re-generation can never overwrite a sentence the student is mid-practice on:
+- New store `lyra-training-exercises` keyed by `skill.id`; hydrate on mount (`exercisesHydrated` gate), save on change. (`src/components/TrainingSession.jsx`.)
+- The auto-generate effect now waits for hydration and fires **only when a slot is missing** (`!exercises || techniques.some((_,i)=>exercises[i]==null)`) — so a remount with a stored set generates nothing.
+- `mergeExercises(prev, parsed, length)` (pure, exported from `src/training-threads.js`): fills only null slots, preserves set sentences, always exactly `length` long. Both `generateExercises` and its fallback now merge instead of overwrite — so adding techniques later via "Analyse more" fills the new slots without rewriting the practised ones.
+
+### 32.4 Verification
+**243 tests green** (238 → +5: first-gen fill, never-overwrite, grow-and-keep after Analyse-more, length/out-of-range clamp, malformed input). Build clean. **Live-verified** (real skill "Maxine Eggenberger", 3 techniques): before the fix the proxy showed 4 generations / 4 different sentences; after the fix, reloaded the page and re-entered the session → exercise sentence **identical** to the stored one ("The red dress she wore to the party looked very nice on her.") and the proxy fired **zero** new `training_exercise` calls. Zero console errors.
+
