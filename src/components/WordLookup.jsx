@@ -152,7 +152,7 @@ export default function WordLookup({ trackCall }) {
               boxShadow: "0 8px 28px rgba(0,0,0,0.16)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.heading }}>{popup.word.toLowerCase()}</span>
                 {state.entry && (state.entry.pos_en || state.entry.pos_zh) && (
@@ -161,7 +161,18 @@ export default function WordLookup({ trackCall }) {
                   </span>
                 )}
               </div>
-              <button onClick={close} aria-label="close" style={{ border: "none", background: "transparent", color: COLORS.muted, cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {state.status === "loaded" && state.entry && (
+                  <button
+                    onClick={handleSaveWord}
+                    disabled={saved}
+                    style={{ fontSize: 10, fontFamily: mono, padding: "3px 9px", borderRadius: 8, border: `1px solid ${saved ? COLORS.accent1 : COLORS.border}`, background: saved ? "#F0EDE8" : COLORS.card, color: saved ? COLORS.accent1 : COLORS.muted, cursor: saved ? "default" : "pointer", whiteSpace: "nowrap" }}
+                  >
+                    {saved ? "★ Saved · 已儲存" : "☆ Save · 儲存"}
+                  </button>
+                )}
+                <button onClick={close} aria-label="close" style={{ border: "none", background: "transparent", color: COLORS.muted, cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+              </div>
             </div>
 
             {state.status === "loading" && (
@@ -185,15 +196,6 @@ export default function WordLookup({ trackCall }) {
                     {state.entry.example_zh && <div style={{ fontSize: 11, lineHeight: 1.6, marginTop: 2, opacity: 0.85 }}>{state.entry.example_zh}</div>}
                   </div>
                 )}
-                <div style={{ marginTop: 8, textAlign: "right" }}>
-                  <button
-                    onClick={handleSaveWord}
-                    disabled={saved}
-                    style={{ fontSize: 10, fontFamily: mono, padding: "4px 12px", borderRadius: 8, border: `1px solid ${saved ? COLORS.accent1 : COLORS.border}`, background: saved ? "#F0EDE8" : COLORS.card, color: saved ? COLORS.accent1 : COLORS.muted, cursor: saved ? "default" : "pointer" }}
-                  >
-                    {saved ? "★ Saved · 已儲存" : "☆ Save · 儲存"}
-                  </button>
-                </div>
               </>
             )}
           </div>
