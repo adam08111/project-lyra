@@ -7,9 +7,18 @@ import { buildTrainingExercisesPrompt, buildTrainingChatPrompt } from "../prompt
 import { anonymiseSkillsForAI, restoreAuthorNames } from "../utils.js";
 import { extractLearningData, syncLearningData, maybeSaveVisibleReport, saveMasterclassReport } from "../learning-sync.js";
 import { parseSectionContent, trimToSentence, deriveShortTitle } from "./XRayView.jsx";
-import { TRAINING_EXERCISES_KEY, mergeExercises } from "../training-threads.js";
+import { TRAINING_EXERCISES_KEY, mergeExercises, normalizeExercises, appendSentence } from "../training-threads.js";
 
 const mono = "'Courier Prime', monospace";
+
+// Pick the active sentence from a technique's list. idx === null → newest (last).
+// Clamps so a stale index never reads out of bounds after the list grows/shrinks.
+const pickSentence = (list, idx) => {
+  const arr = Array.isArray(list) ? list : [];
+  if (!arr.length) return "";
+  const i = idx == null ? arr.length - 1 : Math.max(0, Math.min(idx, arr.length - 1));
+  return arr[i] || "";
+};
 
 // The AI often annotates examples with internal markup like
 //   "For them, {being late is weaponised incompetence}[metaphor — comparing
@@ -57,12 +66,21 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
   const hasStart = Number.isInteger(startTechIdx);
   const [screen, setScreen] = useState(hasStart ? "exercise" : "overview");
   const [activeTechIdx, setActiveTechIdx] = useState(hasStart ? startTechIdx : null);
+  // exercises[techIdx] is a LIST of practice sentences for that technique (the
+  // original + ones the student added after Lyra approved). Persisted per skill
+  // (lyra-training-exercises) so the SAME sentences show every return — gate
+  // generation on hydration so we never regenerate over a stored set on remount.
   const [exercises, setExercises] = useState(null);
-  // exercises persist per skill (lyra-training-exercises) so the SAME sentence
-  // shows every return — gate generation on hydration so we never regenerate
-  // over a stored set on remount.
   const [exercisesHydrated, setExercisesHydrated] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // Which sentence in the active technique's list is showing. null = newest
+  // (so reopening a technique continues at the latest sentence). The pager
+  // flips between kept sentences; "Try a new sentence" appends + jumps here.
+  const [sentenceIdx, setSentenceIdx] = useState(null);
+  // Set when a Lyra turn logs a genuine win (growth/saved report) — gates the
+  // "Try a new sentence" offer so it appears exactly when Lyra approves.
+  const [approvedActive, setApprovedActive] = useState(false);
+  const [addingSentence, setAddingSentence] = useState(false);
   const [studentAttempt, setStudentAttempt] = useState("");
   const [studentExplanation, setStudentExplanation] = useState("");
   // Stuck-chat state — when student clicks "I'm stuck", an inline chat with
@@ -240,7 +258,8 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
     try {
       const all = JSON.parse(localStorage.getItem(TRAINING_EXERCISES_KEY) || "{}");
       const stored = all[skill.id];
-      if (Array.isArray(stored) && stored.length) setExercises(stored);
+      // Normalise the legacy string-per-slot shape to sentence LISTS on read.
+      if (Array.isArray(stored) && stored.length) setExercises(normalizeExercises(stored));
     } catch (e) { /* first time */ }
     setExercisesHydrated(true);
   }, [skill?.id]);
@@ -268,6 +287,8 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
     setChatLoading(false);
     setSavedTurns(new Set()); // indices point at a different thread now
     setCopiedIdx(null);
+    setSentenceIdx(null);     // show the newest sentence for the new technique
+    setApprovedActive(false); // approval is per-technique-per-sentence
     // Intentionally NOT in dep list: chatThreads — we only react to
     // technique switches, not to every chatThreads write (which would
     // re-toggle the panel every time a message lands).
@@ -377,12 +398,54 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
     setGenerating(false);
   }, [skill, generating, techniques, trackCall]);
 
+  // Add a NEW practice sentence for the active technique — keeping the old ones.
+  // Fired from the "Try a new sentence" button that appears when Lyra approves
+  // a rewrite, so the student keeps drilling the SAME skill on fresh material.
+  const addNewSentence = useCallback(async () => {
+    if (activeTechIdx === null || addingSentence || !skill) return;
+    const tech = techniques[activeTechIdx];
+    if (!tech) return;
+    setAddingSentence(true);
+    try {
+      const { anonymised } = anonymiseSkillsForAI([skill]);
+      const anonSkill = anonymised[0];
+      const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
+        || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
+      // Anonymised technique for anti-bias; fall back to the display technique's
+      // name/description (never the example — that can carry the author's voice).
+      const oneTech = anonTechs[activeTechIdx] || { technique: tech.technique, description: tech.description };
+      const avoid = Array.isArray(exercises?.[activeTechIdx]) ? exercises[activeTechIdx] : [];
+      const route = getRouteConfig("training_exercise");
+      trackCall();
+      const result = await callAI(
+        buildTrainingExercisesPrompt([oneTech], avoid),
+        "Generate the exercise sentence now.",
+        false, 1000, route.thinkingBudget, undefined, undefined, route.model
+      );
+      const cleaned = result.replace(/<!--[\s\S]*?-->/g, "").replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      const sentence = Array.isArray(parsed) && parsed[0] && parsed[0].sentence;
+      if (sentence) {
+        const before = avoid.length;
+        setExercises(prev => appendSentence(prev, activeTechIdx, sentence));
+        setSentenceIdx(before);     // jump to the freshly added sentence
+        setStudentAttempt("");
+        setStudentExplanation("");
+        setApprovedActive(false);   // the new sentence hasn't been approved yet
+      }
+    } catch (e) {
+      console.error("Add-sentence generation failed:", e);
+    }
+    setAddingSentence(false);
+  }, [activeTechIdx, addingSentence, skill, techniques, exercises, trackCall]);
+
   // Generate only what's missing, and only after hydration so we never
   // regenerate over a stored set on remount. Fires on first open (nothing
   // stored) and to fill new technique slots (e.g. after "Analyse more").
   useEffect(() => {
     if (!exercisesHydrated || !skill || generating || techniques.length === 0) return;
-    const missing = !exercises || techniques.some((_, i) => exercises[i] == null);
+    // A slot is "missing" if it has no sentences yet (null or empty list).
+    const missing = !exercises || techniques.some((_, i) => !exercises[i] || exercises[i].length === 0);
     if (missing) generateExercises();
     // techniques is recomputed each render (new ref), so it's intentionally
     // omitted from deps — the `missing` check + `generating` guard make the
@@ -411,7 +474,9 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
       const anonTechs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
         || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
       const anonTech = anonTechs[activeTechIdx];
-      const exercise = exercises?.[activeTechIdx] || "";
+      // Coach on the sentence the student is actually looking at (the active one
+      // in this technique's list), not the whole list.
+      const exercise = pickSentence(exercises?.[activeTechIdx], sentenceIdx);
 
       const route = getRouteConfig("training_hint");
       trackCall();
@@ -454,6 +519,11 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
         const syncResult = syncLearningData(learningData, { topic: skill?.authorName || "", forcedTechnique: practisedName, studentTexts });
         savedReport = !!(syncResult && syncResult.savedReport);
       }
+      // Lyra approved this rewrite (a real win) → offer a fresh sentence so the
+      // student keeps drilling the same skill. growth present OR a report saved.
+      if (savedReport || (learningData && Array.isArray(learningData.growth) && learningData.growth.length > 0)) {
+        setApprovedActive(true);
+      }
       const message = synced
         .replace(/<!--[\s\S]*?-->/g, "")
         .replace(/```json|```/g, "")
@@ -472,7 +542,7 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
       setChatMessages(prev => [...prev, { role: 'lyra', text: fallback }]);
     }
     setChatLoading(false);
-  }, [activeTechIdx, exercises, skill, trackCall]);
+  }, [activeTechIdx, exercises, sentenceIdx, skill, trackCall, techniques]);
 
   // Bump the attempts counter for the active technique. The shared progress
   // store is what the overview screen reads to show "N attempts" under each
@@ -663,7 +733,7 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
           {techniques.map((t, i) => {
             const p = progress[String(i)];
             const tried = (p?.attempts || 0) > 0;
-            const exerciseReady = exercises && exercises[i];
+            const exerciseReady = exercises && exercises[i] && exercises[i].length > 0;
             return (
               <button
                 key={i}
@@ -703,7 +773,9 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
 
   // === EXERCISE SCREEN ===
   const activeTech = activeTechIdx !== null ? techniques[activeTechIdx] : null;
-  const activeExercise = exercises && activeTechIdx !== null ? exercises[activeTechIdx] : null;
+  const sentenceList = (exercises && activeTechIdx !== null && Array.isArray(exercises[activeTechIdx])) ? exercises[activeTechIdx] : [];
+  const effSentenceIdx = sentenceList.length ? (sentenceIdx == null ? sentenceList.length - 1 : Math.max(0, Math.min(sentenceIdx, sentenceList.length - 1))) : 0;
+  const activeExercise = sentenceList[effSentenceIdx] || null;
 
   if (screen === "exercise" && activeTech) {
     return (
@@ -749,9 +821,30 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
             )}
           </div>
 
-          {/* Exercise prompt */}
+          {/* Exercise prompt. When the technique has more than one practice
+              sentence (the student added some after Lyra approved), a pager
+              flips between them \u2014 old sentences are kept, never refreshed. */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.heading, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Rewrite this sentence</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.heading, textTransform: "uppercase", letterSpacing: 1 }}>Rewrite this sentence</div>
+              {sentenceList.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    onClick={() => { setSentenceIdx(Math.max(0, effSentenceIdx - 1)); setStudentAttempt(""); }}
+                    disabled={effSentenceIdx === 0}
+                    style={{ background: "none", border: "none", cursor: effSentenceIdx === 0 ? "default" : "pointer", color: effSentenceIdx === 0 ? COLORS.border : COLORS.muted, fontSize: 16, lineHeight: 1, padding: "0 4px" }}
+                    title="Previous sentence"
+                  >{"\u2039"}</button>
+                  <span style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono }}>{effSentenceIdx + 1} / {sentenceList.length}</span>
+                  <button
+                    onClick={() => { setSentenceIdx(Math.min(sentenceList.length - 1, effSentenceIdx + 1)); setStudentAttempt(""); }}
+                    disabled={effSentenceIdx === sentenceList.length - 1}
+                    style={{ background: "none", border: "none", cursor: effSentenceIdx === sentenceList.length - 1 ? "default" : "pointer", color: effSentenceIdx === sentenceList.length - 1 ? COLORS.border : COLORS.muted, fontSize: 16, lineHeight: 1, padding: "0 4px" }}
+                    title="Next sentence"
+                  >{"\u203a"}</button>
+                </div>
+              )}
+            </div>
             <div style={{ background: "#FFF8F0", border: `1.5px solid ${COLORS.amber}`, borderRadius: 10, padding: "12px 14px", fontSize: 13, color: COLORS.heading, lineHeight: 1.6, fontStyle: "italic" }}>
               {"\u201c"}{activeExercise || "Loading..."}{"\u201d"}
             </div>
@@ -938,6 +1031,26 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
                 </button>
               </div>
             </div>
+          )}
+
+          {/* Continue-the-skill offer — appears once Lyra has approved a rewrite
+              (a genuine win). Adds a FRESH practice sentence for this technique,
+              keeping the old ones (flip back via the pager above). */}
+          {approvedActive && (
+            <button
+              onClick={addNewSentence}
+              disabled={addingSentence}
+              style={{
+                width: "100%", marginBottom: 12, fontSize: 13, fontWeight: 700, fontFamily: mono,
+                padding: "11px 16px", borderRadius: 10, cursor: addingSentence ? "default" : "pointer",
+                border: `1.5px solid ${COLORS.green || "#4a8"}`,
+                background: addingSentence ? COLORS.bg2 : (COLORS.green || "#4a8"),
+                color: addingSentence ? COLORS.muted : "#fff",
+                animation: "fadeIn 0.25s ease",
+              }}
+            >
+              {addingSentence ? "Finding a fresh sentence…" : "✦ Try this skill on a new sentence"}
+            </button>
           )}
 
           {/* Action buttons */}

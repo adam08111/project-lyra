@@ -1502,3 +1502,22 @@ Root cause of "can't copy": there was no copy affordance, long-press selection i
 ### 34.5 Verification
 **251 tests green** (247 → +4: same-technique folds to one card, different techniques stay separate, structured-beats-freeform display, no-technique sentence fallback). Build clean. **Live-verified** (preview held 3 "Painted Style Pictures" records from real practice chats): Achievements tab collapsed them to **one** card ("1 achievement", badge "Achievements (1)" before opening). The ⧉ Copy button renders on all 8 Lyra turns and is wired; the actual clipboard write can't be exercised in the headless preview (browsers block programmatic copy without a trusted tap — confirmed both `writeText` and `execCommand` are blocked there), so the final copy confirmation is a real finger-tap on the phone.
 
+---
+
+## 35. UPDATE — 13 June 2026 — Practice: add a fresh sentence on Lyra's approval (keep the old)
+
+### 35.1 The request
+When Lyra approves a rewrite in the practice chat, she should invite the student to keep drilling the SAME skill on a NEW practice sentence — **adding** it while **keeping** the old one (not refreshing/replacing). Lyra's approval is the condition under which the new sentence emerges.
+
+### 35.2 Data model — each technique holds a LIST of sentences
+`exercises[techIdx]` went from a single string (§32) to a **list** of sentences (original + any the student added). `src/training-threads.js`: `mergeExercises` now fills empty slots with one-element lists and never overwrites a populated slot; `normalizeExercises` migrates the legacy string-per-slot shape on read (live data auto-upgrades — verified the persisted store is already `[[…],[…],[…]]`); `appendSentence(prev, techIdx, sentence)` adds one, de-duped, immutably. Persistence (§32) carries over unchanged — sentences still survive remounts.
+
+### 35.3 The flow
+- **Lyra invites (prompt):** `buildTrainingChatPrompt` ongoing-turn guidance — on a genuine win, after celebrating, Lyra asks warmly whether they'd like to try the same technique on a fresh sentence ("same skill, new sentence"), and is told the app shows a button.
+- **Approval gates the button:** `TrainingSession` sets `approvedActive` when a turn logs a win (`savedReport` or a `growth` entry in the learning data). A green **"✦ Try this skill on a new sentence"** button appears only then.
+- **New sentence emerges:** the button calls `addNewSentence()` → ONE `training_exercise` call for just the active technique, passing the technique's existing sentences as an **avoid list** (`buildTrainingExercisesPrompt(techniques, avoid)`) so the new one is a clearly different everyday topic → `appendSentence` keeps the old + adds the new → jumps to it → resets the rewrite box.
+- **Pager keeps the old reachable:** when a technique has >1 sentence, a `‹ N / M ›` pager (pure `pickSentence`, clamped) flips between them; one continuous chat thread per technique (matches "continue with that skill").
+
+### 35.4 Verification
+**262 tests green** (251 → +11: mergeExercises list-shape incl. legacy-string migration + multi-sentence preserve, normalizeExercises, appendSentence incl. no-duplicate, the avoid-block prompt, Lyra's invitation in the ongoing branch). Build clean. **Live end-to-end (real Pro calls):** sent a strong rewrite → Lyra approved ("You've nailed this technique. Want to try the same move on a brand-new sentence to lock it in?") → the green button appeared → tapped it → a new different-topic sentence ("He wore a navy suit to the office…") was appended while the original red-dress sentence was **kept**; pager showed **2 / 2**, flipping to **1 / 2** restored the original. Zero console errors.
+

@@ -90,6 +90,29 @@ describe("no-semicolon rule — coach toward ONE integrated sentence (universal)
   });
 });
 
+describe("add-a-new-sentence: Lyra invites, generator avoids repeats", () => {
+  it("buildTrainingChatPrompt tells Lyra to invite a fresh sentence on a win (same skill)", () => {
+    // The invitation lives in the ONGOING-turn branch (a conversation exists),
+    // not the opening turn — pass a prior student message.
+    const p = buildTrainingChatPrompt({ technique: "T", description: "d" }, "She wore a red dress.", [{ role: "student", text: "my rewrite" }]);
+    expect(p).toContain("WHEN THE REWRITE LANDS");
+    expect(p).toContain("fresh practice sentence");
+    expect(p).toContain("same skill, new sentence");
+  });
+
+  it("buildTrainingExercisesPrompt lists already-practised sentences to avoid when given some", () => {
+    const techs = [{ technique: "Painted Style Pictures", description: "d" }];
+    const withAvoid = buildTrainingExercisesPrompt(techs, ["The red dress looked nice.", "The library was quiet."]);
+    expect(withAvoid).toContain("ALREADY PRACTISED");
+    expect(withAvoid).toContain("The red dress looked nice.");
+    expect(withAvoid).toContain("The library was quiet.");
+  });
+
+  it("buildTrainingExercisesPrompt omits the avoid block when none given (back-compat)", () => {
+    expect(buildTrainingExercisesPrompt([{ technique: "T", description: "d" }])).not.toContain("ALREADY PRACTISED");
+  });
+});
+
 describe("LYRA_BRAIN is NOT prepended to non-coaching prompts", () => {
   it("buildStructuralPrompt does NOT include LYRA_BRAIN", () => {
     const result = buildStructuralPrompt("test", "Essay");

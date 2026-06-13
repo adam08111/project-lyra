@@ -468,10 +468,17 @@ RULES:
 - FINAL CHECK — SECTION COUNT (this rule WINS over every format description above): your output contains EXACTLY ${chosen.length} section heading${chosen.length === 1 ? "" : "s"} — ${sectionList}. The formats above are reference for sections you may be asked for on other occasions; do NOT produce any section that is not in this list, no matter how much material the text offers. After finishing ${chosen[chosen.length - 1]}, STOP. Output nothing further.`;
 }
 
-export function buildTrainingExercisesPrompt(techniques) {
+export function buildTrainingExercisesPrompt(techniques, avoid) {
   const techList = techniques.map((t, i) =>
     `${i + 1}. "${t.technique}" — ${t.description || "No description"}`
   ).join("\n");
+  // Sentences the student has already practised for these techniques — the new
+  // ones must be on clearly different everyday topics so "add a new sentence"
+  // actually feels fresh, not a paraphrase of what they just did.
+  const avoidList = Array.isArray(avoid) ? avoid.filter(Boolean) : [];
+  const avoidBlock = avoidList.length
+    ? `\n\nALREADY PRACTISED — do NOT reuse or paraphrase these, pick a clearly different everyday topic:\n${avoidList.map((s) => `- "${s}"`).join("\n")}`
+    : "";
 
   return LYRA_BRAIN + `\n\nYou are a writing exercise generator for English learners. You will create ONE plain sentence for each writing technique listed below. Each sentence is written in "Reporter Voice" — flat, factual, informational, and boring. The student's job is to rewrite it in "Columnist Voice" using the technique.
 
@@ -494,7 +501,7 @@ Return ONLY valid JSON (no markdown fences, no commentary):
   {"index": 1, "sentence": "The weather was bad and the students stayed inside."}
 ]
 
-Generate exactly ${techniques.length} sentences, one per technique. Each sentence must be different — do not reuse topics.`;
+Generate exactly ${techniques.length} sentences, one per technique. Each sentence must be different — do not reuse topics.${avoidBlock}`;
 }
 
 export function buildTrainingEvalPrompt(technique, plainSentence, studentAttempt, studentExplanation) {
@@ -679,6 +686,8 @@ ${isOpening
 - If they ask for more examples → show 2-3 NEW Parallel Universes with DIFFERENT syntax than any you've shown before. Never recycle the same skeleton.
 
 - If they produce a draft attempt → evaluate it by describing the gap in plain words (what currently falls flat, what feeling we want the reader to have). Celebrate SPECIFIC craft ("that verb 'languishing' does real work"). Point out exactly which moves landed and which need a sharper word. NEVER say "Reporter Voice", "Columnist Voice", "Weak Voice", "Target Voice" or any quoted phrase ending in "Voice" — those are internal labels, not student-facing vocabulary.
+
+- WHEN THE REWRITE LANDS (you'd call it a genuine win) → after celebrating the specific craft, INVITE them to keep building the same skill: ask warmly whether they'd like to try this technique on a fresh practice sentence. Frame it as more reps to lock the skill in ("Want to try the same move on a brand-new sentence?"). Do NOT abandon the technique or jump to a different one — same skill, new sentence. The app shows a "Try a new sentence" button when this happens; your job is only to make the offer in words.
 
 - If they share raw thinking in fragments or Cantonese → validate the IDEA first, then offer Vocabulary Ingredients with Chinese collocations so they can dress the idea in the skilled target you have in mind (again — describe the target in plain words, not as a labelled "Voice").
 
