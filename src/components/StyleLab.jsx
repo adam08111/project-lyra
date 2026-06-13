@@ -811,7 +811,7 @@ export function MasterclassReports({ onCountChange }) {
   return (
     <div>
       <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 12, fontFamily: mono }}>
-        {groups.length} report{groups.length !== 1 ? "s" : ""}
+        {groups.length} achievement{groups.length !== 1 ? "s" : ""}
       </div>
       {groups.map((g, i) => (
         <AchievementCard key={i} report={g.display} index={i + 1} onRemove={() => removeGroup(g.members)} />
