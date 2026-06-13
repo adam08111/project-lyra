@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupReports, consolidateMistakes, buildDelta } from "../src/report-utils.js";
+import { groupReports, groupAchievements, consolidateMistakes, buildDelta } from "../src/report-utils.js";
 import {
   milestoneImminent,
   effectiveRegenThreshold,
@@ -63,6 +63,52 @@ describe("groupReports — one card per practice moment", () => {
     expect(groups[0].members).toHaveLength(2);
     // the structured report (real gains+mistakes) wins over the chat dump
     expect(groups[0].display.technique).toBe("Syntactic Whiplash");
+  });
+});
+
+describe("groupAchievements — one card per technique (Achievements tab)", () => {
+  it("folds continued practice on the SAME technique (different sentences) into ONE card", () => {
+    // The reported bug: each continued turn had a different example sentence, so
+    // groupReports (sentence-moment) made a new card every turn.
+    const reports = [
+      { id: "report_1717000000003_a", technique: "Painted Style Pictures", after: "The red dress exudes a commanding presence." },
+      { id: "report_1717000000002_b", technique: "Painted Style Pictures", after: "The old library breathes a quiet, scholarly calm." },
+      { id: "report_1717000000001_c", technique: "Painted Style Pictures", after: "The storm threw a petulant tantrum across the sky." },
+    ];
+    // groupReports fragments them (different sentences)…
+    expect(groupReports(reports).length).toBe(3);
+    // …groupAchievements keeps them as ONE technique card.
+    const groups = groupAchievements(reports);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].members).toHaveLength(3);
+    expect(groups[0].display.technique).toBe("Painted Style Pictures");
+  });
+
+  it("keeps DIFFERENT techniques as separate cards", () => {
+    const reports = [
+      { id: "report_1_a", technique: "Painted Style Pictures", after: "one sentence here about dresses" },
+      { id: "report_2_b", technique: "Concession Then Punch", after: "a different sentence about something" },
+    ];
+    expect(groupAchievements(reports)).toHaveLength(2);
+  });
+
+  it("prefers a structured report as the card display over a freeform dump", () => {
+    const reports = [
+      { id: "report_2_a", technique: "Painted Style Pictures", reportText: "...wall of words...", after: "dress sentence alpha" },
+      { id: "report_1_b", technique: "Painted Style Pictures", before: "plain", after: "dress sentence beta", skills: [{ skillName: "Painted Style Pictures" }] },
+    ];
+    const groups = groupAchievements(reports);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].display.reportText).toBeUndefined(); // structured one wins
+  });
+
+  it("reports with no technique fall back to sentence-moment grouping (no untitled merge)", () => {
+    const reports = [
+      { id: "report_1_a", after: "the cafeteria was loud and crowded today" },
+      { id: "report_2_b", after: "a completely unrelated point about homework load" },
+    ];
+    // Two unrelated sentences, no technique → must stay two cards, not collapse.
+    expect(groupAchievements(reports)).toHaveLength(2);
   });
 });
 

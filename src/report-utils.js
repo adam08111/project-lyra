@@ -57,6 +57,41 @@ export function groupReports(reports) {
 
 export const countDedupedPractices = (reports) => groupReports(reports).length;
 
+// Identity of the technique/skill a report belongs to, normalised for grouping.
+export const reportTechniqueKey = (r) =>
+  reportClean(r?.technique || (r?.skills && r?.skills[0] && r?.skills[0].skillName) || "").toLowerCase();
+
+/**
+ * Group reports for the ACHIEVEMENTS tab: ONE card per technique practised.
+ *
+ * Distinct from groupReports (which clusters by practice-MOMENT for the growth
+ * report's volume/dedup counting). Here, continued practice on the SAME
+ * technique — each turn with a different example sentence — folds into ONE card
+ * instead of spawning a new one every turn. Reports with no technique fall back
+ * to practice-moment clustering so they don't all collapse into one untitled
+ * card. Display = the richest member (a structured report beats a freeform chat
+ * dump), so the card shows the cleanest view, not a wall of every turn stacked.
+ *
+ * @returns {{ display: object, members: object[], _key: string, _w: Set }[]}
+ */
+export function groupAchievements(reports) {
+  const groups = [];
+  for (const r of reports || []) {
+    const key = reportTechniqueKey(r);
+    const w = reportWords(r.after || (r.skills && r.skills[0] && r.skills[0].studentApplication) || "");
+    let g = key
+      ? groups.find((grp) => grp._key === key)
+      : groups.find((grp) => !grp._key && reportSameMoment(grp._w, w));
+    if (!g) {
+      g = { members: [], display: r, _key: key, _w: w };
+      groups.push(g);
+    }
+    g.members.push(r);
+    if (reportRichness(r) > reportRichness(g.display)) g.display = r;
+  }
+  return groups;
+}
+
 // ── delta timestamps ──────────────────────────────────────────────────
 // Every persisted record's id leads with a Date.now() millisecond stamp
 // (e.g. "report_1717000000000_ab12", "1717000000000_ab12"). That is the only

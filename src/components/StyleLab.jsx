@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { groupReports } from "../report-utils.js";
+import { groupAchievements } from "../report-utils.js";
 import { loadTrainingChats, countThreadTurns } from "../training-threads.js";
 import GrowthReport from "./GrowthReport.jsx";
 import { COLORS, defaultXraySections } from "../constants.js";
@@ -783,18 +783,20 @@ function AchievementCard({ report, index, onRemove }) {
 
 export function MasterclassReports({ onCountChange }) {
   const [reports, setReports] = useState(() => JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]"));
-  const groups = groupReports(reports);
+  // ONE card per technique: continued practice on the same skill folds into the
+  // same card instead of stacking a new wall-of-words card every turn.
+  const groups = groupAchievements(reports);
 
   useEffect(() => { if (onCountChange) onCountChange(groups.length); }, [groups.length]);
 
-  // A card stands for a whole group (one practice moment); deleting it removes
-  // every duplicate report in that group.
+  // A card stands for a whole technique; deleting it removes every report that
+  // accumulated under that technique.
   const removeGroup = (members) => {
     const set = new Set(members);
     const next = reports.filter(r => !set.has(r));
     setReports(next);
     localStorage.setItem("lyra-masterclass-reports", JSON.stringify(next));
-    if (onCountChange) onCountChange(groupReports(next).length);
+    if (onCountChange) onCountChange(groupAchievements(next).length);
   };
 
   if (groups.length === 0) {
@@ -1114,7 +1116,9 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
   const [skillSaved, setSkillSaved] = useState(null); // null | "saved" | "too-short"
   const [skillInStore, setSkillInStore] = useState(false); // whether the analysed skill is currently in localStorage (false after a manual remove)
   const [skillCount, setSkillCount] = useState(() => JSON.parse(localStorage.getItem("lyra-style-skills") || "[]").length);
-  const [achievementCount, setAchievementCount] = useState(() => JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]").length);
+  // Grouped (one per technique) so the tab badge matches the card count before
+  // the tab is even opened — MasterclassReports re-reports the same number via onCountChange.
+  const [achievementCount, setAchievementCount] = useState(() => groupAchievements(JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]")).length);
 
   const analyseEndRef = useRef(null);
   const inputRef = useRef(null);
