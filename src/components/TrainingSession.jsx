@@ -81,6 +81,10 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
   // so the "Save this turn" button can flip to "Saved". Reset when the chat
   // thread changes (technique switch) since indices then point at new turns.
   const [savedTurns, setSavedTurns] = useState(() => new Set());
+  // Which Lyra turn was just copied (by index) — flips the Copy button to
+  // "Copied" briefly. Reset when the thread changes (indices then differ).
+  const [copiedIdx, setCopiedIdx] = useState(null);
+  const copiedTimerRef = useRef(null);
   const [progress, setProgress] = useState({});
   const [progressLoaded, setProgressLoaded] = useState(false);
   // chatThreads: per-technique chat history persisted to localStorage.
@@ -263,6 +267,7 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
     setChatInput("");
     setChatLoading(false);
     setSavedTurns(new Set()); // indices point at a different thread now
+    setCopiedIdx(null);
     // Intentionally NOT in dep list: chatThreads — we only react to
     // technique switches, not to every chatThreads write (which would
     // re-toggle the panel every time a message lands).
@@ -297,6 +302,42 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
       setTimeout(() => textareaRef.current?.focus(), 100);
     }
   }, [screen, activeTechIdx]);
+
+  // Copy a Lyra turn to the clipboard. On the LAN-IP preview the page is an
+  // INSECURE context, so navigator.clipboard is undefined — fall back to a
+  // hidden-textarea execCommand("copy"), which works without HTTPS. This is
+  // why students "can't copy" otherwise: there was no copy affordance and
+  // long-press selection inside the fixed overlay is unreliable on mobile.
+  const copyTurn = useCallback(async (text, idx) => {
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch (e) { /* fall through to legacy path */ }
+    if (!ok) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.top = "-1000px";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch (e) { ok = false; }
+    }
+    if (ok) {
+      setCopiedIdx(idx);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopiedIdx(null), 1600);
+    }
+  }, []);
 
   // Generate exercises for all techniques
   const generateExercises = useCallback(async () => {
@@ -526,6 +567,7 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
   // mid-confirmation).
   useEffect(() => () => {
     if (deleteResetTimerRef.current) clearTimeout(deleteResetTimerRef.current);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
   }, []);
 
   // Open the chat in "review" mode: the student's rewrite gets added as a
@@ -804,26 +846,43 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
                     }}>
                       {m.role === "lyra" ? renderMd(m.text) : m.text}
                     </div>
-                    {/* Save this turn — manual backstop so the student can
-                        bank any Lyra coaching turn as an Achievement, even
-                        if the AI didn't emit the hidden learning-data block. */}
+                    {/* Save this turn + Copy — the student can bank any Lyra
+                        coaching turn as an Achievement (backstop for when the AI
+                        didn't emit the hidden learning-data block), or copy the
+                        whole turn out (long-press selection is unreliable on
+                        mobile, and the LAN preview blocks navigator.clipboard). */}
                     {m.role === "lyra" && (
-                      <button
-                        onClick={() => saveTrainingTurn(m.text, i)}
-                        disabled={savedTurns.has(i)}
-                        style={{
-                          marginTop: 4, alignSelf: "flex-start",
-                          background: savedTurns.has(i) ? (COLORS.green || "#4a8") : "transparent",
-                          border: `1px solid ${savedTurns.has(i) ? (COLORS.green || "#4a8") : COLORS.border}`,
-                          color: savedTurns.has(i) ? "#fff" : (COLORS.green || "#4a8"),
-                          fontSize: 10, fontWeight: 700, fontFamily: mono,
-                          padding: "3px 8px", borderRadius: 7,
-                          cursor: savedTurns.has(i) ? "default" : "pointer",
-                          letterSpacing: 0.3,
-                        }}
-                      >
-                        {savedTurns.has(i) ? "✓ Saved to Achievements" : "★ Save this turn"}
-                      </button>
+                      <div style={{ display: "flex", gap: 6, marginTop: 4, alignSelf: "flex-start", flexWrap: "wrap" }}>
+                        <button
+                          onClick={() => saveTrainingTurn(m.text, i)}
+                          disabled={savedTurns.has(i)}
+                          style={{
+                            background: savedTurns.has(i) ? (COLORS.green || "#4a8") : "transparent",
+                            border: `1px solid ${savedTurns.has(i) ? (COLORS.green || "#4a8") : COLORS.border}`,
+                            color: savedTurns.has(i) ? "#fff" : (COLORS.green || "#4a8"),
+                            fontSize: 10, fontWeight: 700, fontFamily: mono,
+                            padding: "3px 8px", borderRadius: 7,
+                            cursor: savedTurns.has(i) ? "default" : "pointer",
+                            letterSpacing: 0.3,
+                          }}
+                        >
+                          {savedTurns.has(i) ? "✓ Saved to Achievements" : "★ Save this turn"}
+                        </button>
+                        <button
+                          onClick={() => copyTurn(m.text, i)}
+                          style={{
+                            background: copiedIdx === i ? (COLORS.green || "#4a8") : "transparent",
+                            border: `1px solid ${copiedIdx === i ? (COLORS.green || "#4a8") : COLORS.border}`,
+                            color: copiedIdx === i ? "#fff" : COLORS.muted,
+                            fontSize: 10, fontWeight: 700, fontFamily: mono,
+                            padding: "3px 8px", borderRadius: 7,
+                            cursor: "pointer", letterSpacing: 0.3,
+                          }}
+                          title="Copy Lyra's reply"
+                        >
+                          {copiedIdx === i ? "✓ Copied" : "⧉ Copy"}
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}

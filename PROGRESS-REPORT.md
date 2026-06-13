@@ -1483,3 +1483,22 @@ Not just a missing rule — `LYRA_BRAIN`'s own gold-standard Parallel Universe e
 ### 33.5 Note / residual
 The rule targets **suggestions and model sentences**, not Lyra's every utterance — she may still use an occasional semicolon in her own connective prose (and a studied source writer's semicolons remain hers to admire). If zero semicolons anywhere is wanted, that's a stricter, separate ask (risks stilting her coaching voice).
 
+---
+
+## 34. UPDATE — 13 June 2026 — Achievements: one card per technique + copyable practice chat (user's phone)
+
+### 34.1 Two bugs from one practice session
+Practising ONE technique ("Painted Style Pictures") and continuing the chat produced **a new Achievements card every turn** ("expanding into two new cards with wall of words") — and the student **couldn't copy** Lyra's coaching text out of the chat.
+
+### 34.2 Why the cards multiplied
+`saveMasterclassReport` dedups only by exact `after` sentence, and the Achievements tab grouped via `groupReports`, which clusters by practice-MOMENT (≥60% `after`-sentence word overlap). Each continued turn has a *different* example sentence, so every turn became its own group → its own card. `groupReports` is correct for the Growth Report (practice-volume / mistake dedup) but wrong for "achievements I've earned per technique".
+
+### 34.3 Fix A — group Achievements by technique (commit pending)
+New pure `groupAchievements(reports)` in `src/report-utils.js`: ONE card per technique (`reportTechniqueKey` = normalised `technique` || first skill name); reports with no technique fall back to the existing sentence-moment clustering (so they don't all collapse into one untitled card); display = the richest member (a structured report beats a freeform chat dump, so the card is the cleanest view, not every turn's wall stacked). `MasterclassReports` and the tab-badge initialiser switch to it; **`groupReports` and the whole Growth Report path are untouched** (different, correct semantics there).
+
+### 34.4 Fix B — copyable coaching turns (commit pending)
+Root cause of "can't copy": there was no copy affordance, long-press selection inside the fixed overlay is unreliable on mobile, AND the LAN-IP preview is an **insecure context** where `navigator.clipboard` is `undefined`. Added a **⧉ Copy** button beside "★ Save this turn" on every Lyra turn (`src/components/TrainingSession.jsx`), with a dual-path `copyTurn`: `navigator.clipboard.writeText` on a secure context, else a hidden-textarea `document.execCommand("copy")` fallback that works without HTTPS. Transient "✓ Copied" confirmation; timer cleaned on unmount; copied-state reset on technique switch.
+
+### 34.5 Verification
+**251 tests green** (247 → +4: same-technique folds to one card, different techniques stay separate, structured-beats-freeform display, no-technique sentence fallback). Build clean. **Live-verified** (preview held 3 "Painted Style Pictures" records from real practice chats): Achievements tab collapsed them to **one** card ("1 achievement", badge "Achievements (1)" before opening). The ⧉ Copy button renders on all 8 Lyra turns and is wired; the actual clipboard write can't be exercised in the headless preview (browsers block programmatic copy without a trusted tap — confirmed both `writeText` and `execCommand` are blocked there), so the final copy confirmation is a real finger-tap on the phone.
+
