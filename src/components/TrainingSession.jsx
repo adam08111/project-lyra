@@ -8,6 +8,7 @@ import { anonymiseSkillsForAI, restoreAuthorNames } from "../utils.js";
 import { extractLearningData, syncLearningData, maybeSaveVisibleReport, saveMasterclassReport } from "../learning-sync.js";
 import { parseSectionContent, trimToSentence, deriveShortTitle } from "./XRayView.jsx";
 import { TRAINING_EXERCISES_KEY, mergeExercises, normalizeExercises, appendSentence } from "../training-threads.js";
+import { toWrittenChinese } from "../zh-register.js";
 
 const mono = "'Courier Prime', monospace";
 
@@ -45,8 +46,10 @@ const cleanExampleForDisplay = (text) => {
 // markdown bullet markers ("* ") that would otherwise show as raw asterisks.
 const renderMd = (text) => {
   if (!text) return text;
+  // Heal spoken Cantonese to written 書面語 before rendering the coaching turn.
+  const written = toWrittenChinese(text);
   // First, replace line-starting "* " bullets with a bullet character.
-  const bulletFixed = text.replace(/^[ \t]*\*[ \t]+/gm, "  • ");
+  const bulletFixed = written.replace(/^[ \t]*\*[ \t]+/gm, "  • ");
   // Then split on **bold** and *italic* spans (run bold first so it wins).
   const parts = bulletFixed.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*)/g);
   return parts.map((part, i) => {

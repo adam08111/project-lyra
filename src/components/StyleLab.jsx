@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { groupAchievements } from "../report-utils.js";
+import { toWrittenChinese } from "../zh-register.js";
 import { loadTrainingChats, countThreadTurns } from "../training-threads.js";
 import GrowthReport from "./GrowthReport.jsx";
 import { COLORS, defaultXraySections } from "../constants.js";
@@ -659,7 +660,9 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
 // Minimal markdown for freeform Masterclass reports — bold + bullets.
 function renderReportMd(text) {
   if (!text) return null;
-  const bulletFixed = text.replace(/^[ \t]*[*•]\s+/gm, "  • ");
+  // Heal any spoken Cantonese in saved reports to written 書面語 at render time
+  // (old cards are never regenerated, so this is the only way to fix them).
+  const bulletFixed = toWrittenChinese(text).replace(/^[ \t]*[*•]\s+/gm, "  • ");
   const parts = bulletFixed.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     const bold = part.match(/^\*\*([^*]+)\*\*$/);
@@ -735,14 +738,14 @@ function AchievementCard({ report, index, onRemove }) {
                   <div style={sectionTitle}>3 · Before & After Evolution</div>
                   {report.before && <div style={{ ...bodyText, marginBottom: 4 }}><strong>Before:</strong> {report.before}</div>}
                   {report.after && <div style={{ ...bodyText, marginBottom: 4 }}><strong>After:</strong> {report.after}</div>}
-                  {report.why_better && <div style={{ ...bodyText, color: COLORS.muted }}><strong>Why it's better:</strong> {report.why_better}</div>}
+                  {report.why_better && <div style={{ ...bodyText, color: COLORS.muted }}><strong>Why it's better:</strong> {toWrittenChinese(report.why_better)}</div>}
                 </>
               )}
               {report.vocabulary?.length > 0 && (
                 <>
                   <div style={sectionTitle}>Vocabulary Gained</div>
                   {report.vocabulary.map((v, i) => (
-                    <div key={i} style={bodyText}>{v.weak} → <strong>{v.strong}</strong>{v.chinese ? ` (${v.chinese})` : ""}</div>
+                    <div key={i} style={bodyText}>{v.weak} → <strong>{v.strong}</strong>{v.chinese ? ` (${toWrittenChinese(v.chinese)})` : ""}</div>
                   ))}
                 </>
               )}
@@ -751,8 +754,8 @@ function AchievementCard({ report, index, onRemove }) {
                   <div style={sectionTitle}>4 · Grammar & Proofreading</div>
                   {report.grammar.map((gr, i) => (
                     <div key={i} style={{ ...bodyText, marginBottom: 4 }}>
-                      <strong>{gr.phrase} → {gr.correction}</strong>{gr.explanation ? ` — ${gr.explanation}` : ""}
-                      {gr.chinese ? <div style={{ fontSize: 11, color: COLORS.muted }}>{gr.chinese}</div> : null}
+                      <strong>{gr.phrase} → {gr.correction}</strong>{gr.explanation ? ` — ${toWrittenChinese(gr.explanation)}` : ""}
+                      {gr.chinese ? <div style={{ fontSize: 11, color: COLORS.muted }}>{toWrittenChinese(gr.chinese)}</div> : null}
                     </div>
                   ))}
                 </>
