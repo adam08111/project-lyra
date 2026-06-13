@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { remainingSections, mergeNewSectionsIntoSkill, saveStyleSkill, SOURCE_TEXT_MAX_CHARS } from "../src/components/XRayView.jsx";
+import { remainingSections, mergeNewSectionsIntoSkill, saveStyleSkill, filterSectionsToRequested, SOURCE_TEXT_MAX_CHARS } from "../src/components/XRayView.jsx";
 import { XRAY_ALL_SECTIONS } from "../src/prompts.js";
 
 // saveStyleSkill touches localStorage at call time — stub it for the node env.
@@ -136,5 +136,41 @@ describe("coveredSections ledger — 'Analyse more' always terminates", () => {
   it("remainingSections trusts the ledger over thin content", () => {
     const skill = { coveredSections: [...XRAY_ALL_SECTIONS], sections: [], whenToUse: { keyIdea: "", bullets: [] }, signatureStyle: "" };
     expect(remainingSections(skill)).toEqual([]);
+  });
+});
+
+describe("filterSectionsToRequested — display/persistence never exceed the request", () => {
+  const asSections = (titles) => titles.map(title => ({ title, content: "KEY IDEA: x" }));
+
+  it("drops over-produced sections (the live 9-on-a-3-request case)", () => {
+    const requested = ["SENTENCE PATTERNS", "WORD CHOICES", "COMPARING AND DESCRIBING"];
+    const overProduced = asSections(XRAY_ALL_SECTIONS); // model emitted all 9
+    const kept = filterSectionsToRequested(overProduced, requested);
+    expect(kept).toHaveLength(3);
+    expect(kept.map(s => s.title)).toEqual(["COMPARING AND DESCRIBING", "SENTENCE PATTERNS", "WORD CHOICES"]); // canonical emit order preserved
+  });
+
+  it("keeps a compliant response unchanged", () => {
+    const requested = ["SENTENCE PATTERNS", "WORD CHOICES"];
+    const compliant = asSections(["SENTENCE PATTERNS", "WORD CHOICES"]);
+    expect(filterSectionsToRequested(compliant, requested)).toEqual(compliant);
+  });
+
+  it("matches case/space-insensitively", () => {
+    const kept = filterSectionsToRequested(
+      [{ title: " Sentence Patterns ", content: "" }],
+      ["SENTENCE PATTERNS"]
+    );
+    expect(kept).toHaveLength(1);
+  });
+
+  it("empty or invalid request = no filtering (Analyse-more manages its own subsets)", () => {
+    const all = asSections(XRAY_ALL_SECTIONS);
+    expect(filterSectionsToRequested(all, [])).toEqual(all);
+    expect(filterSectionsToRequested(all, null)).toEqual(all);
+  });
+
+  it("invalid sections input returns []", () => {
+    expect(filterSectionsToRequested(null, ["WORD CHOICES"])).toEqual([]);
   });
 });

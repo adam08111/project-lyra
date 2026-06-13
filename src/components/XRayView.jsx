@@ -42,6 +42,19 @@ export function parseProfileSections(text) {
   return sections;
 }
 
+// Deterministic guard for the curation contract (§22): the profiler is TOLD to
+// produce only the requested sections, but a rich source can pull the model into
+// emitting the full 9-section template anyway (live case: 9 on a 3-section
+// request). Display and persistence must never exceed the request — extras are
+// dropped; "Analyse more" still covers them later. Empty/invalid request = no
+// filtering (the Analyse-more path manages its own subsets).
+export function filterSectionsToRequested(sections, requestedNames) {
+  if (!Array.isArray(sections)) return [];
+  if (!Array.isArray(requestedNames) || requestedNames.length === 0) return sections;
+  const want = new Set(requestedNames.map(n => String(n).trim().toUpperCase()));
+  return sections.filter(s => want.has(String(s?.title || "").trim().toUpperCase()));
+}
+
 // Derive a short title for a technique when the AI omitted SHORT TITLE
 // (legacy skills) AND the student hasn't manually renamed it yet. Picks the
 // first content-bearing phrase from the long KEY IDEA sentence — strips

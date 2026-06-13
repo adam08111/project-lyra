@@ -10,7 +10,7 @@ import { buildStyleProfilerPrompt, translatePrompt } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
 import { FeatherIcon } from "./Icons.jsx";
 import XRayView, {
-  parseProfileSections, parseSectionContent, parseAnnotations,
+  parseProfileSections, filterSectionsToRequested, parseSectionContent, parseAnnotations,
   labelColorIndex, ANNOTATION_COLORS, AnnotatedQuote, SectionCard,
   extractAuthor, saveStyleSkill, mono, parseStructureContent,
   deriveShortTitle, translateWithGuard, AnalyseMoreButton, remainingSections, loadSavedSkill
@@ -1189,12 +1189,15 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
 
       const analysisRoute = getRouteConfig("style_analysis");
       trackCall();
-      const result = await callAI(buildStyleProfilerPrompt(defaultXraySections(writingType)), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
+      // One requested set for the prompt AND both parse sites — the clamp must
+      // match what was asked for, or the curation contract drifts.
+      const requestedSections = defaultXraySections(writingType);
+      const result = await callAI(buildStyleProfilerPrompt(requestedSections), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
         // Live-update as tokens stream in
         const clean = stripLearningData(partial);
         const author = extractAuthor(clean);
         if (author !== "Unknown Author") setAuthorName(author);
-        const sections = parseProfileSections(clean);
+        const sections = filterSectionsToRequested(parseProfileSections(clean), requestedSections);
         if (sections.length > 0) {
           setProfileSections(sections);
           setAnalyzing(false);
@@ -1207,7 +1210,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
         setStyleProfile(clean);
         const author = extractAuthor(clean);
         setAuthorName(author);
-        const sections = parseProfileSections(clean);
+        const sections = filterSectionsToRequested(parseProfileSections(clean), requestedSections);
         if (sections.length === 0) {
           setProfileSections([{ title: "STYLE ANALYSIS", content: clean }]);
         } else {

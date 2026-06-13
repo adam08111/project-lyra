@@ -332,6 +332,18 @@ describe("buildStyleProfilerPrompt — name-based section selection", () => {
     expect(buildStyleProfilerPrompt()).toContain("4-STEP COACHING PROTOCOL");
   });
 
+  it("ends with a FINAL CHECK restating the count, the list, and STOP after the last section", () => {
+    // The SECTION COUNT rule sits ~600 lines before the 9-section reference
+    // template; the live Marina Hyde case showed the template winning. The
+    // FINAL CHECK is the last thing the model reads.
+    const p = buildStyleProfilerPrompt(["WORD CHOICES", "SENTENCE PATTERNS"]);
+    const tail = p.slice(-450);
+    expect(tail).toContain("FINAL CHECK");
+    expect(tail).toContain("EXACTLY 2 section");
+    expect(tail).toContain("1) SENTENCE PATTERNS, 2) WORD CHOICES");
+    expect(tail).toContain("After finishing WORD CHOICES, STOP");
+  });
+
   it("XRAY_ALL_SECTIONS is the 9 canonical sections in order", () => {
     expect(XRAY_ALL_SECTIONS).toHaveLength(9);
     expect(XRAY_ALL_SECTIONS[0]).toBe("COMPARING AND DESCRIBING");

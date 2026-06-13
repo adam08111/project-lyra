@@ -462,7 +462,8 @@ RULES:
 - ANNOTATION FORMAT: In every FROM THE TEXT quote, annotate 1-2 key grammar features by wrapping the relevant phrase in {curly braces} and putting a short label in [square brackets] right after. Keep labels SHORT (1-3 words like "relative clause", "passive voice", "fronted adverbial"). Do NOT annotate the entire quote — only the interesting part.
 - Keep total output under 4000 words
 - Be warm and encouraging — make students excited to try these techniques
-- NEVER skip ANY clause or sentence structure. Every time clause (when, while), purpose clause (to, in order to), reason clause (because), concession clause (although, however), relative clause (who, which), inverted clause, participial phrase, passive construction, or any other grammar structure MUST be named in the GRAMMAR part of the BREAKDOWN. If a sentence has multiple clauses, name ALL of them.`;
+- NEVER skip ANY clause or sentence structure. Every time clause (when, while), purpose clause (to, in order to), reason clause (because), concession clause (although, however), relative clause (who, which), inverted clause, participial phrase, passive construction, or any other grammar structure MUST be named in the GRAMMAR part of the BREAKDOWN. If a sentence has multiple clauses, name ALL of them.
+- FINAL CHECK — SECTION COUNT (this rule WINS over every format description above): your output contains EXACTLY ${chosen.length} section heading${chosen.length === 1 ? "" : "s"} — ${sectionList}. The formats above are reference for sections you may be asked for on other occasions; do NOT produce any section that is not in this list, no matter how much material the text offers. After finishing ${chosen[chosen.length - 1]}, STOP. Output nothing further.`;
 }
 
 export function buildTrainingExercisesPrompt(techniques) {

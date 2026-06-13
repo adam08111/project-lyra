@@ -7,7 +7,7 @@ import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
 import { buildStyleProfilerPrompt } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
-import XRayView, { parseProfileSections, extractAuthor, saveStyleSkill, mono } from "./XRayView.jsx";
+import XRayView, { parseProfileSections, filterSectionsToRequested, extractAuthor, saveStyleSkill, mono } from "./XRayView.jsx";
 import { prepareImageForOCR } from "../image-utils.js";
 import { detectFormatCue, typeLabelOf } from "../genre-cues.js";
 
@@ -161,17 +161,20 @@ export default function SourceSetup({
 
       const analysisRoute = getRouteConfig("style_analysis");
       trackCall();
+      // One requested set for the prompt AND both parse sites — the clamp must
+      // match what was asked for, or the curation contract drifts.
+      const requestedSections = defaultXraySections(null);
       // Throttle parsing to every ~400ms — avoids O(n²) re-parsing on every token
       let lastParseAt = 0;
       let advancedToStep2 = false;
-      const result = await callAI(buildStyleProfilerPrompt(defaultXraySections(null)), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
+      const result = await callAI(buildStyleProfilerPrompt(requestedSections), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
         const now = Date.now();
         if (now - lastParseAt < 400) return;
         lastParseAt = now;
         const clean = stripLearningData(partial);
         const author = extractAuthor(clean);
         if (author !== "Unknown Author") setAuthorName(author);
-        const sections = parseProfileSections(clean);
+        const sections = filterSectionsToRequested(parseProfileSections(clean), requestedSections);
         if (sections.length > 0) {
           setProfileSections(sections);
           setAnalyzing(false);
@@ -190,7 +193,7 @@ export default function SourceSetup({
         setSourceAnalysis(clean);
         const author = extractAuthor(clean);
         setAuthorName(author);
-        const sections = parseProfileSections(clean);
+        const sections = filterSectionsToRequested(parseProfileSections(clean), requestedSections);
         if (sections.length === 0) {
           setProfileSections([{ title: "STYLE ANALYSIS", content: clean }]);
         } else {
