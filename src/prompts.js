@@ -198,6 +198,7 @@ CRITICAL — ANTI-COPY FORMAT:
 OTHER RULES:
 - The template MUST preserve the student's EXACT meaning and intent. Only restructure HOW the sentence is written.
 - Do NOT change the student's position, tone, or emphasis.
+- NEVER suggest joining two sentences with a semicolon. When two ideas should combine, the technique must weave them into ONE grammatically integrated sentence (subordination, relative clause, or participial phrase) — not park two clauses behind a semicolon.
 - When suggesting vocabulary, choose synonyms that match EXACTLY what the student meant — not just any formal word.
 - Keep all original facts, figures, names, and specific details unchanged.
 - Templates must make sense within the context of their ${typeLabel.toLowerCase()} about "${topic}".
@@ -241,6 +242,7 @@ Provide up to 4 grammar issues (each MUST include example_wrong and example_corr
 
 CRITICAL:
 - Do NOT flag or reverse any previously applied style improvements. Focus only on genuine grammar errors, new style opportunities, and vocabulary upgrades.
+- NEVER advise joining two sentences with a semicolon. If two short sentences should merge, advise weaving them into ONE grammatically integrated sentence (subordination / relative clause / participial phrase) and say why that single sentence is stronger in an exam than two clauses behind a semicolon.
 - Vocabulary synonyms MUST match what the student meant in context. Do not suggest a word that shifts the meaning even slightly.${activeSkillCtx ? `\n- Do NOT flag or suggest replacing vocabulary or phrasing that aligns with the deployed skill. The student is intentionally using that style.` : ""}`;
 }
 
@@ -694,6 +696,8 @@ HARD CONSTRAINTS FOR THIS EXERCISE
 3. DO NOT collapse the Parallel Universes into a single fill-in-the-blank skeleton. If all your examples start with the same word or follow the same syntax, you have accidentally built a template — rewrite them with varied syntax.
 
 4. DO provide Traditional Chinese (繁體中文, natural HK written Chinese — not Mainland phrasing) for every vocabulary ingredient. This student is a Hong Kong 14-year-old English learner.
+
+5. NEVER suggest joining two ideas with a semicolon (;). If the student's two clauses want to come together, coach them to weave the ideas into ONE grammatically integrated sentence (subordination — although/while/because; a relative clause — which/that/who; or a participial opener), and tell them WHY that single woven sentence scores higher than two clauses parked behind a semicolon. Model "Although X, Y", never "X; yet Y". This binds your OWN examples too: every Parallel Universe sentence you write must itself be one integrated sentence — scan each one before sending and rewrite any "; " that splices two complete clauses.
 
 ═══════════════════════════════════════
 OUTPUT FORMAT

@@ -3,7 +3,7 @@ import { LYRA_BRAIN } from "../src/lyra-brain.js";
 import {
   buildCoachPrompt, buildScaffoldingPrompt, buildTrainingExercisesPrompt,
   buildTrainingEvalPrompt, buildTrainingHintPrompt, buildStyleProfilerPrompt, styleCoachPrompt,
-  buildStructuralPrompt, buildProofreadPrompt,
+  buildStructuralPrompt, buildProofreadPrompt, buildTrainingChatPrompt,
 } from "../src/prompts.js";
 
 describe("LYRA_BRAIN export", () => {
@@ -60,6 +60,33 @@ describe("LYRA_BRAIN is prepended to coaching prompts", () => {
   it("styleCoachPrompt includes LYRA_BRAIN", () => {
     const result = styleCoachPrompt("profile text", "Author Name");
     expect(result).toContain("4-STEP COACHING PROTOCOL");
+  });
+});
+
+describe("no-semicolon rule — coach toward ONE integrated sentence (universal)", () => {
+  it("LYRA_BRAIN carries the rule", () => {
+    expect(LYRA_BRAIN).toContain("ONE FLAWLESS SENTENCE");
+    expect(LYRA_BRAIN).toContain("NEVER suggest joining them with a semicolon");
+  });
+
+  it("LYRA_BRAIN's gold-standard exemplars no longer splice with a semicolon", () => {
+    // The old Parallel Universe models were "Undeniably, … ; yet, …" — replaced
+    // by integrated "Although …, …" sentences so the model imitates the right move.
+    expect(LYRA_BRAIN).toContain("Although a 6 a.m. alarm is a minor irritation,");
+    expect(LYRA_BRAIN).not.toContain("Undeniably, a 6 a.m. alarm");
+    expect(LYRA_BRAIN).not.toContain("is a minor irritation; yet");
+    // The Masterclass before/after model is integrated too (no "; on the other").
+    expect(LYRA_BRAIN).not.toContain("bleeds your account dry; on the other");
+  });
+
+  it("buildTrainingChatPrompt (the practice chat) reinforces it as a hard constraint", () => {
+    const p = buildTrainingChatPrompt({ technique: "T", description: "d" }, "She wore a red dress.", []);
+    expect(p).toContain("NEVER suggest joining two ideas with a semicolon");
+  });
+
+  it("the non-brain Lite surfaces carry it too (structural + proofread)", () => {
+    expect(buildStructuralPrompt("test", "Essay")).toContain("NEVER suggest joining two sentences with a semicolon");
+    expect(buildProofreadPrompt("test", "Essay", [])).toContain("NEVER advise joining two sentences with a semicolon");
   });
 });
 

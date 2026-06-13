@@ -1460,3 +1460,26 @@ Mirror the existing progress/chats persistence pattern, plus a merge so re-gener
 ### 32.4 Verification
 **243 tests green** (238 → +5: first-gen fill, never-overwrite, grow-and-keep after Analyse-more, length/out-of-range clamp, malformed input). Build clean. **Live-verified** (real skill "Maxine Eggenberger", 3 techniques): before the fix the proxy showed 4 generations / 4 different sentences; after the fix, reloaded the page and re-entered the session → exercise sentence **identical** to the stored one ("The red dress she wore to the party looked very nice on her.") and the proxy fired **zero** new `training_exercise` calls. Zero console errors.
 
+---
+
+## 33. UPDATE — 13 June 2026 — Universal no-semicolon coaching rule (user's phone, practice chat)
+
+### 33.1 The bug
+In the practice chat, Lyra coached the student to *"join your two ideas with a semicolon (;)"* — but for HKDSE the student is rewarded for fusing ideas into ONE grammatically integrated sentence, not parking two clauses behind a semicolon. The user wants Lyra to never suggest the semicolon shortcut and instead teach + encourage building one flawless complex sentence.
+
+### 33.2 Root cause
+Not just a missing rule — `LYRA_BRAIN`'s own gold-standard Parallel Universe exemplars modelled the splice (`"Undeniably X; yet, Y"`, `"… ; however, …"`, the Masterclass before/after `"… dry; on the other …"`). The model imitated its own examples. A rule alone would fight the exemplars.
+
+### 33.3 Fix (universal — every coaching surface)
+- **`src/lyra-brain.js`** — new section "ONE FLAWLESS SENTENCE — NEVER THE SEMICOLON SHORTCUT": never suggest/model/praise a clause-joining semicolon; coach subordination / relative clause / participial / appositive instead, with the exam rationale ("grammatical control" scores higher); the read-aloud test; and a clause binding **Lyra's own examples** ("if you would not accept it from the student, do not write it yourself"). All five spliced exemplars rewritten to integrated `"Although X, Y"` / `"While X, Y"` / `"…, only for … to …"` / `"…, while …"` forms — same concession-then-punch rhythm, one sentence.
+- **`src/prompts.js`** — reinforced as a hard constraint in `buildTrainingChatPrompt` (the practice chat — the exact bug surface, including "your own Parallel Universes must be one integrated sentence"), and a one-liner each in the non-brain Lite surfaces `buildStructuralPrompt` + `buildProofreadPrompt` so no surface can suggest a semicolon.
+
+### 33.4 Verification (deterministic + two live runs)
+**247 tests green** (243 → +4: rule present in LYRA_BRAIN, old `; yet` exemplars gone / integrated ones present, training-chat constraint, both Lite surfaces). Build clean.
+- **Live run 1** (rule + exemplar rewrite): Lyra declined the semicolon ("in an exam, that's like parking two cars next to each other… it doesn't show the reader how they're connected") and taught weaving — but **1 of her 3 own Parallel Universe examples still spliced** ("a room full of books; it was a venerable sanctuary").
+- Strengthened the rule to explicitly bind Lyra's own example/PU/before-after sentences (scan-before-send), mirrored in the training-chat constraint.
+- **Live run 2**: declines the semicolon again, and **all three** Parallel Universe examples are now integrated single sentences (participial "Transcending…", subordinating "Although…", participial "Acting as…"). The only semicolon left in the whole reply is in her *explanatory prose* ("the reader doesn't just see a dress and then a personality; they experience…") — a legitimate stylistic semicolon, not a model sentence or a suggestion to the student. Zero console errors.
+
+### 33.5 Note / residual
+The rule targets **suggestions and model sentences**, not Lyra's every utterance — she may still use an occasional semicolon in her own connective prose (and a studied source writer's semicolons remain hers to admire). If zero semicolons anywhere is wanted, that's a stricter, separate ask (risks stilting her coaching voice).
+
