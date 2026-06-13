@@ -1534,3 +1534,19 @@ A review workflow (5 dimensions → per-finding skeptical verification) raised 9
 
 **262 tests green** (unchanged — these are component-level fixes; the pure layer they touch was already covered). Build clean. **Live re-verified:** typed a draft → flipped pager ‹ then › → draft intact; sent a strong rewrite → Lyra approved → tapped the button → a 3rd distinct sentence ("She wore a loose linen shirt…") appended (all three kept, pager 3 / 3) and the transition note landed as the latest chat turn. Zero console errors.
 
+---
+
+## 37. UPDATE — 13 June 2026 — Coaching Chinese: standard written 書面語, no spoken Cantonese
+
+### 37.1 The bug
+A Masterclass Report's GRAMMAR & PROOFREADING explanation rendered in spoken **Cantonese**: "喺英文入面，我哋唔會同時用 'although' 同埋 'but'。用其中一個就已經足夠表達對比。" Hong Kong students read/write standard 書面語; spoken forms look wrong on a teaching card.
+
+### 37.2 Cause
+The §23.6 register fix added a Cantonese banlist to `report-card-brain.js` (Growth Report) and to the annotation-explain / word-lookup prompts (`prompts.js`) — but **not to `LYRA_BRAIN`**, which generates the coaching turns and the Masterclass Report. LYRA_BRAIN's only Chinese guidance was "natural HK written Chinese, not Mainland phrasing" — it never banned spoken Cantonese, so the model slipped into it for full-sentence grammar explanations.
+
+### 37.3 Fix
+New "CHINESE REGISTER — STANDARD WRITTEN 書面語 ONLY" section in `src/lyra-brain.js`: every Chinese it emits (vocabulary glosses, Parallel Universe translations, grammar explanations, the report) must be Traditional 書面語; explicit banned-form → written-form table (係→是, 嘅→的, 唔→不, 喺→在, 我哋→我們, 同埋→和/以及, 嚟→來, 嗰→那, 咁→這樣, 啲→些, 畀→給, 乜→什麼, 冇→沒有, 噉→這樣); and the user's exact sentence as the ✗/✓ pair. The §410 checklist line now points to it.
+
+### 37.4 Verification & note
+**263 tests green** (+1: LYRA_BRAIN carries the register rule + the 我哋/同埋/喺 mappings). Build clean. Applies to **new** coaching turns and reports — the existing saved Achievement card keeps its old Cantonese text (Masterclass reports aren't regenerated/versioned). Like the §33 semicolon rule, this strongly steers a probabilistic model rather than guaranteeing every token; the same banlist already proved effective on the Growth Report and annotation surfaces.
+

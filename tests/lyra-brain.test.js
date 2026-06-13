@@ -24,6 +24,15 @@ describe("LYRA_BRAIN export", () => {
     expect(LYRA_BRAIN).toContain("LYRA_LEARNING_DATA");
     expect(LYRA_BRAIN).toContain("learning_sync");
   });
+
+  it("demands standard written Chinese (書面語) and bans spoken Cantonese forms", () => {
+    expect(LYRA_BRAIN).toContain("CHINESE REGISTER");
+    expect(LYRA_BRAIN).toContain("書面語");
+    // the spoken forms from the live bug must be explicitly banned/mapped
+    expect(LYRA_BRAIN).toContain("我哋 → 我們");
+    expect(LYRA_BRAIN).toContain("同埋 → 和");
+    expect(LYRA_BRAIN).toContain("喺 → 在");
+  });
 });
 
 describe("LYRA_BRAIN is prepended to coaching prompts", () => {
