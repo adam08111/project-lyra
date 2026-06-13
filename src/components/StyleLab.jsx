@@ -861,6 +861,13 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
     const updated = { ...target };
     if (hasFullSections && updated.sections) {
       updated.sections = updated.sections.filter((_, i) => i !== techIdx);
+      // Keep the parallel arrays in lockstep with `sections` — downstream code
+      // (the display title override, and TrainingSession's anonTechs[techIdx]
+      // for coaching + new-sentence generation) indexes analysedTechniques by
+      // the SAME position as sections; filtering only sections desyncs them and
+      // sends the wrong technique after a removal.
+      if (Array.isArray(updated.analysedTechniques)) updated.analysedTechniques = updated.analysedTechniques.filter((_, i) => i !== techIdx);
+      if (Array.isArray(updated.techniques)) updated.techniques = updated.techniques.filter((_, i) => i !== techIdx);
     } else if (updated.analysedTechniques) {
       updated.analysedTechniques = updated.analysedTechniques.filter((_, i) => i !== techIdx);
       if (updated.techniques) {
@@ -883,6 +890,9 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
     const updated = { ...target };
     if (hasFullSections && updated.sections) {
       updated.sections = updated.sections.filter((_, i) => !drop.has(i));
+      // Filter the parallel arrays by the SAME indices (see removeTechnique).
+      if (Array.isArray(updated.analysedTechniques)) updated.analysedTechniques = updated.analysedTechniques.filter((_, i) => !drop.has(i));
+      if (Array.isArray(updated.techniques)) updated.techniques = updated.techniques.filter((_, i) => !drop.has(i));
     } else if (updated.analysedTechniques) {
       updated.analysedTechniques = updated.analysedTechniques.filter((_, i) => !drop.has(i));
       if (updated.techniques) {

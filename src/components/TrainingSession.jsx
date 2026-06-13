@@ -81,6 +81,9 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
   // "Try a new sentence" offer so it appears exactly when Lyra approves.
   const [approvedActive, setApprovedActive] = useState(false);
   const [addingSentence, setAddingSentence] = useState(false);
+  // Brief inline notice when "Try a new sentence" couldn't add one (AI error,
+  // empty output, or a duplicate) — so the tap never reads as a dead button.
+  const [addSentenceNotice, setAddSentenceNotice] = useState("");
   const [studentAttempt, setStudentAttempt] = useState("");
   const [studentExplanation, setStudentExplanation] = useState("");
   // Stuck-chat state — when student clicks "I'm stuck", an inline chat with
@@ -114,6 +117,11 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
   const chatScrollRef = useRef(null);
+  // Live mirror of activeTechIdx so an in-flight addNewSentence (awaiting the
+  // AI) can tell, after it resolves, whether the student has since switched
+  // technique — and skip the UI-position setters that would clobber the new one.
+  const activeTechIdxRef = useRef(activeTechIdx);
+  useEffect(() => { activeTechIdxRef.current = activeTechIdx; }, [activeTechIdx]);
 
   // chatMessages is a DERIVED view of chatThreads[activeTechIdx] — single
   // source of truth, no separate state to sync. Declared early so downstream
@@ -289,6 +297,7 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
     setCopiedIdx(null);
     setSentenceIdx(null);     // show the newest sentence for the new technique
     setApprovedActive(false); // approval is per-technique-per-sentence
+    setAddSentenceNotice("");
     // Intentionally NOT in dep list: chatThreads — we only react to
     // technique switches, not to every chatThreads write (which would
     // re-toggle the panel every time a message lands).
@@ -403,9 +412,12 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
   // a rewrite, so the student keeps drilling the SAME skill on fresh material.
   const addNewSentence = useCallback(async () => {
     if (activeTechIdx === null || addingSentence || !skill) return;
-    const tech = techniques[activeTechIdx];
+    const startedTechIdx = activeTechIdx;  // guard against a technique switch mid-call
+    const tech = techniques[startedTechIdx];
     if (!tech) return;
     setAddingSentence(true);
+    setAddSentenceNotice("");
+    let sentence = null;
     try {
       const { anonymised } = anonymiseSkillsForAI([skill]);
       const anonSkill = anonymised[0];
@@ -413,8 +425,8 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
         || (anonSkill.techniques || []).map(t => typeof t === "string" ? { technique: t } : t);
       // Anonymised technique for anti-bias; fall back to the display technique's
       // name/description (never the example — that can carry the author's voice).
-      const oneTech = anonTechs[activeTechIdx] || { technique: tech.technique, description: tech.description };
-      const avoid = Array.isArray(exercises?.[activeTechIdx]) ? exercises[activeTechIdx] : [];
+      const oneTech = anonTechs[startedTechIdx] || { technique: tech.technique, description: tech.description };
+      const avoid = Array.isArray(exercises?.[startedTechIdx]) ? exercises[startedTechIdx] : [];
       const route = getRouteConfig("training_exercise");
       trackCall();
       const result = await callAI(
@@ -424,17 +436,46 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
       );
       const cleaned = result.replace(/<!--[\s\S]*?-->/g, "").replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(cleaned);
-      const sentence = Array.isArray(parsed) && parsed[0] && parsed[0].sentence;
-      if (sentence) {
-        const before = avoid.length;
-        setExercises(prev => appendSentence(prev, activeTechIdx, sentence));
-        setSentenceIdx(before);     // jump to the freshly added sentence
+      sentence = (Array.isArray(parsed) && parsed[0] && parsed[0].sentence) || null;
+    } catch (e) {
+      console.error("Add-sentence generation failed:", e);
+    }
+
+    // Append targets the captured technique, so it's always safe. Compute the
+    // result up front: only treat it as a success if the list actually grew
+    // (appendSentence de-dupes an exact repeat and returns the array unchanged).
+    let added = false, newIdx = 0;
+    if (sentence) {
+      setExercises(prev => {
+        const next = appendSentence(prev, startedTechIdx, sentence);
+        const grew = next !== prev && Array.isArray(next?.[startedTechIdx]);
+        if (grew) { added = true; newIdx = next[startedTechIdx].length - 1; }
+        return next;
+      });
+    }
+
+    if (added) {
+      // Transition note in the (technique-scoped) chat so the continuous thread
+      // stays coherent: the next coaching turn sends THIS sentence as the target,
+      // and the history now explicitly introduces it instead of trailing the
+      // previous sentence's conversation.
+      setChatThreads(prev => {
+        const key = String(startedTechIdx);
+        const cur = prev[key] || [];
+        return { ...prev, [key]: [...cur, { role: "lyra", text: `✦ Fresh practice sentence — same skill:\n\n“${sentence}”\n\nRewrite this one using the technique, then send it to me and I'll coach you.` }] };
+      });
+      // UI-position setters only matter for the screen the student is on now —
+      // skip them if they navigated to a different technique while we waited.
+      if (activeTechIdxRef.current === startedTechIdx) {
+        setSentenceIdx(newIdx);     // jump to the freshly added sentence
         setStudentAttempt("");
         setStudentExplanation("");
         setApprovedActive(false);   // the new sentence hasn't been approved yet
       }
-    } catch (e) {
-      console.error("Add-sentence generation failed:", e);
+    } else if (activeTechIdxRef.current === startedTechIdx) {
+      // No sentence added (error, empty, or duplicate) — keep the offer so the
+      // student can retry, and tell them why nothing changed.
+      setAddSentenceNotice("Couldn't find a fresh one just now — tap again to retry.");
     }
     setAddingSentence(false);
   }, [activeTechIdx, addingSentence, skill, techniques, exercises, trackCall]);
@@ -830,14 +871,14 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
               {sentenceList.length > 1 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <button
-                    onClick={() => { setSentenceIdx(Math.max(0, effSentenceIdx - 1)); setStudentAttempt(""); }}
+                    onClick={() => setSentenceIdx(Math.max(0, effSentenceIdx - 1))}
                     disabled={effSentenceIdx === 0}
                     style={{ background: "none", border: "none", cursor: effSentenceIdx === 0 ? "default" : "pointer", color: effSentenceIdx === 0 ? COLORS.border : COLORS.muted, fontSize: 16, lineHeight: 1, padding: "0 4px" }}
                     title="Previous sentence"
                   >{"\u2039"}</button>
                   <span style={{ fontSize: 10, color: COLORS.muted, fontFamily: mono }}>{effSentenceIdx + 1} / {sentenceList.length}</span>
                   <button
-                    onClick={() => { setSentenceIdx(Math.min(sentenceList.length - 1, effSentenceIdx + 1)); setStudentAttempt(""); }}
+                    onClick={() => setSentenceIdx(Math.min(sentenceList.length - 1, effSentenceIdx + 1))}
                     disabled={effSentenceIdx === sentenceList.length - 1}
                     style={{ background: "none", border: "none", cursor: effSentenceIdx === sentenceList.length - 1 ? "default" : "pointer", color: effSentenceIdx === sentenceList.length - 1 ? COLORS.border : COLORS.muted, fontSize: 16, lineHeight: 1, padding: "0 4px" }}
                     title="Next sentence"
@@ -1051,6 +1092,11 @@ export default function TrainingSession({ skill, onClose, trackCall, startTechId
             >
               {addingSentence ? "Finding a fresh sentence…" : "✦ Try this skill on a new sentence"}
             </button>
+          )}
+          {addSentenceNotice && (
+            <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, marginTop: -4, marginBottom: 12, textAlign: "center" }}>
+              {addSentenceNotice}
+            </div>
           )}
 
           {/* Action buttons */}
