@@ -1576,3 +1576,22 @@ The prompt rule can't touch a Masterclass Report **already saved** in Cantonese 
 ### 38.3 Verification
 **277 tests green** (+8: `bubblePosition`/`cardPosition` — below-anchor, bottom/edge clamps, narrow-viewport non-inversion). Build clean. **Live-verified in the preview** (driving the real DOM/event path): A — bubble appears; **B — bubble SURVIVES a simulated selection-collapse and the retry tap opens the card** (the headline fix); dismisses when ignored (not sticky); desktop `mousedown` opens; the pointer path opens; **Save (§24.5) still writes a `kind:"word"` concept**; 44px hit target confirmed; zero console errors. A self-caught bug during verification: the first grace was measured from bubble-shown and failed a slow reacher — corrected to collapse-relative. **Preserved (§24):** below-selection anchor, rotation/resize dismiss, scroll-hides-stale, input/own-UI exclusion, cache/in-flight guard, desktop flow. **Device caveat:** the in-browser simulation drives synthetic pointer/selection events; final confirmation is a real finger-tap on iOS/Android (enable `?wldebug=1` if anything still looks off).
 
+---
+
+## 39. UPDATE — 15 June 2026 — Word-definition card overflowed a narrow viewport: × off-screen, can't close (§24)
+
+### 39.1 Cause
+On a narrow phone the definition card rendered WIDER than the screen — the × (in the right padding) sat past the right edge, untappable; the student was trapped. The card declared `width: min(300, vw-24)` but **no `box-sizing`**, so the default `content-box` added the `12px 14px` padding + border (~30px) ON TOP of the declared width. The §24 left-clamp guaranteed only the LEFT edge; the right edge overflowed by ~30px once the viewport dropped below ~350px CSS-px. Same card mounts app-wide (one component, 3 mount points in `lyra.jsx`), so the fix lands everywhere.
+
+### 39.2 Viewport-fit fix (`src/components/WordLookup.jsx`)
+- `box-sizing: border-box` + `maxWidth: calc(100vw - 24px)` on the card; width = `min(360, visualViewport.width - 24)` (12px gutter each side) — the declared width now IS the rendered width.
+- `cardPosition(anchor, vw, vh, cardW)` clamps **both** edges from the actual width: `left ∈ [12, vw-12-cardW]`, so `left ≥ 12` AND `left + width ≤ vw - 12` always hold (previously only the left was guaranteed).
+- × is now a **44×44** flex-centred tap target (negative margins keep it visually tucked in the corner), `flex-shrink:0` so it's never the element that overflows; the word/POS/Save group wraps to its left.
+- The For-example box / meanings already wrap and inherit the capped width (no inner fixed width).
+
+### 39.3 Two-exit trap-proofing
+Three independent exits now: the on-screen **×**, a full-viewport **backdrop** tap (zIndex 199, below the card), and **Escape** (new desktop `keydown` listener while the card is open). A popup can never have a single off-screen exit.
+
+### 39.4 Verification
+**281 tests green** (+4 net: `cardPosition` width ≤ vw-24, left ≥ 12, **right ≤ vw-12** across mid/far-left/far-right/bottom selections and 280/320px viewports, plus the 360 desktop cap). Build clean. **Live-verified at 320px**: card = left 12 / right 308 / width 296 (= vw-24), fully on-screen; **× at 44×44, fully visible and tappable**; meaning + example wrap inside. Both exits close the card (× ✓, backdrop ✓); a width change (rotation 320→700) **dismisses** it (no off-screen ×). No console errors. Final confirmation remains a real device tap.
+

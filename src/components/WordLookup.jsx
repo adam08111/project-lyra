@@ -20,11 +20,14 @@ export function bubblePosition(anchor, vw, vh) {
     left: Math.min(Math.max(8, anchor.x - 60), vw - 130),
   };
 }
-export function cardPosition(anchor, vw, vh) {
-  return {
-    top: Math.min(Math.max(12, anchor.yBottom + 12), Math.max(12, vh - 260)),
-    left: Math.min(Math.max(12, anchor.x - 150), Math.max(12, vw - 312)),
-  };
+// cardW is the ACTUAL (border-box) card width. Clamp BOTH edges: left ≥ 12 and
+// right = left + cardW ≤ vw − 12. With a viewport-capped width both always hold,
+// so the × (pinned in the card's right padding) can never run off-screen.
+export function cardPosition(anchor, vw, vh, cardW) {
+  const w = Math.max(0, cardW || 0);
+  const left = Math.min(Math.max(12, anchor.x - w / 2), Math.max(12, vw - 12 - w));
+  const top = Math.min(Math.max(12, anchor.yBottom + 12), Math.max(12, vh - 260));
+  return { top, left, width: w };
 }
 
 export default function WordLookup({ trackCall }) {
@@ -169,6 +172,16 @@ export default function WordLookup({ trackCall }) {
   };
   const close = () => { clearTimeout(openTimerRef.current); clearTimeout(dismissTimerRef.current); openingRef.current = false; setPopup(null); setState({ status: "idle", entry: null }); setSaved(false); };
 
+  // Trap-proofing: Escape closes the card (desktop). The backdrop tap (below)
+  // is the mobile exit; the viewport-fit card keeps the × reachable as a third.
+  useEffect(() => {
+    if (!popup) return;
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popup]);
+
   // Save the looked-up word to Saved Concepts (the Saved tab), deduped by word.
   const handleSaveWord = () => {
     if (saved || !state.entry || !popup) return;
@@ -192,6 +205,9 @@ export default function WordLookup({ trackCall }) {
   const vvp = (typeof window !== "undefined" && window.visualViewport) || null;
   const vw = vvp ? vvp.width : (typeof window !== "undefined" ? window.innerWidth : 360);
   const vh = vvp ? vvp.height : (typeof window !== "undefined" ? window.innerHeight : 640);
+  // Card width: cap at 360 but NEVER exceed the viewport minus a 12px gutter
+  // each side. With box-sizing:border-box this IS the rendered width.
+  const cardW = Math.min(360, vw - 24);
 
   // On-device diagnostics (phones often have no devtools). Enable by visiting
   // ?wldebug=1 — the overlay shows whether selection→bubble fired (rules A
@@ -248,8 +264,9 @@ export default function WordLookup({ trackCall }) {
             style={{
               position: "fixed",
               zIndex: 200,
-              ...cardPosition(popup, vw, vh),
-              width: Math.min(300, vw - 24),
+              boxSizing: "border-box", // width INCLUDES padding+border — so it actually fits
+              ...cardPosition(popup, vw, vh, cardW),
+              maxWidth: "calc(100vw - 24px)",
               background: COLORS.card,
               border: `1px solid ${COLORS.border}`,
               borderLeft: `3px solid ${COLORS.blue}`,
@@ -278,7 +295,7 @@ export default function WordLookup({ trackCall }) {
                     {saved ? "★ Saved · 已儲存" : "☆ Save · 儲存"}
                   </button>
                 )}
-                <button onClick={close} aria-label="close" style={{ border: "none", background: "transparent", color: COLORS.muted, cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                <button onClick={close} aria-label="close" style={{ border: "none", background: "transparent", color: COLORS.muted, cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 0, minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: -10, marginRight: -8, touchAction: "manipulation" }}>×</button>
               </div>
             </div>
 
