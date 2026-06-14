@@ -1555,3 +1555,24 @@ The prompt rule can't touch a Masterclass Report **already saved** in Cantonese 
 
 **269 tests green** (+6: the live-bug sentence → 書面語, each core token, 關係 not corrupted, 進入面試/深入面 not corrupted, English + already-written Chinese untouched incl. no I/G/L mask leakage, empty/null passthrough). Build clean. **Live-verified on the user's exact card** ("The Helpful Professional", a structured report whose saved data still contains "喺英文入面，我哋唔會…同埋…"): the Achievements card now renders **"在英文裡面，我們不會同時用 'although/even though' 和 'but'。用其中一個就已經足夠表達對比。"** — zero Cantonese markers, English untouched, no console errors. Belt-and-braces: the §37.3 prompt rule reduces it at the source, this converter heals anything already saved or still slipped.
 
+---
+
+## 38. UPDATE — 15 June 2026 — Word-dictionary 📖 bubble works on desktop but not mobile: touch-handoff fix (§24)
+
+### 38.1 Investigation (6-agent adversarial workflow → A/B/C/D)
+**Root cause: B (primary) + D (contributor); A and C ruled out.**
+- **A (never appears) — ruled out.** The selectionchange path survives a normal mobile word-grab; the bubble *does* appear (matches "select → bubble → tap → nothing").
+- **C (off-screen) — ruled out hard.** `index.html` sets `user-scalable=no` → no zoom → no visual-vs-layout-viewport divergence → the clamps cannot push the bubble off-screen.
+- **B (tap does nothing) — PRIMARY.** The 📖 button renders only while `bubble && !popup`, ~10px below a *live* selection. On touch, the tap that reaches the bubble **collapses the selection** → `selectionchange` → the 250ms debounce hits `setBubble(null)` (popupOpenRef still false) → the button unmounts before the tap's pointer event lands. (On iOS the first tap outside a selection is often consumed by the OS to dismiss the callout, so a retry is needed — but the bubble is already gone.) Desktop works because mouse-select keeps the selection stable.
+- **D (contributor) — confirmed.** Two teardown handlers also nuke the bubble mid-handoff, only on mobile: unconditional `onResize` (the URL-bar collapse changes `innerHeight`) and capture-phase `onScroll` (the article scrolls in an inner `overflowY:auto` container, so finger drift fires it).
+
+### 38.2 Touch-robust fix (`src/components/WordLookup.jsx`)
+- **B — bubble survives the selection collapse.** The word is already captured into `bubble` state when shown (kept). `openingRef` (set on the bubble's `pointerdown`) makes the collapse/scroll teardown bail while a tap is in flight. When the selection collapses with no tap in flight, dismissal is **deferred ~800ms from the collapse** (a `dismissTimerRef`), not from when the bubble was shown — so a slow reacher and the iOS first-tap-eaten **retry** still land; a real tap or a fresh selection cancels it; if ignored it still dismisses (not sticky).
+- **Open on the touch-reliable events.** `pointerdown` claims the gesture (`preventDefault` + `openingRef=true` + a 1.5s backstop so it can't stick if the finger lifts off); open fires on `pointerup` + `touchend` + `mousedown` (idempotent — `openPopup` reads the captured word, never re-reads the collapsed selection). ≥44×44px hit target, `touch-action: manipulation`, `user-select:none`, transparent tap-highlight.
+- **D — teardown handlers don't fire during the handoff.** `onScroll` bails on `popupOpenRef`/`openingRef`/own-UI target/within a 350ms grace; `onResize` is **width-gated** (rotation still dismisses synchronously; the height-only URL-bar reflow is ignored).
+- **Geometry** reads `visualViewport` (no `offsetTop` subtraction — pinch-zoom is off, and subtracting would push up into the native menu, the §24 trap). Positioning/clamp extracted to pure `bubblePosition`/`cardPosition`.
+- **On-device diagnostics:** a `?wldebug=1` overlay (phones lack devtools) prints bubble/popup/status/opening/viewport so the failure mode is visible on the phone.
+
+### 38.3 Verification
+**277 tests green** (+8: `bubblePosition`/`cardPosition` — below-anchor, bottom/edge clamps, narrow-viewport non-inversion). Build clean. **Live-verified in the preview** (driving the real DOM/event path): A — bubble appears; **B — bubble SURVIVES a simulated selection-collapse and the retry tap opens the card** (the headline fix); dismisses when ignored (not sticky); desktop `mousedown` opens; the pointer path opens; **Save (§24.5) still writes a `kind:"word"` concept**; 44px hit target confirmed; zero console errors. A self-caught bug during verification: the first grace was measured from bubble-shown and failed a slow reacher — corrected to collapse-relative. **Preserved (§24):** below-selection anchor, rotation/resize dismiss, scroll-hides-stale, input/own-UI exclusion, cache/in-flight guard, desktop flow. **Device caveat:** the in-browser simulation drives synthetic pointer/selection events; final confirmation is a real finger-tap on iOS/Android (enable `?wldebug=1` if anything still looks off).
+

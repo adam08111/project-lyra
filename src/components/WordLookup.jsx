@@ -10,6 +10,23 @@ import { isLookableWord, lookupWord, buildConceptFromWord, normWord } from "../w
  * it; tapping the bubble opens a bilingual definition card (cache-first, one
  * Lite call per word ever). No per-render-site wiring needed.
  */
+// Pure positioning — exported for tests. `anchor` is the selection rect's
+// bottom-centre {x, yBottom}. Both sit BELOW the selection (the native iOS/
+// Android selection menu renders ABOVE it — §24) and are clamped on-screen
+// against the given viewport. vw/vh come from visualViewport at the call site.
+export function bubblePosition(anchor, vw, vh) {
+  return {
+    top: Math.min(vh - 48, anchor.yBottom + 10),
+    left: Math.min(Math.max(8, anchor.x - 60), vw - 130),
+  };
+}
+export function cardPosition(anchor, vw, vh) {
+  return {
+    top: Math.min(Math.max(12, anchor.yBottom + 12), Math.max(12, vh - 260)),
+    left: Math.min(Math.max(12, anchor.x - 150), Math.max(12, vw - 312)),
+  };
+}
+
 export default function WordLookup({ trackCall }) {
   const [bubble, setBubble] = useState(null); // { word, sentence, x, y }
   const [popup, setPopup] = useState(null);   // { word, sentence, x, y }
@@ -19,6 +36,18 @@ export default function WordLookup({ trackCall }) {
   const debounceRef = useRef(null);
   const popupOpenRef = useRef(false);
   popupOpenRef.current = !!popup;
+  // Touch handoff guards. On mobile the tap that REACHES the bubble collapses
+  // the selection (fires selectionchange) and can fire scroll/resize — all of
+  // which used to tear the bubble down before the tap landed. bubbleShownAtRef
+  // timestamps when a bubble was shown so the collapse/scroll teardown is
+  // suppressed for a short grace window; openingRef is true from the first
+  // touch on the bubble until the card mounts.
+  const bubbleShownAtRef = useRef(0);
+  const openingRef = useRef(false);
+  const openTimerRef = useRef(null);
+  const dismissTimerRef = useRef(null);
+  const COLLAPSE_DISMISS_MS = 800; // grace AFTER the selection collapses (tap moment)
+  const SCROLL_GRACE_MS = 350;
 
   // ── selection watcher ──
   useEffect(() => {
@@ -27,7 +56,21 @@ export default function WordLookup({ trackCall }) {
       debounceRef.current = setTimeout(() => {
         if (popupOpenRef.current) return; // don't fight the open card
         const sel = window.getSelection();
-        if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setBubble(null); return; }
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+          // B FIX: the touch that reaches the 📖 bubble collapses the selection.
+          // Don't tear the bubble down mid-handoff. If a tap is in flight, keep
+          // it. Otherwise DEFER the dismissal ~800ms FROM THIS COLLAPSE (the tap
+          // moment) — not from when the bubble was shown — so a slow reacher,
+          // and the iOS "first tap eaten by the OS" retry, still land on the
+          // bubble. A real tap (openingRef) or a new selection cancels it.
+          if (openingRef.current) return;
+          clearTimeout(dismissTimerRef.current);
+          dismissTimerRef.current = setTimeout(() => {
+            if (!openingRef.current && !popupOpenRef.current) setBubble(null);
+          }, COLLAPSE_DISMISS_MS);
+          return;
+        }
+        clearTimeout(dismissTimerRef.current); // a fresh valid selection — keep it
         const text = sel.toString().trim();
         if (!isLookableWord(text)) { setBubble(null); return; }
         // Ignore selections inside editors or our own UI
@@ -42,17 +85,39 @@ export default function WordLookup({ trackCall }) {
         const sentence = full.slice(at, (sel.getRangeAt(0).startOffset || 0) + text.length + 120).trim();
         // Anchor BELOW the selection: iOS/Android native selection menus render
         // above it, so a bubble up there gets buried on the primary platform.
+        bubbleShownAtRef.current = Date.now();
         setBubble({ word: text, sentence, x: rect.left + rect.width / 2, yBottom: rect.bottom });
       }, 250);
     };
-    const onScroll = () => { if (!popupOpenRef.current) setBubble(null); };
-    // Rotation/resize invalidates every captured coordinate — just dismiss.
-    const onResize = () => { setBubble(null); setPopup(null); setState({ status: "idle", entry: null }); };
+    // D FIX: on a long article the text scrolls in an inner overflow container
+    // and a tap-induced finger drift fires scroll mid-handoff. Keep §24
+    // "scroll hides a stale bubble" for genuine later scrolls, but don't tear
+    // the bubble down during the open gesture / grace window / on our own UI.
+    const onScroll = (e) => {
+      if (popupOpenRef.current || openingRef.current) return;
+      const t = e && e.target;
+      if (t && t.closest && t.closest("[data-word-lookup]")) return;
+      if (Date.now() - bubbleShownAtRef.current < SCROLL_GRACE_MS) return;
+      setBubble(null);
+    };
+    // D FIX: the mobile URL/toolbar collapse changes innerHeight and fired this
+    // unconditionally, wiping the bubble mid-handoff. Dismiss only on a real
+    // WIDTH change (rotation always changes width) so §24 rotation-dismiss is
+    // preserved while the height-only reflow is ignored. Stays synchronous so
+    // stale fixed coords are invalidated immediately on rotation.
+    let lastW = typeof window !== "undefined" ? window.innerWidth : 0;
+    const onResize = () => {
+      if (window.innerWidth === lastW) return;
+      lastW = window.innerWidth;
+      setBubble(null); setPopup(null); setState({ status: "idle", entry: null });
+    };
     document.addEventListener("selectionchange", onSelectionChange);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
     return () => {
       clearTimeout(debounceRef.current);
+      clearTimeout(openTimerRef.current);
+      clearTimeout(dismissTimerRef.current);
       document.removeEventListener("selectionchange", onSelectionChange);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
@@ -78,15 +143,31 @@ export default function WordLookup({ trackCall }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [popup, attempt]);
 
+  // First touch on the bubble claims the gesture: openingRef suppresses the
+  // selection-collapse / scroll teardown so the button survives until the tap
+  // opens it. A backstop timer clears openingRef if the gesture is dropped
+  // (finger lifts off the button) so a later deselect can still dismiss.
+  const claimBubbleGesture = (e) => {
+    openingRef.current = true;
+    if (e && e.cancelable) e.preventDefault();
+    if (e) e.stopPropagation();
+    clearTimeout(openTimerRef.current);
+    openTimerRef.current = setTimeout(() => { openingRef.current = false; }, 1500);
+  };
+  // Opens on pointerup / touchend / mousedown — idempotent (the captured word
+  // lives in `bubble`; once consumed, later fires no-op). Never re-reads the
+  // selection (it has collapsed by now on mobile).
   const openPopup = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!bubble) return;
+    if (e) { if (e.cancelable) e.preventDefault(); e.stopPropagation(); }
+    clearTimeout(openTimerRef.current);
+    clearTimeout(dismissTimerRef.current);
+    if (!bubble) { openingRef.current = false; return; }
     setPopup(bubble);
     setBubble(null);
+    openingRef.current = false;
     try { window.getSelection().removeAllRanges(); } catch (err) { /* silent */ }
   };
-  const close = () => { setPopup(null); setState({ status: "idle", entry: null }); setSaved(false); };
+  const close = () => { clearTimeout(openTimerRef.current); clearTimeout(dismissTimerRef.current); openingRef.current = false; setPopup(null); setState({ status: "idle", entry: null }); setSaved(false); };
 
   // Save the looked-up word to Saved Concepts (the Saved tab), deduped by word.
   const handleSaveWord = () => {
@@ -104,27 +185,54 @@ export default function WordLookup({ trackCall }) {
     } catch (e) { /* silent */ }
   };
 
-  const vw = typeof window !== "undefined" ? window.innerWidth : 360;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 640;
+  // Use the visual viewport so coords match what's actually rendered on mobile.
+  // Pinch-zoom is disabled app-wide (index.html user-scalable=no), so offsetTop
+  // is ~0 — we deliberately do NOT subtract it (that would push the bubble up
+  // into the native selection menu, the §24 trap).
+  const vvp = (typeof window !== "undefined" && window.visualViewport) || null;
+  const vw = vvp ? vvp.width : (typeof window !== "undefined" ? window.innerWidth : 360);
+  const vh = vvp ? vvp.height : (typeof window !== "undefined" ? window.innerHeight : 640);
+
+  // On-device diagnostics (phones often have no devtools). Enable by visiting
+  // ?wldebug=1 — the overlay shows whether selection→bubble fired (rules A
+  // in/out), the bubble coords (C), and whether the tap opened the card (B).
+  const debug = (() => {
+    try { return new URLSearchParams(window.location.search).get("wldebug") === "1" || localStorage.getItem("lyra-wl-debug") === "1"; }
+    catch (e) { return false; }
+  })();
 
   return (
     <>
+      {debug && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999, background: "rgba(0,0,0,0.82)", color: "#5f5", font: "10px/1.4 monospace", padding: "4px 6px", pointerEvents: "none", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+          {`WL · bubble=${bubble ? `${bubble.word}@(${Math.round(bubble.x)},${Math.round(bubble.yBottom)})` : "—"} · popup=${popup ? popup.word : "—"} · status=${state.status} · opening=${openingRef.current} · vw=${Math.round(vw)} vh=${Math.round(vh)}`}
+        </div>
+      )}
+
       {/* 📖 bubble above the selected word */}
       {bubble && !popup && (
         <button
           data-word-lookup="bubble"
-          onPointerDown={openPopup}
+          onPointerDown={claimBubbleGesture}
+          onPointerUp={openPopup}
+          onTouchEnd={openPopup}
           onMouseDown={openPopup}
           style={{
             position: "fixed",
-            top: Math.min(vh - 48, bubble.yBottom + 10),
-            left: Math.min(Math.max(8, bubble.x - 60), vw - 130),
+            ...bubblePosition(bubble, vw, vh),
             zIndex: 200,
-            display: "flex", alignItems: "center", gap: 6,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            minWidth: 44, minHeight: 44,
             padding: "6px 12px", borderRadius: 16,
             border: `1.5px solid ${COLORS.border}`, background: COLORS.heading, color: "#fff",
             fontFamily: mono, fontSize: 12, fontWeight: 700, cursor: "pointer",
             boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
+            // Touch ergonomics: no 300ms delay / double-tap-zoom on the button,
+            // and the button's own glyph isn't treated as selectable text (so a
+            // tap on it can't be re-read as a new selection gesture).
+            touchAction: "manipulation",
+            WebkitUserSelect: "none", userSelect: "none",
+            WebkitTapHighlightColor: "transparent",
           }}
         >
           📖 {bubble.word}
@@ -140,8 +248,7 @@ export default function WordLookup({ trackCall }) {
             style={{
               position: "fixed",
               zIndex: 200,
-              top: Math.min(Math.max(12, popup.yBottom + 12), Math.max(12, vh - 260)),
-              left: Math.min(Math.max(12, popup.x - 150), Math.max(12, vw - 312)),
+              ...cardPosition(popup, vw, vh),
               width: Math.min(300, vw - 24),
               background: COLORS.card,
               border: `1px solid ${COLORS.border}`,
