@@ -3,7 +3,8 @@ import { COLORS, FONTS_LINK, writingTypes, getExamRules } from "./constants.js";
 import { keyframes, sharedStyles as s } from "./styles.js";
 import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
-import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt } from "./prompts.js";
+import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt } from "./prompts.js";
+import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
 import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import WordLookup from "./components/WordLookup.jsx";
@@ -17,7 +18,7 @@ import GrammarLog from "./components/GrammarLog.jsx";
 import StyleLab from "./components/StyleLab.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import TrainingSession from "./components/TrainingSession.jsx";
-import { generateTitle, topicBrief, swapTitleTypePrefix } from "./titleGenerator.js";
+import { generateTitle, swapTitleTypePrefix } from "./titleGenerator.js";
 import { detectFormatCue, typeLabelOf } from "./genre-cues.js";
 import { nextHeaderCollapsed } from "./header-collapse.js";
 
@@ -107,9 +108,12 @@ export default function Lyra() {
   const [editingProjectName, setEditingProjectName] = useState("");
   const [expandedProjects, setExpandedProjects] = useState({ "default": true });
 
-  // Welcome
+  // Welcome (§43): the opening greeting is now a model-generated message[0],
+  // not a template banner. typedWelcome guards "generate once per session open".
   const typedWelcome = useRef(false);
-  const [welcomeText, setWelcomeText] = useState("");
+  // True when the generated greeting itself raised a genre-cue mismatch — the
+  // separate §28 banner then defers to it. Persisted per writing.
+  const [welcomeHandledCue, setWelcomeHandledCue] = useState(false);
 
   // Genre-mismatch tripwire: the student's decision for THIS writing
   // ("switched:<type>" | "kept:<type>" | null), persisted on the writing
@@ -228,10 +232,10 @@ export default function Lyra() {
     setProjects(prev => prev.map(p => ({
       ...p,
       writings: p.writings.map(w => w.id === activeWritingId ? {
-        ...w, title, draft, messages, topic, type, wordCount, purpose, genreCueDecision, updatedAt: new Date().toISOString(),
+        ...w, title, draft, messages, topic, type, wordCount, purpose, genreCueDecision, welcomeHandledCue, updatedAt: new Date().toISOString(),
       } : w)
     })));
-  }, [activeWritingId, title, draft, messages, topic, type, wordCount, purpose, genreCueDecision, screen]);
+  }, [activeWritingId, title, draft, messages, topic, type, wordCount, purpose, genreCueDecision, welcomeHandledCue, screen]);
 
   const saveTimer = useRef(null);
   useEffect(() => {
@@ -246,7 +250,7 @@ export default function Lyra() {
   const saveNewWriting = useCallback((projectId = "default", overrideTitle) => {
     const id = "w_" + Date.now();
     const writing = {
-      id, title: overrideTitle || title, topic, type, wordCount, purpose, draft, messages,
+      id, title: overrideTitle || title, topic, type, wordCount, purpose, draft, messages, welcomeHandledCue,
       sourceText: sourceText || undefined,
       sourceAnalysis: sourceAnalysis || undefined,
       createdAt: new Date().toISOString(),
@@ -255,12 +259,13 @@ export default function Lyra() {
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, writings: [writing, ...p.writings] } : p));
     setActiveWritingId(id);
     return id;
-  }, [title, topic, type, wordCount, purpose, draft, messages, sourceText, sourceAnalysis]);
+  }, [title, topic, type, wordCount, purpose, draft, messages, welcomeHandledCue, sourceText, sourceAnalysis]);
 
   const loadWriting = useCallback((writing) => {
     setTopic(writing.topic || "");
     setType(writing.type || null);
     setGenreCueDecision(writing.genreCueDecision || null);
+    setWelcomeHandledCue(writing.welcomeHandledCue || false);
     setWordCount(writing.wordCount || null);
     setPurpose(writing.purpose || null);
     setTitle(writing.title || "Untitled");
@@ -271,8 +276,13 @@ export default function Lyra() {
     setActiveWritingId(writing.id);
     setScreen("app");
     setTab("preview");
-    typedWelcome.current = true;
-    setWelcomeText("");
+    // §43: an existing writing keeps its persisted greeting (messages[0]) — but
+    // if it somehow has NO messages (e.g. the +500ms saveNewWriting snapshot
+    // raced ahead of the streamed greeting and the student navigated away before
+    // autoSave caught up), regenerate a fresh greeting instead of opening to a
+    // permanently empty chat.
+    typedWelcome.current = (writing.messages || []).length > 0;
+    chatAbortRef.current?.abort(); // cancel any in-flight greeting/turn from the prior writing
     setTypingMsg(null);
     setSuggestions(null);
     setProofread(null);
@@ -339,8 +349,9 @@ export default function Lyra() {
     setTitle("Untitled");
     setHeaderCollapsed(false);
     setTitleExpanded(false);
-    typedWelcome.current = false;
-    setWelcomeText("");
+    typedWelcome.current = false;          // §43: New regenerates a fresh greeting
+    setWelcomeHandledCue(false);
+    chatAbortRef.current?.abort();         // cancel any in-flight greeting/turn
     setTypingMsg(null);
     setSuggestions(null);
     setProofread(null);
@@ -437,19 +448,61 @@ Rules:
   }, [miniLesson, trackCall]);
 
   // Welcome message
+  // §43 — Generated, in-voice opening greeting, STREAMED as messages[0], with
+  // the template (FALLBACK_WELCOME) as the failure floor. Fires ONCE per
+  // session open and ONLY when the chat is empty — an EXISTING writing keeps
+  // its persisted first message (messages already populated → skip), while
+  // "New" clears messages + typedWelcome so a fresh greeting generates.
   useEffect(() => {
-    if (screen === "app" && !typedWelcome.current) {
-      typedWelcome.current = true;
-      setTimeout(() => {
-        const nameGreeting = userName ? `Hey ${userName}! ` : "Hello! ";
-        const sourceNote = sourceAnalysis && appliedSkill ? `\n\nYou studied ${appliedSkill.authorName}'s writing and extracted ${extractedSkills?.length || "several"} techniques — I'll ground my coaching in those techniques as we work.` : "";
-        const skillNote = !sourceAnalysis && appliedSkill ? `\n\nI see you've been studying ${appliedSkill.authorName}'s style — great choice for this piece! I'll weave in their techniques as we work.` : "";
-        const techNote = !sourceAnalysis && writingTechniques?.length ? `\n\nI've researched ${writingTechniques.length} writing techniques for your ${typeLabel.toLowerCase()} — check the ✦ Tips button in the editor to review them anytime.` : "";
-        const examNote = purpose && purpose !== "personal" && purpose !== "school" ? `\n\nI'm following ${purpose.toUpperCase()} exam conventions — my suggestions will respect the marking criteria.` : "";
-        const msg = `${nameGreeting}I'm Lyra, your writing coach. You're working on a ${typeLabel.toLowerCase()}: ${topicBrief(topic, 120) || topic} — aiming for ${wcLabel} words. I'll guide you through every step, but remember: every word will be yours.${sourceNote}${skillNote}${techNote}${examNote}\n\nLet's start! Would you like me to outline the structure for your ${typeLabel.toLowerCase()}, or do you want to brainstorm ideas first?`;
-        setWelcomeText(msg);
-      }, 100);
-    }
+    if (screen !== "app" || typedWelcome.current || messages.length > 0) return;
+    typedWelcome.current = true;
+    (async () => {
+      const route = getRouteConfig("welcome");
+      const rawCue = detectFormatCue(topic);
+      const cue = (rawCue && type && rawCue.typeId !== type) ? rawCue : null; // mismatch only
+      const fallbackArgs = { name: userName, type: typeLabel, topic, wordCount: wcLabel };
+      if (cue) setWelcomeHandledCue(true); // optimistic — the greeting is told to raise it
+      const abortCtrl = new AbortController();
+      chatAbortRef.current = abortCtrl;
+      let firstChunk = true;
+      trackCall();
+      setChatLoading(true);
+      try {
+        const full = await callAI(
+          buildWelcomePrompt({ name: userName, type: typeLabel, purpose, wordCount: wcLabel, topic, cue }),
+          "(The student just opened the session — write your opening greeting now.)",
+          false, 1024, route.thinkingBudget,
+          (partial) => {
+            if (!partial) return;
+            if (firstChunk) { firstChunk = false; setChatLoading(false); }
+            setMessages(prev => [{ role: "ai", text: partial }, ...prev.slice(1)]);
+          },
+          abortCtrl.signal, route.model
+        );
+        // Ownership guard: if the student already sent a message while the
+        // greeting streamed, sendChat has taken over chatAbortRef — don't clear
+        // ITS spinner or flip banner state from this orphaned greeting. The
+        // messages[0] finalize is safe (it only fixes the greeting text).
+        const stillMine = chatAbortRef.current === abortCtrl;
+        if (stillMine) chatAbortRef.current = null;
+        const text = chooseWelcome(full, null, fallbackArgs);
+        setMessages(prev => [{ role: "ai", text }, ...prev.slice(1)]);
+        if (stillMine) {
+          setChatLoading(false);
+          setWelcomeHandledCue(shouldSuppressWelcomeBanner(!!cue, !!(full && full.trim())));
+        }
+      } catch (e) {
+        const stillMine = chatAbortRef.current === abortCtrl;
+        if (stillMine) chatAbortRef.current = null;
+        if (e.name === "AbortError") return; // navigated away mid-greeting — leave it
+        setMessages(prev => [{ role: "ai", text: FALLBACK_WELCOME(fallbackArgs) }, ...prev.slice(1)]);
+        if (stillMine) {
+          setChatLoading(false);
+          setWelcomeHandledCue(false); // template is genre-blind → keep the §28 banner
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   // Finalize typewriter when switching away from chat tab
@@ -513,10 +566,9 @@ Rules:
     chatAbortRef.current = abortCtrl;
 
     try {
-      // Build conversation history with roles so Lyra knows who said what
-      const allMsgs = [];
-      if (welcomeText) allMsgs.push({ role: "ai", text: welcomeText });
-      allMsgs.push(...messages);
+      // Build conversation history with roles so Lyra knows who said what.
+      // The §43 greeting is messages[0], so it's already included here.
+      const allMsgs = [...messages];
       const history = allMsgs.length > 0
         ? "=== CONVERSATION SO FAR ===\n" + allMsgs.map(m => `${m.role === "user" ? "Student" : "Lyra"}: ${m.text}`).join("\n\n") + "\n=== END CONVERSATION ===\n\n"
         : "";
@@ -632,7 +684,7 @@ Rules:
         setMessages(prev => [...prev, { role: "ai", text: "I'm having trouble connecting. Please try again." }]);
       }
     }
-  }, [messages, welcomeText, draft, topic, typeLabel, wcLabel, currentWords, appliedSkill, writingTechniques, examRules, sourceAnalysis, extractedSkills, targetVoice]);
+  }, [messages, draft, topic, typeLabel, wcLabel, currentWords, appliedSkill, writingTechniques, examRules, sourceAnalysis, extractedSkills, targetVoice]);
 
   const stopChat = useCallback(() => {
     if (chatAbortRef.current) {
@@ -992,9 +1044,12 @@ Rules:
       </div>
 
       {/* Genre-mismatch banner: explicit format cue in the topic contradicts
-          the declared type. Dismiss persists per writing (genreCueDecision). */}
+          the declared type. Dismiss persists per writing (genreCueDecision).
+          §43: defers to the generated greeting when that raised the cue
+          (welcomeHandledCue) — only the genre-blind template fallback leaves
+          this banner as the safety net. */}
       {(() => {
-        if (genreCueDecision) return null;
+        if (genreCueDecision || welcomeHandledCue) return null;
         const cue = detectFormatCue(topic);
         if (!cue || !type || cue.typeId === type) return null;
         const mappedLabel = typeLabelOf(cue.typeId);
@@ -1029,7 +1084,7 @@ Rules:
             typingMsg={typingMsg} setTypingMsg={setTypingMsg}
             chatLoading={chatLoading} sendChat={sendChat} stopChat={stopChat}
             handleTypewriterDone={handleTypewriterDone}
-            welcomeText={welcomeText} typeLabel={typeLabel}
+            typeLabel={typeLabel}
             topic={topic} draft={draft} currentWords={currentWords}
             addToDraft={addToDraft}
             onScrollChange={(st) => setHeaderCollapsed(c => nextHeaderCollapsed(st, c))}

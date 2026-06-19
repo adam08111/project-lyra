@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { COLORS, QUICK_ACTION_MESSAGES } from "../constants.js";
 import { formatSources } from "../utils.js";
 import { sharedStyles as s } from "../styles.js";
-import { useTypewriter } from "../hooks.js";
 import { FeatherIcon } from "./Icons.jsx";
 import TypewriterBubble from "./TypewriterBubble.jsx";
 
@@ -19,7 +18,7 @@ const renderMd = (text) => {
 export default function ChatTab({
   messages, setMessages, typingMsg, setTypingMsg,
   chatLoading, sendChat, stopChat, handleTypewriterDone,
-  welcomeText, typeLabel, topic, draft, currentWords,
+  typeLabel, topic, draft, currentWords,
   onHelpMeStart, onDeploySkills, addToDraft, onSaveAchievement,
   onScrollChange,
 }) {
@@ -29,10 +28,10 @@ export default function ChatTab({
   const chatInputRef = useRef(null);
   const scrollRafRef = useRef(0);
   // §41: only USER scrolls may collapse the header. The auto-scroll effect
-  // below (welcome typewriter ticks + the on-reply anchor scroll) moves
-  // scrollTop programmatically and would otherwise collapse the header before
-  // the student ever touches it — hiding the new 2-line title on first
-  // impression. We stamp a short window around every programmatic scroll
+  // below (the streamed greeting messages[0] growing + the on-reply anchor
+  // scroll) moves scrollTop programmatically and would otherwise collapse the
+  // header before the student ever touches it — hiding the new 2-line title on
+  // first impression. We stamp a short window around every programmatic scroll
   // (smooth scrollIntoView animates across frames) and ignore scroll events
   // inside it.
   const autoScrollUntilRef = useRef(0);
@@ -54,8 +53,6 @@ export default function ChatTab({
   const [editingMsgIdx, setEditingMsgIdx] = useState(null);
   const [editingMsgText, setEditingMsgText] = useState("");
   const [activeMsgIdx, setActiveMsgIdx] = useState(null);
-
-  const tw = useTypewriter(welcomeText, 18);
 
   // Auto-scroll: when Lyra just replied (last message is AI, nothing is
   // pending), anchor on the student's MOST RECENT message so they read
@@ -85,7 +82,7 @@ export default function ChatTab({
       }
     }
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typingMsg, chatLoading, tw.displayed]);
+  }, [messages, typingMsg, chatLoading]);
 
   // Auto-resize textarea as user types
   useEffect(() => {
@@ -99,15 +96,8 @@ export default function ChatTab({
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div ref={chatScrollRef} onScroll={handleChatScroll} onClick={(e) => { if (e.target === e.currentTarget) setActiveMsgIdx(null); }} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
-        {/* Welcome message */}
-        {welcomeText && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 14, animation: "fadeUp 0.3s ease" }}>
-            <div style={{ marginTop: 4 }}><FeatherIcon size={16} /></div>
-            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: "4px 18px 18px 18px", padding: "12px 16px", fontSize: 14, lineHeight: 1.6, maxWidth: "85%", whiteSpace: "pre-wrap" }}>
-              {renderMd(tw.displayed)}{!tw.done && <span style={{ animation: "blink 0.8s infinite", color: COLORS.accent1 }}>|</span>}
-            </div>
-          </div>
-        )}
+        {/* §43: the opening greeting is messages[0] (generated + streamed), so
+            it renders below like any coaching turn — no separate welcome banner. */}
 
         {/* Messages */}
         {messages.map((m, i) => (

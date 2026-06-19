@@ -1663,3 +1663,29 @@ Chat replied "I'm having trouble connecting. Please try again." (the `callAI` ca
 ### 42.3 Verification
 Restarted the hardened proxy; **live end-to-end from the preview browser** (`fetch('/api/gemini', …)` — the exact `callAI` path): **HTTP 200 in ~5s with a real coaching reply** — no more "trouble connecting." Build clean.
 
+---
+
+## 43. UPDATE — 19 June 2026 — Generated, in-voice opening greeting (template → fallback only)
+
+(The spec called this §35; the report is at §42, so it lands as **§43**.)
+
+### 43.1 The bug
+Lyra's opening message was a fixed template with `{type}`/`{topic}` interpolated — **word-for-word identical every session** ("Hello! I'm Lyra, your writing coach… every word will be yours. I'm following HKDSE conventions… outline or brainstorm?"). A 14-year-old feels the absence of a mind instantly. It was also genre-blind (printed "a business email about 'write a letter to editor…'").
+
+### 43.2 Unit 1 — a dedicated welcome route + prompt
+`ai-router.js`: new `welcome: { model: MODELS.flash, thinkingBudget: 512, brain: true }` — deliberately **flash, not pro** (a greeting fires on every session open; a class of 40 = 40 calls — keep it cheap), `brain:true` so it's unmistakably Lyra's voice. `prompts.js`: `buildWelcomePrompt({name,type,purpose,wordCount,topic,cue})` prepends `LYRA_BRAIN` and instructs a 60–90-word in-voice greeting: greet BY NAME if given (never invent one), react to THIS topic specifically (not generic praise), a warm GENRE CHECK **only when a mismatch cue is passed**, varied conversational next steps, hard limits (no boilerplate / hollow praise / never-write-for-them). Prose, not JSON.
+
+### 43.3 Unit 2 — wired on session start, STREAMED, template as the floor
+The greeting is now **`messages[0]`** (a real AI turn), not the old ephemeral `welcomeText` banner. A `useEffect` (deps `[screen]`) fires ONCE per open (`!typedWelcome.current && messages.length === 0`) and STREAMS via `callAI(..., onChunk)` into `messages[0]` (`setMessages(prev => [{role:"ai",text:partial}, ...prev.slice(1)])`), `chatLoading` true until the first chunk. **Fallback floor** (`welcome.js`): `chooseWelcome(text, error, fallbackArgs)` returns the generated text unless error/empty → the kept template `FALLBACK_WELCOME(...)` — never a blank chat, never the raw error string. **Generate-once / persistence:** the greeting rides the existing `messages` autoSave; `resetToNew` (New) clears `messages` + `typedWelcome=false` → regenerate; `loadWriting` keeps the persisted greeting (`typedWelcome = messages.length > 0` — self-heals to a fresh greeting only if a writing somehow has no messages). The `welcomeText` state + the ChatTab welcome banner + its typewriter were removed (now dead). **§41 preserved** — the streamed greeting drives the same auto-scroll + suppression via `messages`; the removed `tw.displayed` dep was the typewriter that's now gone.
+
+### 43.4 Unit 3 — the genre banner defers to the greeting
+New `welcomeHandledCue` state, **persisted per writing**. Set optimistically true when a mismatch cue is present (so the §28 banner doesn't flash during a successful generation), corrected to false on fallback. The §28 banner returns null when `genreCueDecision || welcomeHandledCue` — the warm in-greeting version wins; only the genre-blind template fallback leaves the banner as the safety net. Pure `shouldSuppressWelcomeBanner(cuePresent, welcomeSucceeded)`.
+
+### 43.5 Unit 4 — systemic templates left alone
+Confirmed untouched and still deterministic: the "Switched to {type}" notice (§29), the "trouble connecting" error string (§42), toasts. **Principle: Lyra's COACHING VOICE = always the model; SYSTEM NOTICES = deterministic.** Only the welcome moved from canned to generated.
+
+### 43.6 Adversarial review + verification
+A pre-commit review (regression / welcome-edge / persistence lenses) returned **safe to commit, 0 must-fix** and confirmed §41 intact. Two minor nice-to-haves applied: (a) an **ownership guard** so a greeting that resolves AFTER the student has already sent a message doesn't clear that turn's spinner / flip banner state; (b) the **self-heal** on `loadWriting` above. Documented residuals (low-risk): no stop button during the greeting stream (matches pre-§43); optimistic `welcomeHandledCue` not corrected if an SSE hangs with no chunks; the banner trusts a successful call honoured the GENRE CHECK (model-compliance trade).
+
+**298 tests green** (+12: `buildWelcomePrompt` includes name/topic/type + genre-check-when-cue / omit-when-none + brevity constraints; `welcome` route = flash + brain; `chooseWelcome` fallback on error/empty; `shouldSuppressWelcomeBanner`). Build clean. **Live-verified (real flash + pro calls):** greeting streams into `messages[0]`, "Hi Mei!" by name, topic-specific, 60–90 words, NOT the template, different per topic; a letter-to-editor topic on Exam Essay → the greeting warmly raises the mismatch AND the §28 banner is suppressed; forcing `/api/gemini` to fail → the template fallback prints (not blank, not the error); greeting + `welcomeHandledCue` persist as `messages[0]`; a normal next message still coaches.
+
