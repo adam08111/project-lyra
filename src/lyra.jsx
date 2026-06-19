@@ -126,6 +126,9 @@ export default function Lyra() {
   const wcLabel = wordCount === "600+" ? "600+" : wordCount;
   // §41: the header collapses to a compact row only while scrolled into the chat.
   const headerCondensed = tab === "chat" && headerCollapsed;
+  // Leaving chat resets the collapse: re-entering lands at the top of the
+  // thread, so the header should be expanded — not a stale collapsed row.
+  useEffect(() => { if (tab !== "chat") setHeaderCollapsed(false); }, [tab]);
   const currentWords = draft.trim() ? draft.trim().split(/\s+/).length : 0;
   const targetNum = wordCount === "600+" ? 600 : (wordCount || 100);
   const progress = Math.min(100, (currentWords / targetNum) * 100);
