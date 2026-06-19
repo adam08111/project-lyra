@@ -21,11 +21,36 @@ export default function ChatTab({
   chatLoading, sendChat, stopChat, handleTypewriterDone,
   welcomeText, typeLabel, topic, draft, currentWords,
   onHelpMeStart, onDeploySkills, addToDraft, onSaveAchievement,
+  onScrollChange,
 }) {
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef(null);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
+  const scrollRafRef = useRef(0);
+  // §41: only USER scrolls may collapse the header. The auto-scroll effect
+  // below (welcome typewriter ticks + the on-reply anchor scroll) moves
+  // scrollTop programmatically and would otherwise collapse the header before
+  // the student ever touches it — hiding the new 2-line title on first
+  // impression. We stamp a short window around every programmatic scroll
+  // (smooth scrollIntoView animates across frames) and ignore scroll events
+  // inside it.
+  const autoScrollUntilRef = useRef(0);
+
+  // §41: report scrollTop up so the parent can collapse the chat header.
+  // rAF-throttled — at most one update per frame — and suppressed during
+  // programmatic auto-scroll. The pure hysteresis decision lives in
+  // header-collapse.js.
+  const handleChatScroll = () => {
+    if (!onScrollChange || scrollRafRef.current) return;
+    if (Date.now() < autoScrollUntilRef.current) return; // programmatic scroll — not a user gesture
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      const el = chatScrollRef.current;
+      if (el) onScrollChange(el.scrollTop);
+    });
+  };
+  useEffect(() => () => { if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current); }, []);
   const [editingMsgIdx, setEditingMsgIdx] = useState(null);
   const [editingMsgText, setEditingMsgText] = useState("");
   const [activeMsgIdx, setActiveMsgIdx] = useState(null);
@@ -44,6 +69,10 @@ export default function ChatTab({
   useEffect(() => {
     const container = chatScrollRef.current;
     if (!container) return;
+    // §41: this effect's scrolls are programmatic — mark a window so the header
+    // collapse handler ignores them (smooth scrollIntoView animates across
+    // frames, so the window must outlast a single tick).
+    autoScrollUntilRef.current = Date.now() + 600;
     const lastMsg = messages[messages.length - 1];
     if (lastMsg && lastMsg.role === "ai" && !typingMsg && !chatLoading) {
       const userBubbles = container.querySelectorAll('[data-msg-role="user"]');
@@ -69,7 +98,7 @@ export default function ChatTab({
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div ref={chatScrollRef} onClick={(e) => { if (e.target === e.currentTarget) setActiveMsgIdx(null); }} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
+      <div ref={chatScrollRef} onScroll={handleChatScroll} onClick={(e) => { if (e.target === e.currentTarget) setActiveMsgIdx(null); }} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
         {/* Welcome message */}
         {welcomeText && (
           <div style={{ display: "flex", gap: 8, marginBottom: 14, animation: "fadeUp 0.3s ease" }}>
