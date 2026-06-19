@@ -20,12 +20,13 @@ export function bubblePosition(anchor, vw, vh) {
     left: Math.min(Math.max(8, anchor.x - 60), vw - 130),
   };
 }
-// cardW is the ACTUAL (border-box) card width. Clamp BOTH edges: left ≥ 12 and
-// right = left + cardW ≤ vw − 12. With a viewport-capped width both always hold,
-// so the × (pinned in the card's right padding) can never run off-screen.
+// cardW is the ACTUAL (border-box) card width. Clamp BOTH edges to a 16px screen
+// gutter: left ≥ 16 and right = left + cardW ≤ vw − 16. §40: widened from 12→16 so
+// the card (and the × in its right padding) sits further from the phone edge — the
+// 12px gutter left the × ~19px from the edge, inside the iOS back-swipe zone.
 export function cardPosition(anchor, vw, vh, cardW) {
   const w = Math.max(0, cardW || 0);
-  const left = Math.min(Math.max(12, anchor.x - w / 2), Math.max(12, vw - 12 - w));
+  const left = Math.min(Math.max(16, anchor.x - w / 2), Math.max(16, vw - 16 - w));
   const top = Math.min(Math.max(12, anchor.yBottom + 12), Math.max(12, vh - 260));
   return { top, left, width: w };
 }
@@ -205,9 +206,9 @@ export default function WordLookup({ trackCall }) {
   const vvp = (typeof window !== "undefined" && window.visualViewport) || null;
   const vw = vvp ? vvp.width : (typeof window !== "undefined" ? window.innerWidth : 360);
   const vh = vvp ? vvp.height : (typeof window !== "undefined" ? window.innerHeight : 640);
-  // Card width: cap at 360 but NEVER exceed the viewport minus a 12px gutter
-  // each side. With box-sizing:border-box this IS the rendered width.
-  const cardW = Math.min(360, vw - 24);
+  // Card width: cap at 360 but NEVER exceed the viewport minus a 16px gutter
+  // each side (§40). With box-sizing:border-box this IS the rendered width.
+  const cardW = Math.min(360, vw - 32);
 
   // On-device diagnostics (phones often have no devtools). Enable by visiting
   // ?wldebug=1 — the overlay shows whether selection→bubble fired (rules A
@@ -266,7 +267,7 @@ export default function WordLookup({ trackCall }) {
               zIndex: 200,
               boxSizing: "border-box", // width INCLUDES padding+border — so it actually fits
               ...cardPosition(popup, vw, vh, cardW),
-              maxWidth: "calc(100vw - 24px)",
+              maxWidth: "calc(100vw - 32px)",
               background: COLORS.card,
               border: `1px solid ${COLORS.border}`,
               borderLeft: `3px solid ${COLORS.blue}`,
@@ -295,7 +296,12 @@ export default function WordLookup({ trackCall }) {
                     {saved ? "★ Saved · 已儲存" : "☆ Save · 儲存"}
                   </button>
                 )}
-                <button onClick={close} aria-label="close" style={{ border: "none", background: "transparent", color: COLORS.muted, cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 0, minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: -10, marginRight: -8, touchAction: "manipulation" }}>×</button>
+                {/* §40: un-tuck from the corner. §39's negative margins (marginRight:-8/marginTop:-10)
+                    pinned the × right-edge ~19px from the screen edge — inside the iOS back-swipe zone and
+                    unreachable by finger on a real phone. Now a visible, bordered 44×44 button that sits
+                    INSIDE the card padding (right edge ~26px from the screen edge, centre ~48px), so it
+                    reads as a real button and clears the edge gesture zone. */}
+                <button onClick={close} aria-label="close" style={{ border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: "pointer", fontSize: 22, lineHeight: 1, padding: 0, minWidth: 44, minHeight: 44, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, touchAction: "manipulation" }}>×</button>
               </div>
             </div>
 

@@ -1595,3 +1595,26 @@ Three independent exits now: the on-screen **×**, a full-viewport **backdrop** 
 ### 39.4 Verification
 **281 tests green** (+4 net: `cardPosition` width ≤ vw-24, left ≥ 12, **right ≤ vw-12** across mid/far-left/far-right/bottom selections and 280/320px viewports, plus the 360 desktop cap). Build clean. **Live-verified at 320px**: card = left 12 / right 308 / width 296 (= vw-24), fully on-screen; **× at 44×44, fully visible and tappable**; meaning + example wrap inside. Both exits close the card (× ✓, backdrop ✓); a width change (rotation 320→700) **dismisses** it (no off-screen ×). No console errors. Final confirmation remains a real device tap.
 
+---
+
+## 40. UPDATE — 19 June 2026 — Word-card × was on the screen edge, unreachable by finger on a real phone (§39 follow-up)
+
+### 40.1 The bug (user, on their phone)
+After §39 fixed the × running OFF a narrow viewport, the × close button was on-screen but **jammed against the phone's edge — physically impossible to tap with a finger**. The student was still trapped in the card. §39 verified only that the *card* fit the viewport; it never measured the *button's* distance from the edge — a fitting card can still pin its × on the bezel.
+
+### 40.2 Root cause
+§39 deliberately pulled the × into the top-right corner with negative margins (`marginRight:-8, marginTop:-10`, "keep it visually tucked in the corner") and rendered it as a borderless, transparent 20px glyph. Measured live at 375px: the × right edge sat **19px from the screen edge — inside the iOS back-swipe gesture zone** (~0–20px, which swallows taps), as a tiny faint target in the hardest-to-reach corner. The §39 card-fit guarantee (right ≤ vw−12) was true and beside the point.
+
+### 40.3 Fix (`src/components/WordLookup.jsx`)
+- **Un-tuck the ×:** removed the negative margins so the button sits INSIDE the card's right padding, and made it a **visible bordered 44×44 button** (card bg, 1px border, 10px radius, 22px glyph) — a real, aimable target, not a faint corner glyph.
+- **Wider screen gutter (12 → 16px):** `cardPosition` now clamps to left ≥ 16 / right ≤ vw−16, with `cardW = min(360, vw−32)` and `maxWidth: calc(100vw−32px)`, so the card (and the × in its padding) sits further off the bezel. The gutter is width-independent, so the clearance holds at every phone width.
+
+### 40.4 Verification (measured live, driving the real DOM at 375px and 320px)
+| | Before (§39) | After (§40) |
+|---|---|---|
+| × right edge → screen edge | 19px (in swipe zone) | **31px** (clear of iOS & Android zones) |
+| × centre → screen edge | 41px | **53px** |
+| Target | transparent 20px glyph, corner-flush | bordered 44×44 button, inset |
+
+Clicking the × closes the card (verified). **281 tests green** (the §39 positioning suite retargeted to the 16px gutter: width ≤ vw−32, left ≥ 16, **right ≤ vw−16**; same case matrix). Build clean. Final confirmation is a finger tap on the user's phone.
+

@@ -28,10 +28,11 @@ describe("bubblePosition — 📖 bubble sits below the selection, clamped on-sc
   });
 });
 
-// Card width mirrors the component: min(360, vw - 24), box-sizing border-box.
-const cardW = (vw) => Math.min(360, vw - 24);
+// Card width mirrors the component: min(360, vw - 32), box-sizing border-box.
+// §40: gutter widened 12→16px each side so the × clears the phone edge / iOS swipe zone.
+const cardW = (vw) => Math.min(360, vw - 32);
 
-describe("cardPosition — card ALWAYS fits the viewport (× stays reachable)", () => {
+describe("cardPosition — card sits a 16px gutter off the screen edge (× reachable by finger)", () => {
   const cases = [
     { name: "mid-screen", vw: 390, vh: 844, x: 200, yBottom: 400 },
     { name: "far-left selection", vw: 390, vh: 844, x: 5, yBottom: 300 },
@@ -41,12 +42,12 @@ describe("cardPosition — card ALWAYS fits the viewport (× stays reachable)", 
     { name: "very narrow 280", vw: 280, vh: 600, x: 270, yBottom: 100 },
   ];
   for (const c of cases) {
-    it(`${c.name}: width ≤ vw-24, left ≥ 12, RIGHT edge ≤ vw-12`, () => {
+    it(`${c.name}: width ≤ vw-32, left ≥ 16, RIGHT edge ≤ vw-16`, () => {
       const w = cardW(c.vw);
       const p = cardPosition({ x: c.x, yBottom: c.yBottom }, c.vw, c.vh, w);
-      expect(p.width).toBeLessThanOrEqual(c.vw - 24);
-      expect(p.left).toBeGreaterThanOrEqual(12);
-      expect(p.left + p.width).toBeLessThanOrEqual(c.vw - 12); // the bug: right edge on-screen
+      expect(p.width).toBeLessThanOrEqual(c.vw - 32);
+      expect(p.left).toBeGreaterThanOrEqual(16);
+      expect(p.left + p.width).toBeLessThanOrEqual(c.vw - 16); // right edge off the screen edge
       expect(p.top).toBeGreaterThanOrEqual(12);
       expect(p.top).toBeLessThanOrEqual(Math.max(12, c.vh - 260));
     });
@@ -59,6 +60,6 @@ describe("cardPosition — card ALWAYS fits the viewport (× stays reachable)", 
   it("caps width at 360 on a wide desktop viewport, still on-screen", () => {
     const p = cardPosition({ x: 600, yBottom: 300 }, 1200, 800, cardW(1200));
     expect(p.width).toBe(360);
-    expect(p.left + p.width).toBeLessThanOrEqual(1200 - 12);
+    expect(p.left + p.width).toBeLessThanOrEqual(1200 - 16);
   });
 });
