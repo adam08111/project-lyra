@@ -631,7 +631,7 @@ Rules:
         targetVoice: targetVoice || appliedSkill.signatureStyle || "",
         techniqueCount: extractedSkills?.length || appliedSkill.analysedTechniques?.length || 0,
       } : null;
-      const baseSysPrompt = scaffolding ? buildScaffoldingPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj) : buildCoachPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj);
+      const baseSysPrompt = scaffolding ? buildScaffoldingPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj) : buildCoachPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj, useSearch);
       const sysPrompt = antiBiasPrefix ? baseSysPrompt + antiBiasPrefix : baseSysPrompt;
       let result = await callAI(sysPrompt, fullMsg, useSearch, 4096, chatRoute.thinkingBudget, undefined, abortCtrl.signal, chatRoute.model);
 

@@ -285,8 +285,8 @@ describe("exam rules integration", () => {
   });
 });
 
-describe("buildCoachPrompt — search-grounded request modes", () => {
-  const p = buildCoachPrompt("cell phones at school", "Persuasive Writing", 500);
+describe("buildCoachPrompt — search-grounded request modes (searchActive=true)", () => {
+  const p = buildCoachPrompt("cell phones at school", "Persuasive Writing", 500, undefined, undefined, true);
   it("contains both mode blocks", () => {
     expect(p).toContain("BRAINSTORM MODE");
     expect(p).toContain("FIND-AN-EXAMPLE MODE");
@@ -298,6 +298,24 @@ describe("buildCoachPrompt — search-grounded request modes", () => {
   it("example mode forbids writing the linking sentence and blind searches", () => {
     expect(p).toContain("NEVER write the linking sentence");
     expect(p).toContain("do not search blind");
+  });
+});
+
+// §34/H11 — the "execute Google Search BEFORE answering" block must only appear
+// when a live search is actually attached; a plain typed turn must not be told
+// to search (it can't) and must be told not to fabricate.
+describe("buildCoachPrompt — search block is gated on searchActive", () => {
+  it("OFF by default: no search instruction, includes the no-search guidance", () => {
+    const p = buildCoachPrompt("cell phones at school", "Persuasive Writing", 500);
+    expect(p).not.toContain("execute Google Search");
+    expect(p).not.toContain("BRAINSTORM MODE");
+    expect(p).toContain("NO LIVE SEARCH THIS TURN");
+    expect(p).toContain("never invent facts");
+  });
+  it("ON when searchActive: includes the live-search instruction, drops the no-search guidance", () => {
+    const p = buildCoachPrompt("cell phones at school", "Persuasive Writing", 500, undefined, undefined, true);
+    expect(p).toContain("execute Google Search");
+    expect(p).not.toContain("NO LIVE SEARCH THIS TURN");
   });
 });
 
