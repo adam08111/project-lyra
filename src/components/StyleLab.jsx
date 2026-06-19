@@ -1060,29 +1060,25 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
   );
 }
 
-export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
-  const [activeTab, setActiveTab] = useState("analyze");
-  // Tab-history stack so the header ← steps back through the tabs the student
-  // visited, and only closes Style Lab (back to the previous screen) once
-  // there's no earlier tab left.
-  const [tabHistory, setTabHistory] = useState([]);
-  const goToTab = (key) => {
-    if (key === activeTab) return;
-    setTabHistory(h => [...h, activeTab]);
-    setActiveTab(key);
-  };
-  const goBack = () => {
-    if (tabHistory.length === 0) { setShowStyleLab(false); return; }
-    const prev = tabHistory[tabHistory.length - 1];
-    setTabHistory(tabHistory.slice(0, -1));
-    setActiveTab(prev);
-  };
+// §44: the Style Lab header exit reads its destination from context. With an
+// active writing open underneath, leaving returns there; otherwise to the start
+// screen. (Pure — exported for tests.)
+export function styleLabExitLabel(activeWritingId) {
+  return activeWritingId ? "Back to my writing" : "Back";
+}
 
-  // Jump to the requested tab when StyleLab opens; reset tab history on open/close.
+export default function StyleLab({ showStyleLab, setShowStyleLab, activeWritingId, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
+  const [activeTab, setActiveTab] = useState("analyze");
+  // §44: every tab is directly tappable in the five-noun bar, so tab switching
+  // is a plain setActiveTab — no history stack. The header ← is now a single,
+  // clearly-labelled EXIT (leaves Style Lab, returns to the page underneath),
+  // not an ambiguous tab-history back.
+  const goToTab = (key) => { if (key !== activeTab) setActiveTab(key); };
+
+  // Jump to the requested tab when StyleLab opens; reset to Analyse on close.
   useEffect(() => {
-    if (!showStyleLab) { setActiveTab("analyze"); setTabHistory([]); return; }
+    if (!showStyleLab) { setActiveTab("analyze"); return; }
     if (initialTab) setActiveTab(initialTab);
-    setTabHistory([]);
   }, [showStyleLab, initialTab]);
   const [referenceText, setReferenceText] = useState("");
   const [styleProfile, setStyleProfile] = useState("");
@@ -1253,12 +1249,20 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, maxWidth: 430, margin: "0 auto", background: COLORS.bg1, zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.25s ease" }}>
       {/* Header */}
       <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
-        <button onClick={goBack} title="Back" style={{ width: 32, height: 32, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, color: COLORS.muted }}>
-          &#x2190;
+        {/* §44: one unambiguous EXIT — leaves Style Lab and returns to the page
+            underneath (the active writing, or the start screen). The label names
+            the destination so it never reads as "back one tab". ≥44px tap target. */}
+        <button
+          onClick={() => setShowStyleLab(false)}
+          title="Leave Style Lab"
+          style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 44, padding: "8px 14px", borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, cursor: "pointer", fontFamily: "'Courier Prime', monospace", fontSize: 12, fontWeight: 700, color: COLORS.heading, flexShrink: 0 }}
+        >
+          <span style={{ fontSize: 16, lineHeight: 1 }}>&#x2190;</span>
+          <span style={{ whiteSpace: "nowrap" }}>{styleLabExitLabel(activeWritingId)}</span>
         </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 15, fontWeight: 700, color: COLORS.heading }}>Style Lab</div>
-          <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 15, fontWeight: 700, color: COLORS.heading, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Style Lab</div>
+          <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {hasProfile && authorName ? `Analysing: ${authorName}` : "Analyse & practise writing styles"}
           </div>
         </div>

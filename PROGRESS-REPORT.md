@@ -1717,3 +1717,22 @@ The fixed opening template (word-for-word identical; genre-blind) was the confir
 
 **302 tests green** (298 → +4: H3 false-positive, H2 chip rejection, H11 search-gating ×2). Build clean.
 
+---
+
+## 44. UPDATE — 19 June 2026 — Style Lab: one clear "exit to the page I came from" control
+
+### 44.1 The problem + the case
+Style Lab is a `showStyleLab` overlay over the current screen. Its top-left ← was a **hybrid** (closest to case (a)): `goBack` (StyleLab.jsx) popped a `tabHistory` stack when the student had moved between tabs, and only called `setShowStyleLab(false)` once that stack was empty. So it *did* exit — but ambiguously (sometimes "back a tab," sometimes "leave"), and on an empty tab (the screenshot's "No saved concepts yet") a student had no obvious way out. A correct label is impossible while the same button sometimes means "back one tab."
+
+### 44.2 The fix
+One unambiguous, destination-named exit, visible on EVERY tab:
+- The header control is now a labelled pill — **"← Back to my writing"** when an active writing is open underneath, else **"← Back"** (returns to the start screen). Context-awareness is free: `setShowStyleLab(false)` reveals whatever screen was underneath; the *label* removes the ambiguity. `activeWritingId` plumbed into all three `<StyleLab>` mounts (lyra.jsx); pure `styleLabExitLabel(activeWritingId)` exported + tested.
+- **Retired the tab-history back** (`tabHistory`/`goBack`): the §30 five-noun tab bar makes every tab one direct tap away, so the history-back was both redundant AND the source of the ambiguity. `goToTab` is now a plain `setActiveTab`. (Reported deviation from the literal case-(b) "keep the tab-back" — the tab-back is exactly what made leaving unclear.)
+- Matches the existing idiom (border + `COLORS.card` + Courier Prime, like the "New analysis" pill); ≥44px tap target (measured 73×44). The title block truncates (`ellipsis`) so the longer label never overflows.
+
+### 44.3 Strand-check (Step 2) — no confirm needed
+Verified `saveStyleSkill` fires **only on stream completion** (StyleLab.jsx — after the full `await` + a complete parse), **never** inside `onChunk` → a partial/half-written skill can never be persisted. On exit, `StyleLab` returns `null` but stays mounted, so an in-flight X-Ray simply finishes in the background and saves a *complete* skill — the least-destructive outcome (no data loss). So no confirm dialog, no abort: exiting mid-analysis is harmless.
+
+### 44.4 Verification
+**304 tests green** (+2: `styleLabExitLabel` active-writing vs start-screen). Build clean. **Live-verified at 375px (real preview):** opened from an active writing → header reads "← Back to my writing" on every tab (Analyse · Saved · Writers · Achievements · Report, incl. the empty "No saved concepts yet" state) → tap → returns to that writing, draft + chat intact; opened from the start screen (no active writing) → reads "← Back" → tap → start screen; exit present on all five tabs; 73×44 hit target; renders native (screenshot).
+
