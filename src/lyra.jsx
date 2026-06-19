@@ -111,6 +111,10 @@ export default function Lyra() {
   // Welcome (§43): the opening greeting is now a model-generated message[0],
   // not a template banner. typedWelcome guards "generate once per session open".
   const typedWelcome = useRef(false);
+  // §34/X2b: true while the greeting is generating — lets Stop clear the
+  // optimistic welcomeHandledCue (stopChat nulls chatAbortRef, so the catch's
+  // own ownership guard can't detect a Stop).
+  const welcomeStreamingRef = useRef(false);
   // True when the generated greeting itself raised a genre-cue mismatch — the
   // separate §28 banner then defers to it. Persisted per writing.
   const [welcomeHandledCue, setWelcomeHandledCue] = useState(false);
@@ -462,6 +466,7 @@ Rules:
       const cue = (rawCue && type && rawCue.typeId !== type) ? rawCue : null; // mismatch only
       const fallbackArgs = { name: userName, type: typeLabel, topic, wordCount: wcLabel };
       if (cue) setWelcomeHandledCue(true); // optimistic — the greeting is told to raise it
+      welcomeStreamingRef.current = true;
       const abortCtrl = new AbortController();
       chatAbortRef.current = abortCtrl;
       let firstChunk = true;
@@ -479,6 +484,7 @@ Rules:
           },
           abortCtrl.signal, route.model
         );
+        welcomeStreamingRef.current = false;
         // Ownership guard: if the student already sent a message while the
         // greeting streamed, sendChat has taken over chatAbortRef — don't clear
         // ITS spinner or flip banner state from this orphaned greeting. The
@@ -492,6 +498,7 @@ Rules:
           setWelcomeHandledCue(shouldSuppressWelcomeBanner(!!cue, !!(full && full.trim())));
         }
       } catch (e) {
+        welcomeStreamingRef.current = false;
         const stillMine = chatAbortRef.current === abortCtrl;
         if (stillMine) chatAbortRef.current = null;
         if (e.name === "AbortError") return; // navigated away mid-greeting — leave it
@@ -691,6 +698,9 @@ Rules:
       chatAbortRef.current.abort();
       chatAbortRef.current = null;
     }
+    // §34/X2b: Stopping the optimistic greeting (cue not yet raised) must release
+    // the §28 genre-banner suppression — otherwise it stays hidden all session.
+    if (welcomeStreamingRef.current) { welcomeStreamingRef.current = false; setWelcomeHandledCue(false); }
     setChatLoading(false);
     // If there's a typing message in progress, finish it immediately
     if (typingMsg) {
