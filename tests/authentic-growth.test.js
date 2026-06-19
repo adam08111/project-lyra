@@ -61,6 +61,16 @@ describe("isAuthenticGrowth — provenance validator", () => {
     expect(isMetaGrowthText("The student council should plant more trees.")).toBe(false);
   });
 
+  // §34/H2 — the static "Help me start" / "Skills" chips send as user messages;
+  // a growth entry whose `before` is one of them must never trophy.
+  it("rejects growth built on the Help-me-start / Skills chips (H2)", () => {
+    const helpStart = "I'm stuck and don't know how to start. Help me begin writing.";
+    const skills = "I have these writing skills saved:\n1. Writer A — concession then punch";
+    const realAfter = "The rain hammered the tin roof all night long.";
+    expect(isAuthenticGrowth({ before: helpStart, after: realAfter }, [helpStart])).toBe(false);
+    expect(isAuthenticGrowth({ before: skills, after: realAfter }, [skills])).toBe(false);
+  });
+
   it("accepts a real rewrite traceable to studentTexts", () => {
     expect(isAuthenticGrowth(REAL_REWRITE, ["The weather was very bad.", "some other note"])).toBe(true);
   });

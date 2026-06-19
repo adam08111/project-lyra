@@ -62,6 +62,11 @@ export const QUICK_ACTION_MESSAGES = [
   "Search the web for relevant facts, statistics, or examples I could use in my",
   "Help me brainstorm angles for this topic — ground them in real, recent examples I could build on.",
   "Find me a real example I could use to develop the point I'm working on.",
+  // §34/H2 — the two static "Help me start" / "Skills" chips also send as USER
+  // messages, so register them (the skills chip is a stable PREFIX; the rest is
+  // dynamic skill text) so a growth entry built on them can never trophy.
+  "I'm stuck and don't know how to start. Help me begin writing.",
+  "I have these writing skills saved:",
 ];
 
 export const wordCounts = [50, 100, 150, 200, 300, 400, 500, "600+"];
