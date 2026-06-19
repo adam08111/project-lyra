@@ -1719,7 +1719,7 @@ The fixed opening template (word-for-word identical; genre-blind) was the confir
 
 ---
 
-## 44. UPDATE — 19 June 2026 — Style Lab: one clear "exit to the page I came from" control
+## 44. UPDATE — 19 June 2026 — Style Lab: one clear "exit to the page I came from" control  _(nav approach SUPERSEDED by §45 — see correction)_
 
 ### 44.1 The problem + the case
 Style Lab is a `showStyleLab` overlay over the current screen. Its top-left ← was a **hybrid** (closest to case (a)): `goBack` (StyleLab.jsx) popped a `tabHistory` stack when the student had moved between tabs, and only called `setShowStyleLab(false)` once that stack was empty. So it *did* exit — but ambiguously (sometimes "back a tab," sometimes "leave"), and on an empty tab (the screenshot's "No saved concepts yet") a student had no obvious way out. A correct label is impossible while the same button sometimes means "back one tab."
@@ -1735,4 +1735,28 @@ Verified `saveStyleSkill` fires **only on stream completion** (StyleLab.jsx — 
 
 ### 44.4 Verification
 **304 tests green** (+2: `styleLabExitLabel` active-writing vs start-screen). Build clean. **Live-verified at 375px (real preview):** opened from an active writing → header reads "← Back to my writing" on every tab (Analyse · Saved · Writers · Achievements · Report, incl. the empty "No saved concepts yet" state) → tap → returns to that writing, draft + chat intact; opened from the start screen (no active writing) → reads "← Back" → tap → start screen; exit present on all five tabs; 73×44 hit target; renders native (screenshot).
+
+---
+
+## 45. UPDATE — 20 June 2026 — Style Lab nav floor (correction to §44): a view stack rooted at the X-Ray page
+
+§44 had the wrong mental model. The right one: the **X-Ray paste page is the ROOT and the FLOOR** of a view stack; the tabbed workspace (Analyse / Saved / Writers / Achievements / Report) opens DEEPER from it. So there is no "exit to my writing" — leaving is the hamburger → global drawer.
+
+### 45.1 The model (`StyleLab.jsx`)
+- **`stack`** of view keys; `stack[0]` is always `"analyze"` (the X-Ray root). `activeTab = stack[top]`; `atRoot = stack.length === 1`.
+- **Header:** at the floor → the **hamburger** (`☰`) which leaves Style Lab and opens the global drawer (`setShowStyleLab(false) + setSidebarOpen(true)`); no back control at the root. Above the floor → a compact **contextual back chevron** that pops ONE view, labelled by its destination: `‹ X-Ray` at the floor, `‹ Achievements`, `‹ Writers`, … One nav button only; ≥44px.
+- **Tab nav as a stack:** a new tab pushes; re-selecting a tab already in the stack **pops back to it** (no duplicates) → Achievements → Report → tap Achievements lands on Achievements. `back()` pops one; it's only reachable from the chevron, which only renders above the floor — so there is no exit-to-writing branch.
+- **History binding (corrected — see §45.1.1):** every level above the floor is mirrored by exactly ONE history entry carrying the full stack; going deeper pushes, and ALL backward motion (chevron, pop-to-existing, device/browser back) is driven through history, so the stack and history never desync. The device/browser back walks the stack down to the X-Ray page, then falls through (leaving Style Lab via the underlying app — never trapped).
+- Pure helpers `styleLabBackLabel(destKey)` and `nextStyleLabStack(stack, key)` exported + tested. `activeWritingId` (the §44 plumb) removed; `setSidebarOpen` plumbed into all 3 mounts.
+
+#### 45.1.1 History desync fixed (amendment)
+The first §45 cut pushed a history entry going forward but the chevron `back()` and pop-to-existing tab re-selection mutated the React stack **without** consuming the matching pushed entry, and an `initialTab` direct-open pushed nothing. Net: orphaned history entries — a device-back after a chevron-back could skip a level or over-pop, and a device-back from a directly-opened tab walked the **app's** history underneath instead of Style Lab's stack. Fix: each `pushState` now stores the FULL stack (`{ slStack }`); `popstate` restores exactly that stack (the floor/baseline entry has none → returns to the X-Ray root). The chevron and pop-to-existing now go **through** `history.back()` / `history.go(-Δ)` so every pushed entry is consumed in lockstep — stack length and history length stay equal at all times. Direct-open to a tab pushes one entry so its device-back pops to the root, not the underlying app. (Storing the whole stack also makes the browser FORWARD button restore the view.) StyleLab is the app's only `history` user — no router — so this is self-contained.
+
+### 45.2 Latent §44 bug fixed
+§44's `resetAll` still called `setTabHistory([])` after §44 had deleted the `tabHistory` state — a dangling reference that would crash "New analysis" (only reachable with a profile loaded, so it slipped past §44's verification). Now `resetAll` does `setStack(["analyze"])`. (Lesson: the §44/§39-class of runtime-only ReferenceErrors don't fail `vite build` or unit tests — they need a live render check, which §45 added.)
+
+### 45.3 Verification
+**309 tests green** (+5 net: `styleLabBackLabel` ×3, `nextStyleLabStack` push / pop-to-existing / pop-to-root / no-op). Build clean. **Live-verified on a fresh server at 375px:** root shows the hamburger and no back control; entering the workspace shows `‹ X-Ray`; Achievements → Report → back lands on Achievements; popping all the way returns to the X-Ray page (hamburger) — never a "my writing" screen; the workspace subtitle "Analyse & practise writing styles" renders in full (no truncation); the hamburger leaves Style Lab and opens the global drawer; **zero console errors.**
+
+**§45.1.1 amendment verification:** the history-sync correction changes only the *invisible* history bookkeeping — all four visible acceptance behaviors above are preserved (the chevron still pops one view, pop-to-existing still lands on the re-selected tab, pop-to-root still reveals the hamburger), traced step-by-step against the new push/`go(Δ)`/`slStack`-restore wiring. Re-verified: **309 tests green, `vite build` clean, and the dev server transforms `StyleLab.jsx` at runtime with no error** (the §45.2-class runtime check). The on-device *back-gesture* walk (device-back stepping the stack to the root, then falling through) was **not** driven live — the Chrome automation extension was offline at amend time — so the device-back path's final confirmation is a real back-gesture on the user's phone.
 
