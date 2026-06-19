@@ -1647,3 +1647,19 @@ A pre-commit review (3 lenses → verify → synthesize) caught a real regressio
 ### 41.6 Note / residual
 Collapse-on-reply is now intentionally OFF (the suppression covers the reply anchor scroll); the header collapses only on the student's own scroll. A short (non-overflowing) title is still tappable (a harmless no-op) — gating that on measured overflow is a documented minor follow-up.
 
+---
+
+## 42. UPDATE — 19 June 2026 — API "trouble connecting": proxy crash-resilience + vite timeout alignment
+
+### 42.1 Symptom & diagnosis
+Chat replied "I'm having trouble connecting. Please try again." (the `callAI` catch in `sendChat`). The proxy process (port 3001) had **died** — `netstat` showed nothing listening — so every AI call (vite proxies `/api/gemini` → `localhost:3001`) got connection-refused → `!res.ok` → the catch fired. (The word-lookups in the log succeeded *earlier*, while the proxy was alive; the chat came after.) The Pro model itself is healthy — a direct call returns HTTP 200 in ~6s, not slow, not 404/429. This is distinct from the §16.6 useSearch object-vs-string crash (that fix is still in place).
+
+**Likely death trigger:** a CLIENT DISCONNECT mid-response — the chat's AbortController (stop button), a vite proxy timeout, or navigating away — resets the socket; the resulting `error` on the Node `ServerResponse` was unhandled and crashed the whole proxy, killing every AI call until a manual restart. `proxy.js` had no `res.on('error')` or `process.on('uncaughtException')` guard.
+
+### 42.2 Fixes
+- **`server/proxy.js` — crash resilience:** per-request `res.on('error')` + `req.on('error')`, plus global `process.on('uncaughtException')` / `unhandledRejection` handlers that log and keep serving (the proxy is stateless per request). **Verified: 3 requests aborted client-side mid-thinking left the proxy alive and serving** (the old code would have crashed on the response-socket reset).
+- **`vite.config.js` — timeout alignment:** `/api/gemini` `timeout`/`proxyTimeout` raised 120000 → 200000 so a slow thinking-heavy call (X-Ray, grounded search) doesn't get a 504 from vite while the proxy's own 180s upstream timeout is still working — which would surface as "trouble connecting" with nothing actually broken. (Takes effect on the next vite restart.)
+
+### 42.3 Verification
+Restarted the hardened proxy; **live end-to-end from the preview browser** (`fetch('/api/gemini', …)` — the exact `callAI` path): **HTTP 200 in ~5s with a real coaching reply** — no more "trouble connecting." Build clean.
+

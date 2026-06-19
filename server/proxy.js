@@ -73,6 +73,13 @@ function recordRequest() {
 }
 
 const server = http.createServer((req, res) => {
+  // Resilience: a client disconnect (the chat's AbortController / stop button,
+  // a vite proxy timeout, or the user navigating away) resets the socket
+  // mid-response. Without this handler the resulting 'error' on the response
+  // is unhandled and crashes the WHOLE proxy — taking down every AI call until
+  // a manual restart (the "trouble connecting" outage). Log and keep serving.
+  res.on("error", (e) => console.error("[response error]", e?.code || e?.message || e));
+  req.on("error", (e) => console.error("[request error]", e?.code || e?.message || e));
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -331,6 +338,12 @@ const server = http.createServer((req, res) => {
     res.end("Not found");
   }
 });
+
+// Last-resort safety net: never let one stray throw or rejected promise kill
+// the proxy (which would silently break every AI call in the app). The proxy
+// is stateless per request, so logging and staying alive is the right trade.
+process.on("uncaughtException", (e) => console.error("[uncaughtException]", e?.stack || e?.message || e));
+process.on("unhandledRejection", (e) => console.error("[unhandledRejection]", e?.stack || e?.message || e));
 
 server.listen(3001, () => {
   console.log("\n🪶 Lyra API Proxy running on http://localhost:3001");
