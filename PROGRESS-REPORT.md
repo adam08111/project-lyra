@@ -1689,3 +1689,31 @@ A pre-commit review (regression / welcome-edge / persistence lenses) returned **
 
 **298 tests green** (+12: `buildWelcomePrompt` includes name/topic/type + genre-check-when-cue / omit-when-none + brevity constraints; `welcome` route = flash + brain; `chooseWelcome` fallback on error/empty; `shouldSuppressWelcomeBanner`). Build clean. **Live-verified (real flash + pro calls):** greeting streams into `messages[0]`, "Hi Mei!" by name, topic-specific, 60–90 words, NOT the template, different per topic; a letter-to-editor topic on Exam Essay → the greeting warmly raises the mismatch AND the §28 banner is suppressed; forcing `/api/gemini` to fail → the template fallback prints (not blank, not the error); greeting + `welcomeHandledCue` persist as `messages[0]`; a normal next message still coaches.
 
+---
+
+## 34. UPDATE — 19 June 2026 — Adversarial review of §26–§33 (verify-then-fix) + the welcome confirmation
+
+A workflow reviewed 8 feature areas (H1–H20 + X1–X3) — each hypothesis counter-cased against the real code, CONFIRMED findings independently re-verified, then synthesized. **20 code hypotheses: 6 CONFIRMED (1 major, 4 minor, 1 nit→downgraded), 14 REJECTED, 0 N/A.** Fixes applied in severity order (per-finding commits); **302 tests** (298 → +4).
+
+### 34.1 CONFIRMED + fixed
+| # | Sev | Finding | Fix (commit) |
+|---|-----|---------|------|
+| **H3** | major | `META_PATTERNS[0]` = `/\b(the\|this)\s+(student\|learner)\b/i` was noun-only → matched ordinary prose ("the student next to me", "this student represents…"); silently rejected legit rewrites in `isAuthenticGrowth` **and** the one-time boot purge irreversibly deleted matching growth-log/report entries. | Verb-anchored with a small auxiliary window (keeps "The student understands…" / "has learned"; drops noun-only). +1 test. `fd060f3` |
+| **H2** | minor | "Help me start" + "Skills" chips send as USER messages but weren't in `QUICK_ACTION_MESSAGES` → validator check-2 couldn't reject growth built on them. | Registered both (the skills chip as a stable prefix) in the validator-only block. +1 test. `69be5ea` |
+| **H11** | minor | The "execute Google Search BEFORE answering" block was unconditional in `buildCoachPrompt` → a typed "give me an example" (`useSearch=false`) produced search-shaped, source-less output. | `buildCoachPrompt(...searchActive)`; live-search modes only when true, else a no-fabrication / use-the-chips instruction. `sendChat` passes `useSearch`. +2 tests. `793f8ed` |
+| **X2b** | minor | Hitting **Stop** during the pre-first-chunk greeting left the optimistic `welcomeHandledCue=true` → §28 banner suppressed all session. (The review's `stillMine` fix doesn't work — `stopChat` nulls `chatAbortRef` first.) | `welcomeStreamingRef` lets `stopChat` release the suppression when it aborts a mid-stream greeting. `416eb54` |
+| **H5** | minor | The debounced structural-suggest effect read `typeLabel`/`examRules` but had deps `[draft, appliedSkill]` → a type switch within ~2.5s of a keystroke fired one suggestion with the PREVIOUS type's convention/formality. (H5's main worry — that coach/proofread/welcome snapshot the type — was REJECTED: they rebuild at call time.) | Added `typeLabel, examRules` to the effect deps. `2643cca` |
+| H20 | nit | **Downgraded to non-finding.** The reviewer read the meta-truncation comment as "backwards," but at `lyra.jsx:967-978` the order is `… · {apiCalls} calls · {wcLabel} words` — word count IS rightmost, so ellipsis drops it first, exactly as the comment ("type > API calls > word count") and the §41 spec state. Comment matches runtime. |
+
+### 34.2 REJECTED (14) — each held against its counter-case, file:line verified
+**H1** `studentTexts` passed at both call sites, fails-closed with a `console.warn`. **H4** purge is flag-guarded/idempotent, runs after `autoRestoreFromBackup`. **H5(main)** type switch DOES change coaching (coach/proofread/welcome read `examRules`+formality at build time). **H6** switch-notice only de-stacks a *consecutive* AI notice. **H7** title-prefix swap requires the exact `{label} — ` prefix. **H8** `genreCueDecision` persisted per writing, no re-nag. **H9** grounded sources unpacked + stashed end-to-end (the §42 fix intact). **H10** find-an-example asks first when no claim. **H12** training threads still reachable via Writers→SavedSkillDetail. **H13** zero dead `setTab` targets, no persisted ghost tab. **H14** "Use it" rehome = same deploy state. **H15/H16/H17** dictionary card fits at 320px, dual exits + z-order correct, word captured at render-time. **H18** genuine collapse hysteresis. **H19** `onScroll` on the correct inner container. **X2a/X2c** no duplicate greeting / no type↔cue persistence desync.
+
+### 34.3 Cross-cutting
+- **X1 (storage)** ✅ healthy — 15 KB, `snapshotBackup` warns on `QuotaExceededError` (`backup.js:72`), and `lyra-word-dictionary` + `lyra-annotation-glossary` are correctly absent from the 12-key `CRITICAL_KEYS` (`backup.js:26`).
+- **X3 (branch)** ⚠️ §40–§43 (now +§34) are committed **locally**, not pushed (the branch is ahead of `origin/main`). Reported for the user's decision — not auto-pushed.
+
+### 34.4 PART 2 — the templated welcome (CONFIRMED, major) — already built
+The fixed opening template (word-for-word identical; genre-blind) was the confirmed defect. **The replacement is §43** (generated, streamed, in-voice greeting; template as fallback floor; banner deferral) — it satisfies B1–B5 (route, prompt, streaming + fallback, banner deferral, 12 tests, 5 live checks). System notices ("Switched to {type}", "trouble connecting", toasts) confirmed and **left templated** — coaching voice = model, system notices = deterministic.
+
+**302 tests green** (298 → +4: H3 false-positive, H2 chip rejection, H11 search-gating ×2). Build clean.
+
