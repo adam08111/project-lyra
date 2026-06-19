@@ -559,7 +559,10 @@ Rules:
       } catch (e) { /* silent */ }
     }, 2500);
     return () => clearTimeout(sugTimer.current);
-  }, [draft, appliedSkill]);
+    // §34/H5: typeLabel + examRules are read inside (buildStructuralPrompt) — a
+    // type switch within the 2.5s debounce must reschedule with the new type's
+    // convention/formality block, not fire the previous type's snapshot.
+  }, [draft, appliedSkill, typeLabel, examRules]);
 
   const sendChat = useCallback(async (text, useSearch = false, scaffolding = false) => {
     if (!text.trim()) return;
