@@ -48,6 +48,19 @@ describe("isAuthenticGrowth — provenance validator", () => {
     expect(isAuthenticGrowth(g, ["The weather was very bad."])).toBe(false);
   });
 
+  // §34/H3 — the meta-regex must be verb-anchored: it flags Lyra's growth
+  // observations but NOT ordinary essay prose that merely names "the student".
+  it("isMetaGrowthText flags cognition observations, not noun-only prose (H3)", () => {
+    // still caught (Lyra observing growth)
+    expect(isMetaGrowthText("The student understands that stories beat statistics.")).toBe(true);
+    expect(isMetaGrowthText("The student now understands sensory imagery.")).toBe(true);
+    expect(isMetaGrowthText("This learner has learned to vary sentence length.")).toBe(true);
+    // NO LONGER false-positives (legit student writing)
+    expect(isMetaGrowthText("The student next to me kept tapping his pen.")).toBe(false);
+    expect(isMetaGrowthText("This student represents a generation under pressure.")).toBe(false);
+    expect(isMetaGrowthText("The student council should plant more trees.")).toBe(false);
+  });
+
   it("accepts a real rewrite traceable to studentTexts", () => {
     expect(isAuthenticGrowth(REAL_REWRITE, ["The weather was very bad.", "some other note"])).toBe(true);
   });

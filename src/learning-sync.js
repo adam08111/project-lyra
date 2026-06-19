@@ -23,7 +23,11 @@ const MARKER = /<!--LYRA_LEARNING_DATA\n?([\s\S]*?)\nLYRA_LEARNING_DATA-->/;
 const normGrowthText = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 
 const META_PATTERNS = [
-  /\b(the|this)\s+(student|learner)\b/i,
+  // §34/H3: verb-anchored — "the/this student <cognition verb>" is Lyra
+  // observing growth, NOT student writing. The old noun-only form matched
+  // ordinary prose ("the student next to me…") and both silently rejected
+  // legit rewrites and fed the one-time purge.
+  /\b(the|this)\s+(student|learner)\s+(?:\w+\s+){0,2}(understands?|realis\w+|realiz\w+|learn(?:ed|ing|s|t)|knows?|grasp\w*|recogni[sz]\w+|demonstrat\w+|sees?\s+that)\b/i,
   /\bstudent (now )?(understands|realises|realizes|learned|knows)\b/i,
 ];
 
