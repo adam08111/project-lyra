@@ -1618,3 +1618,32 @@ After §39 fixed the × running OFF a narrow viewport, the × close button was o
 
 Clicking the × closes the card (verified). **281 tests green** (the §39 positioning suite retargeted to the 16px gutter: width ≤ vw−32, left ≥ 16, **right ≤ vw−16**; same case matrix). Build clean. Final confirmation is a finger tap on the user's phone.
 
+---
+
+## 41. UPDATE — 19 June 2026 — Chat header: cap resting height, collapse on scroll, fix meta wrap + control stability
+
+(The spec called this §33; the report is already at §40, so it lands as **§41**.)
+
+### 41.1 The bugs
+On a long pasted HKDSE question the chat header rendered the FULL title at full font — ~8 lines, ~40% of the viewport before any chat showed. The meta line (`{type} · {wc} words · {n} API calls`) wrapped mid-token ("2 API / calls") because it was a plain div with no wrap strategy. ✎ and New got crowded by a long title.
+
+### 41.2 Scroll source (verified, as the spec suspected)
+The chat messages scroll in an **inner container** (`ChatTab.jsx` `chatScrollRef`, `overflowY:auto`), NOT the window — the content area is `overflow:hidden`. So collapse is driven by that container's `onScroll`, lifted to the parent. The header is a normal flex item (NOT sticky) in the `100vh` column, so collapsing it just resizes the content below: **scrollTop is preserved, the message list never jumps, and Unit 6 (sticky/safe-area) does not apply.**
+
+### 41.3 The six units
+- **Unit 1 — resting cap (`lyra.jsx`):** title clamped to 2 lines + ellipsis (`-webkit-line-clamp:2`); reclaims most of the screen.
+- **Unit 2 — meta nowrap:** one non-wrapping row (`white-space:nowrap; overflow:hidden; text-overflow:ellipsis`); "API calls"→"calls"; ordered `type · purpose · {n} calls · {wc} words` so right-ellipsis drops the lowest priority first (**type > API calls > word count**). The type-picker dropdown moved to a non-clipping wrapper so `overflow:hidden` no longer hides it.
+- **Unit 3 — collapse on scroll (`header-collapse.js` + `ChatTab.jsx` + `lyra.jsx`):** pure `nextHeaderCollapsed(scrollTop, current)` with HYSTERESIS (collapse > 24, expand < 8, hold in the band), rAF-throttled from the inner container. Collapsed = compact row (avatar 28, 1-line title, condensed meta `{type} · {n} calls`), gated to the chat tab via `headerCondensed`. Padding transitions 14→8px; no list jump.
+- **Unit 4 — control stability:** ✎ + New moved into a fixed top-right cluster (`flexShrink:0`); title+meta sit in a `min-width:0` column that truncates. Verified identical control positions for a 1-line title, a 2-line title, and the collapsed row.
+- **Unit 5 — full title on tap:** tapping the clamped title toggles the full text ↔ the 2-line clamp; rename stays a separate ✎ control (one gesture per target). The tap is disabled while condensed (would be a no-op).
+- **Unit 6 — N/A:** header is not sticky, so no safe-area inset needed; the Chat/My Writing tab pill below stays stable on collapse (verified).
+
+### 41.4 Adversarial review fix — collapse only on USER scroll
+A pre-commit review (3 lenses → verify → synthesize) caught a real regression the first live pass missed: collapse was fed by **programmatic** scrollTop, so the welcome typewriter's per-tick `scrollIntoView` (and the on-reply anchor scroll) collapsed the header before the student touched anything — hiding the new 2-line title on first impression, worst on short viewports (375×667) where the long welcome overflows. **Fix:** only user scrolls drive collapse — the auto-scroll effect stamps a 600ms window around its programmatic scrolls (smooth `scrollIntoView` animates across frames) and the scroll handler ignores events inside it. This also turns OFF the accidental collapse-on-every-reply.
+
+### 41.5 Verification
+**286 tests green** (+5: `nextHeaderCollapsed` hysteresis — collapse > 24, hold in [8, 24], expand < 8, threshold edges, a round-trip flips once each way). Build clean. **Live-verified driving the real DOM at 375×812 / 600 / 320 + desktop:** 2-line clamp + ellipsis; meta one nowrap line ("…calls" before "…words"); collapse 80↔48px with hysteresis hold at 15; **scrollTop preserved (no jump)**; ✎/New identical positions across 1-line / 2-line / collapsed; tap title 36↔109px and back; ✎ rename opens separately; type picker un-clipped; **programmatic scroll (scrollTop 103) leaves the header expanded while a real user scroll still collapses.** Final confirmation is a finger scroll on the user's phone.
+
+### 41.6 Note / residual
+Collapse-on-reply is now intentionally OFF (the suppression covers the reply anchor scroll); the header collapses only on the student's own scroll. A short (non-overflowing) title is still tappable (a harmless no-op) — gating that on measured overflow is a documented minor follow-up.
+

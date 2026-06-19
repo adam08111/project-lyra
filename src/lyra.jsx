@@ -19,6 +19,7 @@ import Sidebar from "./components/Sidebar.jsx";
 import TrainingSession from "./components/TrainingSession.jsx";
 import { generateTitle, topicBrief, swapTitleTypePrefix } from "./titleGenerator.js";
 import { detectFormatCue, typeLabelOf } from "./genre-cues.js";
+import { nextHeaderCollapsed } from "./header-collapse.js";
 
 export default function Lyra() {
   // Core state
@@ -47,6 +48,8 @@ export default function Lyra() {
   // Editor
   const [title, setTitle] = useState("Untitled");
   const [editingTitle, setEditingTitle] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(false); // §41: collapses on chat scroll
+  const [titleExpanded, setTitleExpanded] = useState(false);     // §41: tap clamped title → full text
   const titleInputRef = useRef(null);
   const [draft, setDraft] = useState("");
 
@@ -121,6 +124,8 @@ export default function Lyra() {
   const typeLabel = type ? writingTypes.find(w => w.id === type)?.label : "";
   const examRules = getExamRules(purpose, type);
   const wcLabel = wordCount === "600+" ? "600+" : wordCount;
+  // §41: the header collapses to a compact row only while scrolled into the chat.
+  const headerCondensed = tab === "chat" && headerCollapsed;
   const currentWords = draft.trim() ? draft.trim().split(/\s+/).length : 0;
   const targetNum = wordCount === "600+" ? 600 : (wordCount || 100);
   const progress = Math.min(100, (currentWords / targetNum) * 100);
@@ -329,6 +334,8 @@ export default function Lyra() {
     setMessages([]);
     setDraft("");
     setTitle("Untitled");
+    setHeaderCollapsed(false);
+    setTitleExpanded(false);
     typedWelcome.current = false;
     setWelcomeText("");
     setTypingMsg(null);
@@ -861,9 +868,13 @@ Rules:
       <style>{keyframes}</style>
       <link href={FONTS_LINK} rel="stylesheet" />
 
-      {/* Header */}
-      <div style={{ padding: "14px 18px", display: "flex", alignItems: "flex-start", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
-        <LyraAvatar size={36} />
+      {/* Header (§41): resting layout caps the title at 2 lines and keeps the
+          meta on ONE row; once the chat is scrolled it collapses to a compact
+          single row. It's a normal flex item (NOT sticky), so collapsing just
+          resizes the content below — the message list never jumps. ✎ and New
+          live in a fixed top-right cluster, independent of the title length. */}
+      <div style={{ padding: headerCondensed ? "8px 18px" : "14px 18px", display: "flex", alignItems: "flex-start", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0, transition: "padding 0.15s ease" }}>
+        <div style={{ flexShrink: 0 }}><LyraAvatar size={headerCondensed ? 28 : 36} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           {editingTitle ? (
             <input
@@ -876,51 +887,81 @@ Rules:
               style={{ width: "100%", fontFamily: "'Courier Prime', monospace", fontSize: 14, fontWeight: 700, color: COLORS.heading, border: `1.5px solid ${COLORS.heading}`, background: COLORS.bg2, padding: "4px 8px", borderRadius: 8, outline: "none", boxSizing: "border-box" }}
             />
           ) : (
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-              <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 14, fontWeight: 700, color: COLORS.heading, lineHeight: 1.3, wordBreak: "break-word", flex: 1, minWidth: 0 }}>{title}</div>
-              <button
-                onClick={startEditingTitle}
-                title="Edit title"
-                style={{ width: 24, height: 24, borderRadius: 12, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 11, color: COLORS.muted, flexShrink: 0, marginTop: 1, transition: "all 0.2s" }}
-              >✎</button>
-            </div>
-          )}
-          <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 2, position: "relative" }}>
-            {/* Tappable type chip → small picker → non-destructive switch */}
-            <button
-              onClick={() => setShowTypePicker(v => !v)}
-              title="Change writing type"
-              style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontSize: 11, color: COLORS.muted, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}
-            >
-              {typeLabel}
-            </button>
-            {purpose && purpose !== "personal" ? ` · ${purpose.toUpperCase()}` : ""} · {wcLabel} words · {apiCalls} API calls
-            {showTypePicker && (
-              <div onClick={() => setShowTypePicker(false)} style={{ position: "fixed", inset: 0, zIndex: 89 }} />
-            )}
-            {showTypePicker && (
-              <div onMouseLeave={() => setHoverTypeId(null)} style={{ position: "absolute", top: 18, left: 0, zIndex: 90, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
-                {writingTypes.map(wt => {
-                  // The highlight FOLLOWS the pointer (classic menu behaviour);
-                  // with no pointer inside, it rests on the current type. Bold
-                  // always marks the current type.
-                  const highlighted = hoverTypeId ? wt.id === hoverTypeId : wt.id === type;
-                  return (
+            <>
+              {/* Title — clamped to 2 lines at rest (1 when condensed). Tapping
+                  it toggles the FULL question (Unit 5); rename is the separate
+                  ✎ control, so there is one unambiguous gesture per target. */}
+              <div
+                onClick={headerCondensed ? undefined : () => setTitleExpanded(v => !v)}
+                title={headerCondensed ? undefined : (titleExpanded ? "Tap to shorten" : "Tap to show the full title")}
+                style={{
+                  fontFamily: "'Courier Prime', monospace", fontSize: 14, fontWeight: 700, color: COLORS.heading,
+                  lineHeight: 1.3, wordBreak: "break-word", cursor: headerCondensed ? "default" : "pointer",
+                  ...((headerCondensed || !titleExpanded) && {
+                    display: "-webkit-box", WebkitBoxOrient: "vertical",
+                    WebkitLineClamp: headerCondensed ? 1 : 2, overflow: "hidden",
+                  }),
+                }}
+              >{title}</div>
+              {headerCondensed ? (
+                <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {typeLabel} · {apiCalls} calls
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 2, position: "relative" }}>
+                  {/* ONE non-wrapping row (Unit 2) — ellipsis, never a mid-token
+                      wrap. Ordered so truncation drops the lowest priority
+                      first: type > API calls > word count. */}
+                  <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     <button
-                      key={wt.id}
-                      onClick={() => switchWritingType(wt.id)}
-                      onMouseEnter={() => setHoverTypeId(wt.id)}
-                      style={{ textAlign: "left", fontSize: 12, fontFamily: "'Courier Prime', monospace", padding: "6px 10px", borderRadius: 8, border: "none", background: highlighted ? COLORS.bg3 : "transparent", color: COLORS.heading, fontWeight: wt.id === type ? 700 : 400, cursor: "pointer", transition: "background 0.1s" }}
+                      onClick={() => setShowTypePicker(v => !v)}
+                      title="Change writing type"
+                      style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontSize: 11, color: COLORS.muted, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}
                     >
-                      {wt.label}
+                      {typeLabel}
                     </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    {purpose && purpose !== "personal" ? ` · ${purpose.toUpperCase()}` : ""} · {apiCalls} calls · {wcLabel} words
+                  </div>
+                  {showTypePicker && (
+                    <div onClick={() => setShowTypePicker(false)} style={{ position: "fixed", inset: 0, zIndex: 89 }} />
+                  )}
+                  {showTypePicker && (
+                    <div onMouseLeave={() => setHoverTypeId(null)} style={{ position: "absolute", top: 18, left: 0, zIndex: 90, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
+                      {writingTypes.map(wt => {
+                        // The highlight FOLLOWS the pointer (classic menu behaviour);
+                        // with no pointer inside, it rests on the current type. Bold
+                        // always marks the current type.
+                        const highlighted = hoverTypeId ? wt.id === hoverTypeId : wt.id === type;
+                        return (
+                          <button
+                            key={wt.id}
+                            onClick={() => switchWritingType(wt.id)}
+                            onMouseEnter={() => setHoverTypeId(wt.id)}
+                            style={{ textAlign: "left", fontSize: 12, fontFamily: "'Courier Prime', monospace", padding: "6px 10px", borderRadius: 8, border: "none", background: highlighted ? COLORS.bg3 : "transparent", color: COLORS.heading, fontWeight: wt.id === type ? 700 : 400, cursor: "pointer", transition: "background 0.1s" }}
+                          >
+                            {wt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
-        <button onClick={() => { autoSave(); resetToNew(); }} style={{ padding: "6px 14px", borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 12, cursor: "pointer", color: COLORS.muted, marginTop: 2 }}>New</button>
+        {/* Top-right control cluster — fixed position, independent of the
+            title's line count and the collapse state (Unit 4). */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {!editingTitle && (
+            <button
+              onClick={startEditingTitle}
+              title="Edit title"
+              style={{ width: 30, height: 30, borderRadius: 15, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12, color: COLORS.muted, flexShrink: 0, transition: "all 0.2s" }}
+            >✎</button>
+          )}
+          <button onClick={() => { autoSave(); resetToNew(); }} style={{ padding: "6px 14px", borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 12, cursor: "pointer", color: COLORS.muted, flexShrink: 0 }}>New</button>
+        </div>
       </div>
 
       {/* Top Navigation (was bottom — thumb-reach put it under the keyboard
@@ -988,6 +1029,7 @@ Rules:
             welcomeText={welcomeText} typeLabel={typeLabel}
             topic={topic} draft={draft} currentWords={currentWords}
             addToDraft={addToDraft}
+            onScrollChange={(st) => setHeaderCollapsed(c => nextHeaderCollapsed(st, c))}
             onSaveAchievement={(lyraText, studentSentence) => {
               // Backstop for when the AI forgets the hidden LYRA_LEARNING_DATA
               // block: save the student's sentence + Lyra's verbatim reply as a
