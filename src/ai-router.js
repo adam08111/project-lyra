@@ -65,6 +65,16 @@ const ROUTE_CONFIG = {
     brain: true,
   },
 
+  // Opening greeting (§43). Deliberately FLASH, not pro: a warm in-voice hello
+  // doesn't need the full pedagogical engine, and it fires on EVERY session
+  // open (a class of 40 all opening at once = 40 calls) — keep it cheap and
+  // streamed. brain:true so it's unmistakably Lyra's voice, not a template.
+  welcome: {
+    model: MODELS.flash,
+    thinkingBudget: 512,
+    brain: true,
+  },
+
   // Training evaluation (Reporter→Columnist voice shift assessment)
   training_eval: {
     model: MODELS.pro,

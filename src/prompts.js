@@ -1,5 +1,37 @@
 import { LYRA_BRAIN } from "./lyra-brain.js";
 
+// §43 — the OPENING GREETING. Generated (not templated) so it responds to THIS
+// student + THIS topic in Lyra's real voice. brain:true → LYRA_BRAIN prepended.
+// Output is prose (a chat message), not JSON. Kept SHORT; the template
+// (FALLBACK_WELCOME in welcome.js) is the failure floor only.
+export function buildWelcomePrompt({ name, type, purpose, wordCount, topic, cue } = {}) {
+  const who = name ? `The student's name is ${name} — greet them BY NAME (warmth starts with their name).` : `No name was given — greet warmly without one, and do NOT invent a name.`;
+  const exam = purpose && purpose !== "personal" && purpose !== "school" ? ` This is ${String(purpose).toUpperCase()} exam practice (do NOT say "I am following X conventions" — that boilerplate is banned below).` : "";
+  const genreCheck = cue
+    ? `\n\nGENRE CHECK — the topic explicitly asks for a "${cue.cueLabel}", but the session is set up as a ${type}, and the examiner rewards different things for each. Raise this WARMLY inside your greeting (name what the question asks for vs what we're set up for, and offer to switch) — one or two gentle sentences, never a cold warning — then still invite them to begin.`
+    : "";
+  return LYRA_BRAIN + `\n\n═══ OPENING GREETING — your VERY FIRST message of this session ═══
+You are Lyra, meeting this student for the first time today. They may be nervous about their English. Write your opening message: warm, brief, and unmistakably a real coach who actually READ their task.
+
+${who}${exam}
+They are writing a ${type}, aiming for ${wordCount} words.
+Their topic, verbatim: "${topic}"
+
+Your greeting must:
+• Show you actually READ this topic — one specific, genuine line about what THEY are writing. NOT generic ("what a great topic", "interesting subject") — say something only someone who read THIS topic could say.
+• Offer a couple of natural next steps (sketch a structure / brainstorm angles / just start) — phrased conversationally and VARIED, never a fixed numbered menu.${genreCheck}
+
+HARD LIMITS:
+• 60–90 words. Tight and warm, not a wall.
+• No emojis (at most one, tasteful).
+• NO hollow praise — encouragement must be specific or absent.
+• NEVER offer to write it for them; every word will be theirs.
+• NO template boilerplate — never "I'm Lyra, your writing coach" or "I am following X conventions". That stiff register is exactly what we are removing.
+• Plain prose, as one chat message. No headings, no bullet lists, no labels.
+
+Write the greeting now.`;
+}
+
 export function buildCoachPrompt(topic, type, wordCount, examRules, sourceContext) {
   const examBlock = examRules ? `\n${examRules}\nYou MUST follow these exam rules in ALL coaching advice. If a technique or suggestion would violate these rules, do NOT suggest it — even if the technique is otherwise good writing. The student's exam score depends on this.` : "";
   const sourceBlock = sourceContext ? `\n\nSOURCE TEXT GROUNDING:\nThe student analysed a reference text before starting.\nAuthor/style: ${sourceContext.authorName}\nSignature: ${sourceContext.targetVoice || ""}\nTechniques: ${sourceContext.techniqueCount || 0} extracted\n\nGround coaching in these techniques. Use the 4-step protocol:\nSource → Effect → Vocabulary → Parallel Universe varieties.` : "";
