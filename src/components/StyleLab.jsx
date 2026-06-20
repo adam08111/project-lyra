@@ -1487,24 +1487,30 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen
         <button
           onClick={() => { setShowStyleLab(false); setSidebarOpen && setSidebarOpen(true); }}
           aria-label="Menu"
-          style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, color: COLORS.muted, position: "relative", flexShrink: 0 }}
+          style={{ width: 44, height: 44, padding: 0, border: "none", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
         >
-          ☰
-          {totalWritings > 0 && (
-            <div style={{ position: "absolute", top: -2, right: -2, width: 16, height: 16, borderRadius: 8, background: COLORS.blue, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{totalWritings > 99 ? "99" : totalWritings}</div>
-          )}
+          {/* §47/Unit 4: the visible glyph is a 36×36 circle (matches the app's ☰
+              everywhere) wrapped in a 44×44 tappable button so the hit target stays ≥44. */}
+          <span style={{ position: "relative", width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: COLORS.muted }}>
+            ☰
+            {totalWritings > 0 && (
+              <span style={{ position: "absolute", top: -2, right: -2, width: 16, height: 16, borderRadius: 8, background: COLORS.blue, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{totalWritings > 99 ? "99" : totalWritings}</span>
+            )}
+          </span>
         </button>
         {/* §44 (model A): ONE small "go back" control — a plain ← icon, not a wide
-            labelled button. It steps back through the tab history, then backs out
-            of Style Lab once the student is at their entry tab (goBack). 44×44 hit
-            target, visually a small arrow — matches the round-icon idiom. Sits next
-            to the ☰ (back-then-exit, §44 — unchanged). */}
+            labelled button. It steps back through the tab history, then backs out of
+            Style Lab once the student is at their entry tab (goBack). Sits next to the ☰
+            (back-then-exit, §44 — unchanged). §47/Unit 4: same 36×36 circle + 44×44
+            tappable wrapper as the ☰ — matched pair, ≥44 hit. */}
         <button
           onClick={goBack}
           title="Back"
           aria-label="Back"
-          style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: COLORS.muted, flexShrink: 0 }}
-        >&#8592;</button>
+          style={{ width: 44, height: 44, padding: 0, border: "none", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+        >
+          <span style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: COLORS.muted }}>&#8592;</span>
+        </button>
         {/* §44: the wordmark is a SILENT home affordance (kept — option A) — tapping
             the title block jumps to Analyse (X-Ray) on every tab (a no-op on Analyse).
             No icon / button styling, so it never competes with the ☰/← controls — a
