@@ -783,7 +783,7 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
         {selecting ? (
           <>
             <button
