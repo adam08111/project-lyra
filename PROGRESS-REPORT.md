@@ -1833,3 +1833,31 @@ Built on §46.9 (Words A–Z). Two more pieces: a top **search box** (the scale-
 
 **Verification:** 327 tests green (+6 `matchesSaved`, +6 `groupConceptsByCategory`); `vite build` clean; the `:3000` dev server transforms with no error. On-screen checks (Chrome offline → confirm on phone): search box on top; type "ref" → both sections filter live, A–Z + category headings collapse to flat lists, counts update, ✕ restores browse; a Chinese substring matches vocab by 中文; Words tap-R → R-words newest-first + Show-more; Concepts grouped under their section labels, no-category under "Other"; empty store → message only.
 
+---
+
+## 47. UPDATE — 21 June 2026 — Deferred-debt consolidation (verify-then-fix four parked items)
+
+Ran AFTER the push/merge to `origin/main` (`b2eada7`) so these land on replicated mainline. Test baseline **327 → 329**.
+
+### 47.1 Unit 1 — §34 adversarial review PART 1 (AUDIT) — ALREADY RAN; re-verified, no new fixes
+§34 PART 1 (the H1–H20 + X1–X3 sweep) already ran — recorded in §34 (6 CONFIRMED / 14 REJECTED), confirmed fixes committed: H3 `fd060f3`, H2 `69be5ea`, H11 `793f8ed`, X2b `416eb54`, H5 `2643cca`. Re-verified the three mandatory hypotheses against the current (post §40–§46) code:
+
+| Hyp | Verdict | Evidence |
+|---|---|---|
+| **H5** does the type-switch change coaching? | **REJECTED** (no-op worry unfounded) | `buildCoachPrompt(…, examRules, …)` builds the exam block from the param at call time (prompts.js:35-36); `examRules = getExamRules(purpose, type)` is derived per render (lyra.jsx:133) and passed at the call (lyra.jsx:644). The structural-suggest effect deps include `typeLabel, examRules` (lyra.jsx:565 — the §34/H5 fix). A type-switch DOES change coaching and reschedules suggestions under the new convention. |
+| **H2** all chips registered? | **REJECTED** | Validator matches `before === m \|\| before.includes(m)` (learning-sync.js:60); grounded Brainstorm/Find-example send exact `QUICK_ACTION_MESSAGES[1]`/`[2]`, Outline a `QAM[0]` prefix, Help-me-start/Skills `QAM[7]`/`[8]` (constants.js:54-70). The generated welcome (§43) is model prose — NOT in QAM, and it's `messages[0]` (role ai), never a studentText, so it can't make junk traceable. |
+| **H-storage** footprint | **AUDIT — healthy** | Live `:3000` localStorage: 20 keys, **~184 KB total** (~2–4% of quota). Top: `lyra-backup-v1` 90 KB (the CRITICAL_KEYS mirror), `lyra-training-chats` 35 KB, `lyra-style-skills` 13 KB (sourceText cap holding — far below 50 KB), reports 11 KB; caches `lyra-word-dictionary` 6 KB + `lyra-annotation-glossary` 3 KB present but **excluded from the backup**. No quota pressure. |
+
+The remaining §34 hypotheses (H1, H3, H4, H6–H20, X1–X3) stand as recorded in §34 (already adversarially reviewed there — not re-swept). **No new Unit-1 findings → no fixes.**
+
+### 47.2 Unit 2 — concept 中文 search asymmetry — FIXED (`3583f86`)
+The §46.10 "concepts are English-only" note over-generalized: **annotation-explain concepts already carry Chinese** in `name` = `term_en — term_zh` (buildConceptFromExplanation), so they were already 中文-searchable; only **sentence-breakdown** concepts (XRayView grammarName, English) lack Chinese — and have none at save (forward-only, unchanged). Made it explicit + robust: `buildConceptFromExplanation` now persists `name_zh = term_zh`, and `savedSearchBlob` (matchesSaved) reads `name_zh`/`term_zh` — so concept 中文 search survives any future `name` reformat and stays symmetric with words. No legacy backfill (old records stay English-searchable; matchesSaved tolerates a missing field). +2 tests.
+
+### 47.3 Unit 3 — storage cap + quota warning — ALREADY DONE (no change)
+Both present: `saveStyleSkill` caps `sourceText` to `SOURCE_TEXT_MAX_CHARS = 50000` INSIDE the function (XRayView:1506/1569, const exported); `snapshotBackup` `console.warn`s on failure and emits the explicit "localStorage quota exceeded — backups are NOT being updated" on `QuotaExceededError`/`code===22` (backup.js:72-75), with matching warns in `autoRestoreFromBackup` (105) and `getBackupInfo` (122). The §24/§46 caches are OUT of the 12-key `CRITICAL_KEYS` (backup.js:26-39) — the 47.1 audit confirms they're live but not mirrored into the backup. The footprint audit shows this is forward-safety, not urgent.
+
+### 47.4 Unit 4 — ☰/← size mismatch — FIXED (`6a9cbb6`)
+§46.8 left the ☰ at 36×36 next to the §44 ← at 44×44. Unified: both are now a **36×36 visible circle** (matching the app's ☰ elsewhere) inside a **44×44 transparent tappable wrapper** — the glyph matches the app idiom while the hit target stays ≥44. Pure markup.
+
+**Final: 329 tests green** (327 → +2 Unit 2); `vite build` clean; `:3000` dev transform clean. Commits: Unit 2 `3583f86`, Unit 4 `6a9cbb6` (Units 1 & 3 = verification / already-done, no code). On-screen confirmations (Chrome automation offline): the ☰/← matched pair, and Saved-tab 中文 concept search.
+
