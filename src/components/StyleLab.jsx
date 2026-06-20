@@ -300,12 +300,29 @@ export function groupConceptsByCategory(concepts, canonicalOrder = XRAY_ALL_SECT
   return { groups, order };
 }
 
+// §44 search over saved items (both sections). The searchable blob is the item's
+// English term/name plus its meanings/examples; WORDS also carry their Chinese
+// (the " · 中文" in `name`, plus meaning_zh / example_zh), so a Chinese query finds
+// vocab by 中文. Concepts have no stored Chinese (translated on demand) → English
+// only. Case/whitespace-insensitive substring; empty query → true. Pure; exported.
+function savedSearchBlob(item) {
+  return [item.name, item.meaning_en, item.meaning_zh, item.grammar, item.function, item.useIt, item.example, item.example_en, item.example_zh]
+    .filter(Boolean).join(" ").toLowerCase();
+}
+export function matchesSaved(item, query) {
+  const q = String(query == null ? "" : query).trim().toLowerCase();
+  if (!q) return true;
+  return savedSearchBlob(item || {}).includes(q);
+}
+
 function SavedConcepts() {
   const [concepts, setConcepts] = useState(() => JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]"));
   const [expanded, setExpanded] = useState(null);
   const [letter, setLetter] = useState("All");          // A–Z index selection (WORDS only)
   const [wordWindow, setWordWindow] = useState(WORD_WINDOW_STEP);
   const [conceptWindows, setConceptWindows] = useState({}); // per-category load-more (label → shown count)
+  const [query, setQuery] = useState("");                   // search — outer filter over BOTH sections
+  const [conceptSearchWindow, setConceptSearchWindow] = useState(WORD_WINDOW_STEP);
 
   const remove = (idx) => {
     const next = concepts.filter((_, i) => i !== idx);
@@ -348,6 +365,23 @@ function SavedConcepts() {
   const conceptItems = others.map(e => ({ section: e.c.section, savedAt: e.c.savedAt || 0, c: e.c, i: e.i }));
   const { groups: conceptGroups, order: conceptOrder } = groupConceptsByCategory(conceptItems);
 
+  // Search is the OUTER filter: a non-empty query filters the FULL store of BOTH
+  // sections and suppresses the A–Z chips + category grouping (flat result lists).
+  // Clearing the query restores the browse view to "All" (simplest).
+  const searching = query.trim().length > 0;
+  const filteredWords = wordItems.filter((it) => matchesSaved(it.c, query));
+  const filteredOthers = conceptItems.filter((it) => matchesSaved(it.c, query));
+  const onQuery = (v) => {
+    setQuery(v);
+    setWordWindow(WORD_WINDOW_STEP);
+    setConceptSearchWindow(WORD_WINDOW_STEP);
+    if (!v.trim()) setLetter("All");
+  };
+  const showMoreStyle = { width: "100%", padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: mono, fontSize: 12, fontWeight: 700, color: COLORS.heading, cursor: "pointer", marginTop: 4 };
+  const noMatchesMsg = (
+    <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, padding: "2px 0 10px" }}>no matches · 沒有符合</div>
+  );
+
   const sectionHeader = (label) => (
     <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, margin: "14px 0 8px" }}>
       {label}
@@ -365,6 +399,44 @@ function SavedConcepts() {
 
   return (
     <div>
+      {/* Search — the OUTER filter over BOTH sections (English; words also by 中文).
+          A non-empty query suppresses the A–Z chips + category grouping → flat lists. */}
+      <div style={{ position: "relative", marginBottom: 12 }}>
+        <input
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder="Search saved · 搜尋"
+          aria-label="Search saved words and concepts"
+          style={{ width: "100%", boxSizing: "border-box", padding: "9px 32px 9px 12px", borderRadius: 10, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: mono, fontSize: 13, color: COLORS.heading, outline: "none" }}
+        />
+        {query && (
+          <button onClick={() => onQuery("")} aria-label="Clear search" style={{ position: "absolute", top: "50%", right: 8, transform: "translateY(-50%)", width: 22, height: 22, borderRadius: 11, border: "none", background: "transparent", color: COLORS.muted, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>&#10005;</button>
+        )}
+      </div>
+
+      {searching ? (
+        <>
+          {sectionHeader(`📖 Words · 生字 (${filteredWords.length})`)}
+          {filteredWords.length === 0 ? noMatchesMsg : (
+            <>
+              {renderCards(filteredWords.slice(0, wordWindow))}
+              {filteredWords.length > wordWindow && (
+                <button onClick={() => setWordWindow((w) => w + WORD_WINDOW_STEP)} style={showMoreStyle}>Show more · 顯示更多 ({filteredWords.length - wordWindow})</button>
+              )}
+            </>
+          )}
+          {sectionHeader(`✦ Concepts · 概念 (${filteredOthers.length})`)}
+          {filteredOthers.length === 0 ? noMatchesMsg : (
+            <>
+              {renderCards(filteredOthers.slice(0, conceptSearchWindow))}
+              {filteredOthers.length > conceptSearchWindow && (
+                <button onClick={() => setConceptSearchWindow((w) => w + WORD_WINDOW_STEP)} style={showMoreStyle}>Show more · 顯示更多 ({filteredOthers.length - conceptSearchWindow})</button>
+              )}
+            </>
+          )}
+        </>
+      ) : (
+        <>
       {words.length > 0 && (
         <>
           {sectionHeader(`📖 Words · 生字 (${words.length})`)}
@@ -433,6 +505,8 @@ function SavedConcepts() {
               </div>
             );
           })}
+        </>
+      )}
         </>
       )}
     </div>
