@@ -1083,15 +1083,7 @@ export function popTabHistory(history) {
 export function styleLabBackExits(history) {
   return history.length === 0;
 }
-// Show the top-right HOME feather only OFF the Analyse tab. On Analyse it would
-// point home-to-home (a no-op) AND duplicate the large decorative feather above
-// the paste box — so it's hidden there, and shown on Saved / Writers /
-// Achievements / Report (its only feather, a real jump back to Analyse).
-export function showStyleLabHomeFeather(activeTab) {
-  return activeTab !== "analyze";
-}
-
-export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
+export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen, projects, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
   const [activeTab, setActiveTab] = useState("analyze");
   // Tab-history stack so the header ← steps back through the tabs the student
   // visited, and only closes Style Lab once there's no earlier tab left. A direct
@@ -1281,25 +1273,43 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
   if (!showStyleLab) return null;
 
   const hasProfile = profileSections.length > 0;
+  // Same count the app's ☰ badge shows (total writings across projects).
+  const totalWritings = (projects || []).reduce((sum, p) => sum + (p.writings ? p.writings.length : 0), 0);
 
   return (
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, maxWidth: 430, margin: "0 auto", background: COLORS.bg1, zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.25s ease" }}>
       {/* Header */}
       <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
+        {/* §44: the app's ☰ menu, reused as-is — the SAME 36×36 control + count badge +
+            open handler the main app / source-setup use — so Style Lab shares the app's
+            top-left pattern (☰ then ←) instead of being a nav island. The sidebar (z 70)
+            sits BELOW this overlay (z 100), so the ☰ closes Style Lab as it opens the
+            sidebar (the app's home path; "New Writing" then lands on the front page). */}
+        <button
+          onClick={() => { setShowStyleLab(false); setSidebarOpen && setSidebarOpen(true); }}
+          aria-label="Menu"
+          style={{ width: 36, height: 36, borderRadius: 18, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, color: COLORS.muted, position: "relative", flexShrink: 0 }}
+        >
+          ☰
+          {totalWritings > 0 && (
+            <div style={{ position: "absolute", top: -2, right: -2, width: 16, height: 16, borderRadius: 8, background: COLORS.blue, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{totalWritings > 99 ? "99" : totalWritings}</div>
+          )}
+        </button>
         {/* §44 (model A): ONE small "go back" control — a plain ← icon, not a wide
             labelled button. It steps back through the tab history, then backs out
             of Style Lab once the student is at their entry tab (goBack). 44×44 hit
-            target, visually a small arrow — matches the round-icon idiom. */}
+            target, visually a small arrow — matches the round-icon idiom. Sits next
+            to the ☰ (back-then-exit, §44 — unchanged). */}
         <button
           onClick={goBack}
           title="Back"
           aria-label="Back"
           style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: COLORS.muted, flexShrink: 0 }}
         >&#8592;</button>
-        {/* §44: the wordmark is a SILENT home affordance — tapping the title block
-            jumps to Analyse (X-Ray) on every tab (a no-op on Analyse itself). It has
-            no icon, so it never reads as a second feather; it keeps a home path on the
-            Analyse tab, where the visible top-right home-feather is hidden. */}
+        {/* §44: the wordmark is a SILENT home affordance (kept — option A) — tapping
+            the title block jumps to Analyse (X-Ray) on every tab (a no-op on Analyse).
+            No icon / button styling, so it never competes with the ☰/← controls — a
+            harmless logo-tap shortcut to the X-Ray front page, distinct from ☰ (menu). */}
         <div
           onClick={() => goToTab("analyze")}
           title="Go to X-Ray"
@@ -1312,22 +1322,6 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
         </div>
         {hasProfile && (
           <button onClick={resetAll} style={{ padding: "6px 12px", borderRadius: 14, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 11, cursor: "pointer", color: COLORS.muted }}>New analysis</button>
-        )}
-        {/* §44: Lyra-feather HOME — the absolute counterpart to the ← (relative back).
-            A round 44×44 button matching the ← idiom that JUMPS to Analyse (X-Ray) from
-            any OTHER tab. HIDDEN on Analyse itself (showStyleLabHomeFeather): there it
-            would point home-to-home AND duplicate the decorative paste-box feather, so
-            Analyse shows just that one feather. Routed through goToTab so the current
-            tab is pushed onto the §44 history — ← still retraces afterwards. */}
-        {showStyleLabHomeFeather(activeTab) && (
-          <button
-            onClick={() => goToTab("analyze")}
-            title="Go to X-Ray"
-            aria-label="Go to X-Ray"
-            style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}
-          >
-            <FeatherIcon size={22} color={COLORS.muted} />
-          </button>
         )}
       </div>
 
