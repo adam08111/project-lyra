@@ -306,7 +306,7 @@ export function groupConceptsByCategory(concepts, canonicalOrder = XRAY_ALL_SECT
 // vocab by 中文. Concepts have no stored Chinese (translated on demand) → English
 // only. Case/whitespace-insensitive substring; empty query → true. Pure; exported.
 function savedSearchBlob(item) {
-  return [item.name, item.meaning_en, item.meaning_zh, item.grammar, item.function, item.useIt, item.example, item.example_en, item.example_zh]
+  return [item.name, item.name_zh, item.term_zh, item.meaning_en, item.meaning_zh, item.grammar, item.function, item.useIt, item.example, item.example_en, item.example_zh]
     .filter(Boolean).join(" ").toLowerCase();
 }
 export function matchesSaved(item, query) {

@@ -133,6 +133,10 @@ export function buildConceptFromExplanation(entry, { phrase, sentence = "", sect
   const tryExample = join(entry.try_example_en, entry.try_example_zh);
   return {
     name: join(entry.term_en, entry.term_zh),
+    // §47/Unit 2: persist the Chinese term explicitly so concept search matches by
+    // 中文 symmetrically with words (matchesSaved reads name_zh). The EN — ZH `name`
+    // already carries it, but the explicit field survives any future name reformat.
+    name_zh: entry.term_zh || "",
     grammar: join(entry.what_en, entry.what_zh),
     function: join(entry.here_en, entry.here_zh),
     useIt: tryExample ? `${join(entry.try_en, entry.try_zh)} → ${tryExample}` : join(entry.try_en, entry.try_zh),

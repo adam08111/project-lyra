@@ -29,4 +29,16 @@ describe("matchesSaved (§44) — Saved-tab search over English + Chinese", () =
   it("returns false when nothing contains the query", () => {
     expect(matchesSaved({ name: "refined" }, "zzz")).toBe(false);
   });
+
+  it("(§47/Unit 2) finds a concept by its persisted Chinese label (name_zh)", () => {
+    const concept = { name: "participial phrase", name_zh: "分詞短語", grammar: "a clause acting as an adjective" };
+    expect(matchesSaved(concept, "分詞短語")).toBe(true);   // Chinese search now symmetric
+    expect(matchesSaved(concept, "participial")).toBe(true); // English still works
+  });
+
+  it("(§47/Unit 2) a legacy concept without name_zh doesn't crash and stays English-searchable", () => {
+    const legacy = { name: "appositive", grammar: "noun phrase renamer" };
+    expect(matchesSaved(legacy, "appositive")).toBe(true);
+    expect(matchesSaved(legacy, "分詞短語")).toBe(false);
+  });
 });
