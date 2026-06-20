@@ -1719,7 +1719,7 @@ The fixed opening template (word-for-word identical; genre-blind) was the confir
 
 ---
 
-## 44. UPDATE — 19 June 2026 — Style Lab: one clear "exit to the page I came from" control  _(nav approach SUPERSEDED by §45 — see correction)_
+## 44. UPDATE — 19 June 2026 — Style Lab: one clear "exit to the page I came from" control  _(nav approach superseded — the big labelled exit crowded the header; see §46 for the final small-← + tab-history model)_
 
 ### 44.1 The problem + the case
 Style Lab is a `showStyleLab` overlay over the current screen. Its top-left ← was a **hybrid** (closest to case (a)): `goBack` (StyleLab.jsx) popped a `tabHistory` stack when the student had moved between tabs, and only called `setShowStyleLab(false)` once that stack was empty. So it *did* exit — but ambiguously (sometimes "back a tab," sometimes "leave"), and on an empty tab (the screenshot's "No saved concepts yet") a student had no obvious way out. A correct label is impossible while the same button sometimes means "back one tab."
@@ -1738,7 +1738,7 @@ Verified `saveStyleSkill` fires **only on stream completion** (StyleLab.jsx — 
 
 ---
 
-## 45. UPDATE — 20 June 2026 — Style Lab nav floor (correction to §44): a view stack rooted at the X-Ray page
+## 45. UPDATE — 20 June 2026 — Style Lab nav floor (correction to §44): a view stack rooted at the X-Ray page  _(REVERTED by §46 — the view-stack / hamburger model was rejected; restored the tab-history ←)_
 
 §44 had the wrong mental model. The right one: the **X-Ray paste page is the ROOT and the FLOOR** of a view stack; the tabbed workspace (Analyse / Saved / Writers / Achievements / Report) opens DEEPER from it. So there is no "exit to my writing" — leaving is the hamburger → global drawer.
 
@@ -1759,4 +1759,27 @@ The first §45 cut pushed a history entry going forward but the chevron `back()`
 **309 tests green** (+5 net: `styleLabBackLabel` ×3, `nextStyleLabStack` push / pop-to-existing / pop-to-root / no-op). Build clean. **Live-verified on a fresh server at 375px:** root shows the hamburger and no back control; entering the workspace shows `‹ X-Ray`; Achievements → Report → back lands on Achievements; popping all the way returns to the X-Ray page (hamburger) — never a "my writing" screen; the workspace subtitle "Analyse & practise writing styles" renders in full (no truncation); the hamburger leaves Style Lab and opens the global drawer; **zero console errors.**
 
 **§45.1.1 amendment verification:** the history-sync correction changes only the *invisible* history bookkeeping — all four visible acceptance behaviors above are preserved (the chevron still pops one view, pop-to-existing still lands on the re-selected tab, pop-to-root still reveals the hamburger), traced step-by-step against the new push/`go(Δ)`/`slStack`-restore wiring. Re-verified: **309 tests green, `vite build` clean, and the dev server transforms `StyleLab.jsx` at runtime with no error** (the §45.2-class runtime check). The on-device *back-gesture* walk (device-back stepping the stack to the root, then falling through) was **not** driven live — the Chrome automation extension was offline at amend time — so the device-back path's final confirmation is a real back-gesture on the user's phone.
+
+---
+
+## 46. UPDATE — 20 June 2026 — Style Lab nav (redo of §44, REVERTS §45): a small ← that backs through tab history, then exits
+
+Both prior attempts were wrong. **§44**'s big labelled "← Back to my writing" pill didn't fit the already-occupied header (title block + "New analysis"). **§45**'s view-stack — hamburger-at-root + contextual chevron — solved the wrong problem and swapped an intuitive back arrow for a hamburger-as-exit. The real bug was never the exit control: tab switches were **stateless**, so Achievements → Report stranded the student with no way back to Achievements. This redo restores the (pre-§44) tab-history model, refined, and reverts the entire §45 view-stack.
+
+### 46.1 Part 1 — the exit control: small, not a button (`StyleLab.jsx`)
+One compact **← icon** in the header (44×44 hit target, a visually small arrow, matching the round-icon idiom) — no wide label, no second control. Removed: the §45 hamburger/chevron, the `slStack` push/pop/`popstate` history wiring, the `nextStyleLabStack` / `styleLabBackLabel` helpers, and the `setSidebarOpen` plumbing (all 3 `<StyleLab>` mounts). Landed first with stateless tabs (← = pure exit) so the control change is isolated (commit `d5c067e`).
+
+### 46.2 Part 2 — tab-history back-navigation (the real bug)
+- `const [tabHistory, setTabHistory] = useState([])`. `goToTab(key)` pushes the tab being LEFT, then switches; the header **← = `goBack`** pops the last entry (returns there), and once the stack is empty it **exits Style Lab** (`setShowStyleLab(false)` → the screen underneath: active writing, else source-setup). One control, one "go back" meaning that degrades from "back a tab" to "back out".
+- A **direct tab tap also pushes**, so back retraces the real path the student took (Achievements → Report → ← → Achievements → ← → wherever they were before). Consecutive duplicates collapse (a same-tab tap pushes nothing); the stack is **capped at `TAB_HISTORY_CAP = 10`** to bound growth.
+- Pure, exported, tested helpers: `pushTabHistory(history, leaving, next)` (dup-collapse + cap), `popTabHistory(history)` (`{tab, history}`, or `null` on empty), `styleLabBackExits(history)` (the exit-vs-tab-back predicate). 7 reducer tests.
+
+### 46.3 Part 3 — entry tab / empty-stack
+The stack initialises **empty** with `initialTab` as the current tab (the `styleLabInitialTab` "open straight to a tab" paths, e.g. "no saved skills → open Style Lab"). So the first back from the entry tab finds an empty history → exits cleanly, never jumping to an unrelated tab. Tab history **resets on every open AND close** (and on "New analysis") — a fresh visit starts clean, no stale back targets carried across.
+
+### 46.4 The (A)/(B) control decision
+Chose **(A)** — the single ← does tab-back-then-exit, NO separate ✕ — per the brief's preference and because the empty-stack exit is the standard mobile back semantic (a back arrow that backs *out* when there's nothing left to back to is exactly what users expect; it is not surprising). Model (B) (← = tab-back only + a separate ✕) would add a second control to an already-tight header for no real gain. So Parts 1 and 2 are the SAME ← control — the brief anticipated this ("Part 1's separate exit control may be unnecessary IF the ← reliably exits once history is empty").
+
+### 46.5 Verification
+**309 tests green** (7 tab-history reducer tests — push/dup-collapse/cap, pop/empty-null, exit-predicate — replacing §45's view-stack tests). `vite build` clean; the `:3002` dev server transforms the updated `StyleLab.jsx` at runtime with **no error** (the §45.2-class runtime check). **Not driven live:** the click-through / on-device back-gesture — the Chrome automation extension was offline — so the manual walk is the final confirmation to do on the phone: Achievements → Report → ← → Achievements; keep pressing ← to empty the stack then exit; the exit lands on the correct underlying screen (active writing vs start); direct tab jumps retrace the real path; reopen → history is fresh; the ← is small (no big label crowding the header). Committed per part: Part 1 `d5c067e`, Part 2 + this report to follow.
 

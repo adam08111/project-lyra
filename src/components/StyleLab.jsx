@@ -1060,22 +1060,55 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
   );
 }
 
-// §44 (model A): the header ← is the single "go back" control. With no tab
-// history it backs out of Style Lab (returns to the screen underneath); Part 2
-// adds the tab history so it first steps back through the tabs the student
-// visited. Pure predicate — empty history ⇒ the ← exits. Exported for tests.
+// §44 (model A): the header ← is the single "go back" control. It steps back
+// through the tabs the student actually visited, then — once the history is empty
+// (they're at their entry tab) — backs out of Style Lab entirely. One control,
+// one "go back" meaning that degrades from "back a tab" to "back out". Pure
+// helpers, exported for tests.
+export const TAB_HISTORY_CAP = 10;
+// Push the tab being LEFT onto the history when switching to a different tab. A
+// same-tab switch is a no-op (collapse consecutive duplicates); the stack is
+// capped so a long session can't grow it without bound.
+export function pushTabHistory(history, leavingTab, nextTab) {
+  if (nextTab === leavingTab) return history;
+  return [...history, leavingTab].slice(-TAB_HISTORY_CAP);
+}
+// Pop the most-recent tab to return to. Returns { tab, history }, or null on an
+// empty stack — the signal that the ← should exit Style Lab instead.
+export function popTabHistory(history) {
+  if (history.length === 0) return null;
+  return { tab: history[history.length - 1], history: history.slice(0, -1) };
+}
+// Pure predicate — empty history ⇒ the ← backs out of Style Lab.
 export function styleLabBackExits(history) {
   return history.length === 0;
 }
 
 export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
   const [activeTab, setActiveTab] = useState("analyze");
-  const goToTab = (key) => { if (key !== activeTab) setActiveTab(key); };
+  // Tab-history stack so the header ← steps back through the tabs the student
+  // visited, and only closes Style Lab once there's no earlier tab left. A direct
+  // tab tap also pushes, so back retraces the real path taken.
+  const [tabHistory, setTabHistory] = useState([]);
+  const goToTab = (key) => {
+    if (key === activeTab) return;
+    setTabHistory(h => pushTabHistory(h, activeTab, key));
+    setActiveTab(key);
+  };
+  const goBack = () => {
+    if (styleLabBackExits(tabHistory)) { setShowStyleLab(false); return; }  // at entry tab → back out
+    const { tab, history } = popTabHistory(tabHistory);
+    setTabHistory(history);
+    setActiveTab(tab);
+  };
 
-  // Jump to the requested tab when StyleLab opens; reset to Analyse on close.
+  // Jump to the requested tab when StyleLab opens; reset tab history on open AND
+  // close (a fresh visit starts clean — no stale back targets). The initial tab is
+  // the bottom of the stack, so the first back from it exits cleanly.
   useEffect(() => {
-    if (!showStyleLab) { setActiveTab("analyze"); return; }
+    if (!showStyleLab) { setActiveTab("analyze"); setTabHistory([]); return; }
     if (initialTab) setActiveTab(initialTab);
+    setTabHistory([]);
   }, [showStyleLab, initialTab]);
   const [referenceText, setReferenceText] = useState("");
   const [styleProfile, setStyleProfile] = useState("");
@@ -1167,6 +1200,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
     setProfileSections([]);
     setError("");
     setActiveTab("analyze");
+    setTabHistory([]);
     setSkillSaved(null);
     setSkillInStore(false);
     setTranslation("");
@@ -1246,11 +1280,11 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
       {/* Header */}
       <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
         {/* §44 (model A): ONE small "go back" control — a plain ← icon, not a wide
-            labelled button. Here (Part 1) it exits Style Lab to the screen
-            underneath; Part 2 wires it to step back through the tab history first.
-            44×44 hit target, visually a small arrow — matches the round-icon idiom. */}
+            labelled button. It steps back through the tab history, then backs out
+            of Style Lab once the student is at their entry tab (goBack). 44×44 hit
+            target, visually a small arrow — matches the round-icon idiom. */}
         <button
-          onClick={() => setShowStyleLab(false)}
+          onClick={goBack}
           title="Back"
           aria-label="Back"
           style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: COLORS.muted, flexShrink: 0 }}
