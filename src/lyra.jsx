@@ -899,7 +899,7 @@ Rules:
           sidebarProps={sidebarProps}
           onOpenTraining={openTrainingSession}
         />
-        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} setSidebarOpen={setSidebarOpen} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
+        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
         <WordLookup trackCall={trackCall} />
         {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
       </>
@@ -922,7 +922,7 @@ Rules:
           onStart={() => { const autoTitle = generateTitle(topic, type); setTitle(autoTitle); setScreen("app"); setTimeout(() => saveNewWriting("default", autoTitle), 500); }}
           sidebarProps={sidebarProps}
         />
-        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} setSidebarOpen={setSidebarOpen} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
+        <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
         <WordLookup trackCall={trackCall} />
         {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
       </>
@@ -1171,7 +1171,7 @@ Rules:
       />
 
       {/* Style Lab Overlay */}
-      <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} setSidebarOpen={setSidebarOpen} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
+      <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} onApplySkill={applySkillWithEnrichment} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
         <WordLookup trackCall={trackCall} />
 
       {/* Training Session Overlay */}

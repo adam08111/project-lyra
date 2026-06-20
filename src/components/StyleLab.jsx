@@ -1060,70 +1060,23 @@ export function SavedSkills({ onCountChange, onApply, onPractice, trackCall }) {
   );
 }
 
-// §45: Style Lab is a VIEW STACK rooted at the X-Ray paste page ("analyze").
-// The tabbed workspace opens deeper from it. The header back chevron names the
-// destination it returns to ("‹ X-Ray" at the floor, "‹ Achievements", …).
-const STYLE_LAB_BACK_LABELS = { analyze: "X-Ray", saved: "Saved", skills: "Writers", achievements: "Achievements", report: "Report" };
-export function styleLabBackLabel(destKey) {
-  return STYLE_LAB_BACK_LABELS[destKey] || "Back";
-}
-// Tab navigation as a stack: a NEW tab pushes; re-selecting a tab already in the
-// stack POPS back to it (no duplicates) — so Achievements → Report → tap
-// Achievements lands on Achievements, not a second copy. Floor = "analyze".
-export function nextStyleLabStack(stack, key) {
-  if (key === stack[stack.length - 1]) return stack;
-  const i = stack.indexOf(key);
-  return i >= 0 ? stack.slice(0, i + 1) : [...stack, key];
+// §44 (model A): the header ← is the single "go back" control. With no tab
+// history it backs out of Style Lab (returns to the screen underneath); Part 2
+// adds the tab history so it first steps back through the tabs the student
+// visited. Pure predicate — empty history ⇒ the ← exits. Exported for tests.
+export function styleLabBackExits(history) {
+  return history.length === 0;
 }
 
-export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
-  // §45: a view stack. stack[0] is always "analyze" (the X-Ray root / floor);
-  // the tabbed workspace pushes on top. activeTab = the top; atRoot = the floor.
-  const [stack, setStack] = useState(["analyze"]);
-  const activeTab = stack[stack.length - 1];
-  const atRoot = stack.length === 1;
-  const stackRef = useRef(stack);
-  stackRef.current = stack;
-  // §45.1 history sync: every level above the floor is mirrored by exactly ONE
-  // browser-history entry that carries the FULL stack at that level. Going deeper
-  // pushes; ALL backward motion — chevron, pop-to-existing tab, and device/browser
-  // back — is driven THROUGH history, so the stack and the history length can never
-  // desync (the §45 version popped the React stack without consuming the matching
-  // entry, leaving orphaned entries that made device-back skip or over-pop).
-  const histPush = (nextStack) => { try { history.pushState({ slStack: nextStack }, ""); } catch (e) { /* no history in SSR/tests */ } };
-  const histGo = (delta) => { try { history.go(delta); } catch (e) { /* no history in SSR/tests */ } };
-  const goToTab = (key) => {
-    const cur = stackRef.current;
-    const next = nextStyleLabStack(cur, key);
-    if (next === cur) return;
-    if (next.length > cur.length) { histPush(next); setStack(next); }   // deeper: push the entry, then show it
-    else histGo(next.length - cur.length);                              // pop-to-existing: history drives the pop
-  };
-  // The chevron pops exactly one view — via history.back() so the matching pushed
-  // entry is consumed (no orphans); the popstate handler applies the stack change.
-  const back = () => { if (stackRef.current.length > 1) histGo(-1); };
+export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
+  const [activeTab, setActiveTab] = useState("analyze");
+  const goToTab = (key) => { if (key !== activeTab) setActiveTab(key); };
 
-  // Reset the stack on open. Opening straight to a non-root tab pushes ONE entry
-  // for that deep level, so a device-back there pops to the X-Ray root (not the
-  // app history underneath) before falling through.
+  // Jump to the requested tab when StyleLab opens; reset to Analyse on close.
   useEffect(() => {
-    if (!showStyleLab) { setStack(["analyze"]); return; }
-    if (initialTab && initialTab !== "analyze") { const s = ["analyze", initialTab]; setStack(s); histPush(s); }
-    else setStack(["analyze"]);
+    if (!showStyleLab) { setActiveTab("analyze"); return; }
+    if (initialTab) setActiveTab(initialTab);
   }, [showStyleLab, initialTab]);
-
-  // §45.1 history binding: device/browser back restores the stack carried by the
-  // entry we land on. The floor / pre-Style-Lab entry carries no slStack → back to
-  // the X-Ray root; a further back then falls through, leaving Style Lab (never
-  // trapped). Storing the whole stack also makes the browser FORWARD button work.
-  useEffect(() => {
-    const onPop = (e) => {
-      const s = e.state && Array.isArray(e.state.slStack) && e.state.slStack.length ? e.state.slStack : ["analyze"];
-      setStack(s);
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
   const [referenceText, setReferenceText] = useState("");
   const [styleProfile, setStyleProfile] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -1213,7 +1166,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen
     setAuthorName("");
     setProfileSections([]);
     setError("");
-    setStack(["analyze"]);
+    setActiveTab("analyze");
     setSkillSaved(null);
     setSkillInStore(false);
     setTranslation("");
@@ -1292,27 +1245,16 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, maxWidth: 430, margin: "0 auto", background: COLORS.bg1, zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.25s ease" }}>
       {/* Header */}
       <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, borderBottom: `1px solid ${COLORS.border}`, background: COLORS.card, flexShrink: 0 }}>
-        {/* §45: at the root (X-Ray page) the top-left is the HAMBURGER — it opens
-            the global drawer, which is how you leave Style Lab (no back control at
-            the floor). In the workspace it's a compact contextual back chevron
-            that pops one view ("‹ X-Ray" at the floor, "‹ Achievements", …). One
-            nav button only; ≥44px. */}
-        {atRoot ? (
-          <button
-            onClick={() => { setShowStyleLab(false); if (setSidebarOpen) setSidebarOpen(true); }}
-            title="Menu"
-            style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: COLORS.muted, flexShrink: 0 }}
-          >&#9776;</button>
-        ) : (
-          <button
-            onClick={back}
-            title={`Back to ${styleLabBackLabel(stack[stack.length - 2])}`}
-            style={{ display: "flex", alignItems: "center", gap: 4, minHeight: 44, padding: "8px 12px", borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, cursor: "pointer", fontFamily: "'Courier Prime', monospace", fontSize: 12, fontWeight: 700, color: COLORS.heading, flexShrink: 0 }}
-          >
-            <span style={{ fontSize: 17, lineHeight: 1 }}>&#x2039;</span>
-            <span style={{ whiteSpace: "nowrap" }}>{styleLabBackLabel(stack[stack.length - 2])}</span>
-          </button>
-        )}
+        {/* §44 (model A): ONE small "go back" control — a plain ← icon, not a wide
+            labelled button. Here (Part 1) it exits Style Lab to the screen
+            underneath; Part 2 wires it to step back through the tab history first.
+            44×44 hit target, visually a small arrow — matches the round-icon idiom. */}
+        <button
+          onClick={() => setShowStyleLab(false)}
+          title="Back"
+          aria-label="Back"
+          style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: COLORS.muted, flexShrink: 0 }}
+        >&#8592;</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 15, fontWeight: 700, color: COLORS.heading, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Style Lab</div>
           <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
