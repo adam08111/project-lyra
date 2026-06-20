@@ -251,9 +251,36 @@ function SavedConceptCard({ concept, isExpanded, onToggle, onRemove }) {
   );
 }
 
+// §44 A–Z index for the Saved tab's WORDS. Bucket the FULL set of saved word
+// items (each { name, savedAt }) by first letter: trimmed + uppercased, A–Z → that
+// letter, anything else (digit, CJK, punctuation, empty) → "#" so nothing is ever
+// dropped. Within a bucket, newest-first (savedAt desc) — a student usually wants
+// the word they just saved. Returns the per-letter buckets AND the Set of
+// non-empty letters (which greys out the empty chips). Pure — works on the full
+// store, never a rendered window. Exported for tests.
+const A_Z = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const WORD_WINDOW_STEP = 20;
+export function bucketWordsByLetter(words) {
+  const buckets = { "#": [] };
+  for (const L of A_Z) buckets[L] = [];
+  for (const w of (words || [])) {
+    const first = String((w && w.name) || "").trim().charAt(0).toUpperCase();
+    const key = first >= "A" && first <= "Z" ? first : "#";
+    buckets[key].push(w);
+  }
+  const letters = new Set();
+  for (const key of Object.keys(buckets)) {
+    buckets[key].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)); // newest-first
+    if (buckets[key].length > 0) letters.add(key);
+  }
+  return { buckets, letters };
+}
+
 function SavedConcepts() {
   const [concepts, setConcepts] = useState(() => JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]"));
   const [expanded, setExpanded] = useState(null);
+  const [letter, setLetter] = useState("All");          // A–Z index selection (WORDS only)
+  const [wordWindow, setWordWindow] = useState(WORD_WINDOW_STEP);
 
   const remove = (idx) => {
     const next = concepts.filter((_, i) => i !== idx);
@@ -281,6 +308,16 @@ function SavedConcepts() {
   const words = entries.filter(e => e.c.kind === "word");
   const others = entries.filter(e => e.c.kind !== "word");
 
+  // A–Z index over the WORDS: bucket the FULL set (each item carries the original
+  // index `i` so remove/expand still hit the right record), then window the active
+  // view. "All" keeps the store order (current behaviour); a letter is newest-first.
+  const wordItems = words.map(e => ({ name: e.c.name, savedAt: e.c.savedAt || 0, c: e.c, i: e.i }));
+  const { buckets, letters } = bucketWordsByLetter(wordItems);
+  const activeWords = letter === "All" ? wordItems : (buckets[letter] || []);
+  const shownWords = activeWords.slice(0, wordWindow);
+  const selectLetter = (L) => { setLetter(L); setWordWindow(WORD_WINDOW_STEP); };
+  const indexChips = ["All", ...A_Z, ...(buckets["#"].length ? ["#"] : [])];
+
   const sectionHeader = (label) => (
     <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, margin: "14px 0 8px" }}>
       {label}
@@ -301,7 +338,42 @@ function SavedConcepts() {
       {words.length > 0 && (
         <>
           {sectionHeader(`📖 Words · 生字 (${words.length})`)}
-          {renderCards(words)}
+          {/* A–Z letter index (WORDS only): tap a letter to filter to it; letters
+              with no saved word are greyed/disabled; "All" resets; "#" appears only
+              when a non-letter first char exists. Buckets the FULL store, then windows. */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+            {indexChips.map((ch) => {
+              const enabled = ch === "All" || letters.has(ch);
+              const active = letter === ch;
+              return (
+                <button
+                  key={ch}
+                  onClick={() => { if (enabled) selectLetter(ch); }}
+                  disabled={!enabled}
+                  aria-label={ch === "All" ? "Show all saved words" : `Saved words starting with ${ch}`}
+                  style={{
+                    minWidth: ch === "All" ? 38 : 26, height: 26, padding: "0 5px", borderRadius: 7,
+                    border: `1px solid ${active ? COLORS.heading : COLORS.border}`,
+                    background: active ? COLORS.heading : COLORS.card,
+                    color: active ? "#fff" : (enabled ? COLORS.heading : COLORS.muted),
+                    opacity: enabled ? 1 : 0.3,
+                    fontFamily: mono, fontSize: 11, fontWeight: 700,
+                    cursor: enabled ? "pointer" : "default",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >{ch}</button>
+              );
+            })}
+          </div>
+          {renderCards(shownWords)}
+          {activeWords.length > shownWords.length && (
+            <button
+              onClick={() => setWordWindow((w) => w + WORD_WINDOW_STEP)}
+              style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: mono, fontSize: 12, fontWeight: 700, color: COLORS.heading, cursor: "pointer", marginTop: 4 }}
+            >
+              Show more · 顯示更多 ({activeWords.length - shownWords.length})
+            </button>
+          )}
         </>
       )}
       {others.length > 0 && (
