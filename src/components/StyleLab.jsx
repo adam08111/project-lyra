@@ -1282,7 +1282,7 @@ export function popTabHistory(history) {
 export function styleLabBackExits(history) {
   return history.length === 0;
 }
-export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen, projects, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
+export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen, projects, trackCall, setAppliedSkill, setWritingTechniques, initialTab, onOpenTraining, writingType }) {
   const [activeTab, setActiveTab] = useState("analyze");
   // Tab-history stack so the header ← steps back through the tabs the student
   // visited, and only closes Style Lab once there's no earlier tab left. A direct
@@ -1777,10 +1777,12 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen
         {/* SKILLS TAB */}
         {activeTab === "skills" && (
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-            <SavedSkills onCountChange={setSkillCount} trackCall={trackCall} onApply={onApplySkill ? (skill) => {
-              onApplySkill(skill);
-              setShowStyleLab(false);
-            } : null} onPractice={onOpenTraining ? (skill, techIdx) => {
+            {/* §48: no onApply here — the editor auto-surfaces saved skills (onboarding
+                skill_match → apply; the coach reads saved skills directly), so the
+                Writers-tab "✦ Write with this skill" deploy is redundant. The detail's
+                bottom row is Remove · Practice. (The editor's ✦ Skills picker still
+                passes onApply, so deliberate mid-writing deploy keeps working there.) */}
+            <SavedSkills onCountChange={setSkillCount} trackCall={trackCall} onPractice={onOpenTraining ? (skill, techIdx) => {
               // Per-technique practice (techIdx is a number) opens the exercise
               // as an overlay ON TOP of this skill detail and keeps StyleLab
               // mounted underneath, so closing the exercise returns to the same

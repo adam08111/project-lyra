@@ -1861,3 +1861,23 @@ Both present: `saveStyleSkill` caps `sourceText` to `SOURCE_TEXT_MAX_CHARS = 500
 
 **Final: 329 tests green** (327 → +2 Unit 2); `vite build` clean; `:3000` dev transform clean. Commits: Unit 2 `3583f86`, Unit 4 `6a9cbb6` (Units 1 & 3 = verification / already-done, no code). On-screen confirmations (Chrome automation offline): the ☰/← matched pair, and Saved-tab 中文 concept search.
 
+---
+
+## 48. UPDATE — 21 June 2026 — Remove the redundant "✦ Write with this skill" (Writers tab)
+
+The §30 "✦ Write with this skill" deploy button in `SavedSkillDetail`'s bottom row was a manual second path the user never uses — saved skills already reach the editor automatically.
+
+### 48.1 Step 0 — clean subtraction (confirmed)
+The button sets `appliedSkill`/`writingTechniques` via `onApply → applySkillWithEnrichment`. The editor's auto-surfacing is **independent**: `skill_match` runs at **onboarding** (Onboarding.jsx:63 — matches + applies a skill, whose `writingTechniques` carries into the editor's technique strip), NOT from this button; and the coach prompt reads `savedSkills` from localStorage directly (lyra.jsx:600). So removing the button doesn't break auto-surfacing.
+
+### 48.2 Shared-button finding (flagged → user chose "Writers tab only")
+`SavedSkillDetail` is reached from TWO contexts: the **Saved/Writers tab** AND the **editor's ✦ Skills picker** ("Deploy a Skill", EditorTab:77 → `SavedSkills` → drill into a skill → this button). The button is the picker's ONLY deploy control and `skill_match` doesn't run mid-writing, so removing it everywhere would make the picker a dead-end. Flagged per the brief; the user chose **Writers tab only**.
+
+### 48.3 The change
+The button renders only when `onApply` is passed (`{onApply && <button>}`). Stopped passing `onApply` in the Writers-tab `SavedSkills` (StyleLab.jsx:1780) → its detail bottom row is now **Remove · Practice**. The editor's ✦ Skills picker still passes `onApply` (EditorTab:77 → `onApplySkill = applySkillWithEnrichment`, lyra.jsx:1154), so deliberate mid-writing deploy keeps working there. Removed the now-dead `onApplySkill` threading to StyleLab (its signature + 3 mounts); `applySkillWithEnrichment` and the EditorTab pass are untouched. The button JSX in `SavedSkillDetail` stays (the picker still needs it) — pure subtraction of the Writers-tab wiring.
+
+**329 tests green** (no test asserted the button); `vite build` clean; `:3000` dev transform clean. On-screen checks (Chrome automation offline): Writers-tab saved-skill detail shows Remove · Practice; the editor's ✦ Skills picker still deploys; Practice / per-card Practise / Analyse more / Remove unchanged.
+
+### 48.4 Parked (per the brief — not acted on)
+The bottom-row "Practice" may now be redundant with the per-card "Practise/Continue" (per-card is more precise — a technique, not the skill in abstract). Flagged for a future decision.
+
