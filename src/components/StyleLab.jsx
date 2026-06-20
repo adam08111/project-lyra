@@ -1083,6 +1083,13 @@ export function popTabHistory(history) {
 export function styleLabBackExits(history) {
   return history.length === 0;
 }
+// Show the top-right HOME feather only OFF the Analyse tab. On Analyse it would
+// point home-to-home (a no-op) AND duplicate the large decorative feather above
+// the paste box — so it's hidden there, and shown on Saved / Writers /
+// Achievements / Report (its only feather, a real jump back to Analyse).
+export function showStyleLabHomeFeather(activeTab) {
+  return activeTab !== "analyze";
+}
 
 export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, setAppliedSkill, setWritingTechniques, onApplySkill, initialTab, onOpenTraining, writingType }) {
   const [activeTab, setActiveTab] = useState("analyze");
@@ -1289,7 +1296,15 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
           aria-label="Back"
           style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: COLORS.muted, flexShrink: 0 }}
         >&#8592;</button>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        {/* §44: the wordmark is a SILENT home affordance — tapping the title block
+            jumps to Analyse (X-Ray) on every tab (a no-op on Analyse itself). It has
+            no icon, so it never reads as a second feather; it keeps a home path on the
+            Analyse tab, where the visible top-right home-feather is hidden. */}
+        <div
+          onClick={() => goToTab("analyze")}
+          title="Go to X-Ray"
+          style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+        >
           <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 15, fontWeight: 700, color: COLORS.heading, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Style Lab</div>
           <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: mono, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {hasProfile && authorName ? `Analysing: ${authorName}` : "Analyse & practise writing styles"}
@@ -1299,18 +1314,21 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
           <button onClick={resetAll} style={{ padding: "6px 12px", borderRadius: 14, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 11, cursor: "pointer", color: COLORS.muted }}>New analysis</button>
         )}
         {/* §44: Lyra-feather HOME — the absolute counterpart to the ← (relative back).
-            Fills the previously-empty top-right corner as a symmetric bookend: a round
-            44×44 button matching the ← idiom that JUMPS to the Analyse (X-Ray) front page
-            from any tab. Routed through goToTab so the current tab is pushed onto the §44
-            history — ← still retraces afterwards (a no-op only when already on Analyse). */}
-        <button
-          onClick={() => goToTab("analyze")}
-          title="Go to X-Ray"
-          aria-label="Go to X-Ray"
-          style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}
-        >
-          <FeatherIcon size={22} color={COLORS.muted} />
-        </button>
+            A round 44×44 button matching the ← idiom that JUMPS to Analyse (X-Ray) from
+            any OTHER tab. HIDDEN on Analyse itself (showStyleLabHomeFeather): there it
+            would point home-to-home AND duplicate the decorative paste-box feather, so
+            Analyse shows just that one feather. Routed through goToTab so the current
+            tab is pushed onto the §44 history — ← still retraces afterwards. */}
+        {showStyleLabHomeFeather(activeTab) && (
+          <button
+            onClick={() => goToTab("analyze")}
+            title="Go to X-Ray"
+            aria-label="Go to X-Ray"
+            style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}
+          >
+            <FeatherIcon size={22} color={COLORS.muted} />
+          </button>
+        )}
       </div>
 
       {/* Tab switcher */}

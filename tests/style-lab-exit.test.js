@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pushTabHistory, popTabHistory, styleLabBackExits, TAB_HISTORY_CAP } from "../src/components/StyleLab.jsx";
+import { pushTabHistory, popTabHistory, styleLabBackExits, showStyleLabHomeFeather, TAB_HISTORY_CAP } from "../src/components/StyleLab.jsx";
 
 describe("pushTabHistory (§44) — record the tab being left on a switch", () => {
   it("pushes the leaving tab when switching to a different tab", () => {
@@ -36,5 +36,17 @@ describe("styleLabBackExits (§44) — the exit-vs-tab-back decision (history em
   it("non-empty history ⇒ the ← steps back a tab", () => {
     expect(styleLabBackExits(["analyze"])).toBe(false);
     expect(styleLabBackExits(["analyze", "saved"])).toBe(false);
+  });
+});
+
+describe("showStyleLabHomeFeather (§44) — top-right HOME feather hidden on Analyse, shown elsewhere", () => {
+  it("hidden on the Analyse tab (home-to-home + duplicates the decorative feather)", () => {
+    expect(showStyleLabHomeFeather("analyze")).toBe(false);
+  });
+  it("shown on every other tab (the only feather there, jumps to Analyse)", () => {
+    expect(showStyleLabHomeFeather("saved")).toBe(true);
+    expect(showStyleLabHomeFeather("skills")).toBe(true);
+    expect(showStyleLabHomeFeather("achievements")).toBe(true);
+    expect(showStyleLabHomeFeather("report")).toBe(true);
   });
 });
