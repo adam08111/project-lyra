@@ -7,7 +7,7 @@ import { COLORS, defaultXraySections } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { buildStyleProfilerPrompt, translatePrompt } from "../prompts.js";
+import { buildStyleProfilerPrompt, translatePrompt, XRAY_ALL_SECTIONS } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
 import { FeatherIcon } from "./Icons.jsx";
 import XRayView, {
@@ -276,11 +276,36 @@ export function bucketWordsByLetter(words) {
   return { buckets, letters };
 }
 
+// §44 Concepts-by-category grouping for the Saved tab. Group saved CONCEPTS by
+// their `section` label (the X-Ray section the breakdown came from); concepts with
+// no section → "Other". Newest-first within a group (savedAt desc). Returns the
+// groups AND an ordered label list: the §13 canonical X-Ray order first
+// (XRAY_ALL_SECTIONS), then any other labels alphabetically, "Other" last. Pure;
+// full store. Exported for tests.
+const CONCEPT_OTHER = "Other";
+export function groupConceptsByCategory(concepts, canonicalOrder = XRAY_ALL_SECTIONS) {
+  const order0 = canonicalOrder || [];
+  const groups = {};
+  for (const c of (concepts || [])) {
+    const label = (c && c.section && String(c.section).trim()) || CONCEPT_OTHER;
+    (groups[label] || (groups[label] = [])).push(c);
+  }
+  for (const label of Object.keys(groups)) {
+    groups[label].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)); // newest-first
+  }
+  const present = Object.keys(groups);
+  const canon = order0.filter((l) => present.includes(l));
+  const rest = present.filter((l) => l !== CONCEPT_OTHER && !order0.includes(l)).sort((a, b) => a.localeCompare(b));
+  const order = [...canon, ...rest, ...(groups[CONCEPT_OTHER] ? [CONCEPT_OTHER] : [])];
+  return { groups, order };
+}
+
 function SavedConcepts() {
   const [concepts, setConcepts] = useState(() => JSON.parse(localStorage.getItem("lyra-saved-concepts") || "[]"));
   const [expanded, setExpanded] = useState(null);
   const [letter, setLetter] = useState("All");          // A–Z index selection (WORDS only)
   const [wordWindow, setWordWindow] = useState(WORD_WINDOW_STEP);
+  const [conceptWindows, setConceptWindows] = useState({}); // per-category load-more (label → shown count)
 
   const remove = (idx) => {
     const next = concepts.filter((_, i) => i !== idx);
@@ -317,6 +342,11 @@ function SavedConcepts() {
   const shownWords = activeWords.slice(0, wordWindow);
   const selectLetter = (L) => { setLetter(L); setWordWindow(WORD_WINDOW_STEP); };
   const indexChips = ["All", ...A_Z, ...(buckets["#"].length ? ["#"] : [])];
+
+  // Concepts grouped by their X-Ray category (full store), each group windowed —
+  // nobody recalls a concept by first letter, so category beats A–Z here.
+  const conceptItems = others.map(e => ({ section: e.c.section, savedAt: e.c.savedAt || 0, c: e.c, i: e.i }));
+  const { groups: conceptGroups, order: conceptOrder } = groupConceptsByCategory(conceptItems);
 
   const sectionHeader = (label) => (
     <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, fontFamily: mono, margin: "14px 0 8px" }}>
@@ -379,7 +409,30 @@ function SavedConcepts() {
       {others.length > 0 && (
         <>
           {sectionHeader(`✦ Concepts · 概念 (${others.length})`)}
-          {renderCards(others)}
+          {/* Concepts grouped by their X-Ray category (the section the breakdown came
+              from); canonical section order, "Other · 其他" last. Each group windows at
+              20 with its own Show-more. */}
+          {conceptOrder.map((label) => {
+            const list = conceptGroups[label] || [];
+            const win = conceptWindows[label] || WORD_WINDOW_STEP;
+            const shown = list.slice(0, win);
+            return (
+              <div key={label} style={{ marginBottom: 4 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.accent2, textTransform: "uppercase", letterSpacing: 0.8, fontFamily: mono, margin: "6px 0" }}>
+                  {label === CONCEPT_OTHER ? "Other · 其他" : label} ({list.length})
+                </div>
+                {renderCards(shown)}
+                {list.length > shown.length && (
+                  <button
+                    onClick={() => setConceptWindows((p) => ({ ...p, [label]: win + WORD_WINDOW_STEP }))}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 10, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: mono, fontSize: 11, fontWeight: 700, color: COLORS.heading, cursor: "pointer", marginBottom: 8 }}
+                  >
+                    Show more · 顯示更多 ({list.length - shown.length})
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </>
       )}
     </div>
