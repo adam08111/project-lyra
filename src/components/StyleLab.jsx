@@ -1298,6 +1298,19 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, trackCall, set
         {hasProfile && (
           <button onClick={resetAll} style={{ padding: "6px 12px", borderRadius: 14, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 11, cursor: "pointer", color: COLORS.muted }}>New analysis</button>
         )}
+        {/* §44: Lyra-feather HOME — the absolute counterpart to the ← (relative back).
+            Fills the previously-empty top-right corner as a symmetric bookend: a round
+            44×44 button matching the ← idiom that JUMPS to the Analyse (X-Ray) front page
+            from any tab. Routed through goToTab so the current tab is pushed onto the §44
+            history — ← still retraces afterwards (a no-op only when already on Analyse). */}
+        <button
+          onClick={() => goToTab("analyze")}
+          title="Go to X-Ray"
+          aria-label="Go to X-Ray"
+          style={{ width: 44, height: 44, borderRadius: 16, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}
+        >
+          <FeatherIcon size={22} color={COLORS.muted} />
+        </button>
       </div>
 
       {/* Tab switcher */}
