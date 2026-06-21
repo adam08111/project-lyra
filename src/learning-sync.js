@@ -149,7 +149,13 @@ export function syncLearningData(data, ctx) {
       chinese: g.chinese || "",
       source: "coaching",
     }));
-    setGrammarLog(prev => [...newEntries, ...prev]);
+    // §56/A2: dedup by phrase+correction so a Reload (re-running sync on the
+    // regenerated reply) doesn't append duplicate grammar entries.
+    setGrammarLog(prev => {
+      const seen = new Set(prev.map(e => `${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
+      const fresh = newEntries.filter(e => !seen.has(`${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
+      return [...fresh, ...prev];
+    });
   }
 
   // 2. Skills deployed → skill deployment log
@@ -166,7 +172,10 @@ export function syncLearningData(data, ctx) {
         topic: topic?.slice(0, 80) || "",
         date: new Date().toISOString(),
       }));
-      localStorage.setItem("lyra-skill-deployments", JSON.stringify([...newEntries, ...existing]));
+      // §56/A2: dedup by skillName+studentApplication (reload re-sync safety).
+      const seen = new Set(existing.map(s => `${(s.skillName || "").toLowerCase()}|${(s.studentApplication || "").toLowerCase()}`));
+      const fresh = newEntries.filter(s => !seen.has(`${(s.skillName || "").toLowerCase()}|${(s.studentApplication || "").toLowerCase()}`));
+      if (fresh.length) localStorage.setItem("lyra-skill-deployments", JSON.stringify([...fresh, ...existing]));
     } catch (e) { /* silent */ }
   }
 
@@ -183,13 +192,20 @@ export function syncLearningData(data, ctx) {
         why: g.why_better,
         topic: topic?.slice(0, 80) || "",
       }));
-      localStorage.setItem("lyra-growth-log", JSON.stringify([...newEntries, ...existing]));
-      // Growth Report cadence: count this practice moment toward the next regen.
-      // The Report tab regenerates when this reaches REGEN_EVERY_N_PRACTICES.
-      try {
-        const n = (Number(localStorage.getItem("lyra-growth-pending")) || 0) + 1;
-        localStorage.setItem("lyra-growth-pending", String(n));
-      } catch (e2) { /* silent */ }
+      // §56/A2: dedup by before+after so a Reload doesn't append duplicate growth
+      // entries AND doesn't double-count the practice toward the regen cadence.
+      const seen = new Set(existing.map(e => `${normGrowthText(e.before)}|${normGrowthText(e.after)}`));
+      const fresh = newEntries.filter(e => !seen.has(`${normGrowthText(e.before)}|${normGrowthText(e.after)}`));
+      if (fresh.length) {
+        localStorage.setItem("lyra-growth-log", JSON.stringify([...fresh, ...existing]));
+        // Growth Report cadence: count this practice moment toward the next regen
+        // (only when a genuinely new growth entry survived dedup).
+        // The Report tab regenerates when this reaches REGEN_EVERY_N_PRACTICES.
+        try {
+          const n = (Number(localStorage.getItem("lyra-growth-pending")) || 0) + 1;
+          localStorage.setItem("lyra-growth-pending", String(n));
+        } catch (e2) { /* silent */ }
+      }
     } catch (e) { /* silent */ }
   }
 
