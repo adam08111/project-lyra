@@ -56,6 +56,15 @@ describe("LYRA_BRAIN — Diagnostic Critique block", () => {
     expect(block).toMatch(/no phase\/pass labels/);              // silent gate enforces it
   });
 
+  it("uses no literal A)/B) pass labels — they contradicted the §54 leak ban (§56/C3)", () => {
+    expect(block).not.toMatch(/(^|\n)\s*A\)\s/);  // no "A)" section marker the model could echo
+    expect(block).not.toMatch(/(^|\n)\s*B\)\s/);  // no "B)" section marker
+    expect(block).not.toMatch(/\([AB]\)/);         // no "(A)"/"(B)" cross-references
+    // the descriptive section names remain
+    expect(block).toMatch(/SENTENCE-BY-SENTENCE/);
+    expect(block).toMatch(/LOGIC PASS/);
+  });
+
   it("forces sentence-by-sentence coverage (not grouped) + leaps with both directions", () => {
     expect(block).toMatch(/SENTENCE-BY-SENTENCE/);
     expect(block).toMatch(/Do NOT collapse this into a grouped/);   // explicitly bans the failure mode
