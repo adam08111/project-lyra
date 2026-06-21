@@ -5,7 +5,7 @@ import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt, buildMessageTranslatePrompt } from "./prompts.js";
 import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
-import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice } from "./utils.js";
+import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import WordLookup from "./components/WordLookup.jsx";
 import { snapshotBackup } from "./backup.js";
@@ -850,45 +850,65 @@ Rules:
     if (!draft.trim()) return;
     setProofLoading(true);
     setProofread(null);
-    try {
-      // SKILL-AWARE: Build anonymised active skill context so proofread doesn't contradict deployed techniques
-      let activeSkillCtx = null;
-      if (appliedSkill) {
-        const { anonymised } = anonymiseSkillsForAI([appliedSkill]);
-        const anonSkill = anonymised[0];
-        const techs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
-          || (anonSkill.techniques || []).map(t => typeof t === 'string' ? { technique: t } : t);
-        activeSkillCtx = {
-          name: techs.map(t => t.technique).join(", "),
-          style: anonSkill.signatureStyle || "",
-          techniques: techs.map(t => `${t.technique}${t.description ? ` — ${t.description}` : ""}`).join("; "),
-        };
-      }
 
-      const proofRoute = getRouteConfig("proofread");
-      trackCall();
-      const result = await callAI(buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules), draft, false, 1000, proofRoute.thinkingBudget, undefined, undefined, proofRoute.model);
-      const parsed = JSON.parse(result.replace(/```json|```/g, "").trim());
-      setProofread(parsed);
-      setProofTab("grammar");
-      if (parsed.grammar?.length) {
-        const newEntries = parsed.grammar.map(g => ({
-          id: Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-          date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-          phrase: g.phrase,
-          correction: g.correction,
-          rule: g.rule,
-          explanation: g.explanation,
-          example_wrong: g.example_wrong || "",
-          example_correct: g.example_correct || "",
-          topic: topic?.slice(0, 60) || "Untitled",
-        }));
-        setGrammarLog(prev => [...newEntries, ...prev]);
-        setCheckFlash(true);
-        setTimeout(() => setCheckFlash(false), 2000);
-      }
-    } catch (e) {
-      setProofread({ grammar: [], style: [], vocabulary: [], strengths: "Unable to analyse.", nextFocus: "Try again." });
+    // SKILL-AWARE: Build anonymised active skill context so proofread doesn't contradict deployed techniques
+    let activeSkillCtx = null;
+    if (appliedSkill) {
+      const { anonymised } = anonymiseSkillsForAI([appliedSkill]);
+      const anonSkill = anonymised[0];
+      const techs = anonSkill.analysedTechniques || anonSkill.researchedTechniques
+        || (anonSkill.techniques || []).map(t => typeof t === 'string' ? { technique: t } : t);
+      activeSkillCtx = {
+        name: techs.map(t => t.technique).join(", "),
+        style: anonSkill.signatureStyle || "",
+        techniques: techs.map(t => `${t.technique}${t.description ? ` — ${t.description}` : ""}`).join("; "),
+      };
+    }
+
+    const proofRoute = getRouteConfig("proofread");
+    const sys = buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules);
+    // The Lite tier sometimes returns prose, or fenced/preamble/truncated JSON.
+    // Parse defensively (extractJsonObject) and RETRY ONCE before giving up, so a
+    // bad first response never leaves the panel silently empty (the §57 bug).
+    let parsed = null;
+    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      try {
+        trackCall();
+        // 4096, not 1000: the model can spend ~1–1.8K thinking tokens (which count
+        // toward maxOutputTokens), so a low cap truncated the JSON mid-object →
+        // parse failed → empty panel. 4096 leaves room for thinking + the full
+        // grammar/style/vocab payload (matches the chat_coaching budget).
+        const result = await callAI(sys, draft, false, 4096, proofRoute.thinkingBudget, undefined, undefined, proofRoute.model);
+        const obj = extractJsonObject(result);
+        // A usable result has at least one of the three arrays.
+        if (obj && (Array.isArray(obj.grammar) || Array.isArray(obj.style) || Array.isArray(obj.vocabulary))) parsed = obj;
+      } catch (e) { /* prose / truncated / malformed — retry once, then error state */ }
+    }
+
+    if (!parsed) {
+      // Never a silent empty panel — show a visible, retryable error (see EditorTab).
+      setProofread({ error: "Couldn't check this right now — please try again." });
+      setProofLoading(false);
+      return;
+    }
+
+    setProofread(parsed);
+    setProofTab("grammar");
+    if (parsed.grammar?.length) {
+      const newEntries = parsed.grammar.map(g => ({
+        id: Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        phrase: g.phrase,
+        correction: g.correction,
+        rule: g.rule,
+        explanation: g.explanation,
+        example_wrong: g.example_wrong || "",
+        example_correct: g.example_correct || "",
+        topic: topic?.slice(0, 60) || "Untitled",
+      }));
+      setGrammarLog(prev => [...newEntries, ...prev]);
+      setCheckFlash(true);
+      setTimeout(() => setCheckFlash(false), 2000);
     }
     setProofLoading(false);
   }, [draft, topic, typeLabel, appliedSuggestions, appliedSkill, examRules]);

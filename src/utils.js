@@ -145,6 +145,22 @@ DOES NOT EXIST for the purposes of this conversation.
 // Strip markdown formatting from text
 export const stripMd = (t) => t.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/\*\s*/g, "").replace(/^\s*[-\u2013\u2022]\s*/, "").trim();
 
+// Robustly parse a single JSON object from a model response that may wrap it in
+// ```json fences, prepend preamble/prose, or trail commentary. Strips fences,
+// then slices the outermost { ... } before parsing (the growth-report
+// parseProfileJSON pattern). Throws if there is no complete, valid object \u2014
+// e.g. the model returned prose with no braces, or truncated/unterminated JSON
+// (both observed on the Lite tier) \u2014 so the caller can retry / show an error
+// rather than rendering nothing.
+export function extractJsonObject(text) {
+  let t = (text || "").trim();
+  t = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const first = t.indexOf("{");
+  const last = t.lastIndexOf("}");
+  if (first >= 0 && last > first) t = t.slice(first, last + 1);
+  return JSON.parse(t);
+}
+
 // Truncate at word boundary with ellipsis
 export const truncate = (t, max) => { if (t.length <= max) return t; const cut = t.slice(0, max).replace(/\s+\S*$/, ""); return (cut || t.slice(0, max)) + "\u2026"; };
 

@@ -2031,3 +2031,22 @@ All of **§51–§56 was local** (origin/main was `2471743` = §50; the brief's 
 
 **Tests: 353 green before and after** (was 348 pre-review; +4 A2 dedup, +1 C3 guard). Build clean.
 
+---
+
+## 57. UPDATE — 21 June 2026 — Proofread panel showed empty Grammar/Style/Vocab (parse failure → silent empty)
+
+**Bug (screenshot):** the Proofread panel showed Grammar/Style/Vocab tabs with NO content under any tab and no error — looked stuck/unresponsive.
+
+### 57.0 Step-0 finding — **B (PARSE FAILED)**, root cause = thinking tokens starving the response budget
+Traced the flow live. `runProofread` (`lyra.jsx`) called the Lite route at **`maxTokens: 1000`** and parsed with a **naive** `JSON.parse(result.replace(/```json|```/g,""))` — no preamble strip, no outermost-`{}` extraction. The proxy token log was decisive: `thinking=957` (cap 1000) / `thinking=1815` (cap 2048) with `response=39` / `229` — **the model's thinking tokens count toward `maxOutputTokens`, leaving almost nothing for the JSON, which truncated mid-object** → naive parse threw → the `catch` set `{grammar:[],style:[],vocabulary:[],strengths,nextFocus}`, but EditorTab renders **only the three arrays** and never showed `strengths`/`nextFocus` → empty tabs, no error (the screenshot). Not A (HTTP 200), not C (not a clean empty parse), not D (tabs do switch). Live repro: at 1000 the Lite reply was prose or truncated JSON; **at 4096 it returned complete `{grammar:4, style:2, vocabulary:3}` that parses cleanly.**
+
+### 57.1 The fix
+- **`maxTokens` 1000 → 4096** (`lyra.jsx`) — room for thinking + the full grammar/style/vocab payload (the chat-tier pattern). This is the primary fix; verified the real model now returns complete parseable JSON.
+- **Robust parse** — new `extractJsonObject` (`utils.js`, the `parseProfileJSON` pattern: strip fences, slice the outermost `{…}`, parse) replaces the naive parse; **retry once** before giving up.
+- **Hardened prompt** (`prompts.js`) — "Return ONLY a single raw JSON object — start with `{`, end with `}`, no code fences, no prose" (the Lite model had returned markdown prose).
+- **Never silent/stuck** (`EditorTab.jsx`) — on failure the panel now shows a visible **"Couldn't check this right now — try again"** with a retry button (was an invisible error payload); each tab shows a **"✓ No … found"** placeholder when its array is empty, so a clean draft never looks broken either. Every `runProofread` exit sets `proofLoading=false`.
+- +7 `extractJsonObject` tests (**360 green**), build clean.
+
+### 57.2 Verification
+Live: real model at 4096 → full `{g:4,s:2,v:3}` JSON, both naive and robust parsers OK (was truncated to 39–229 response tokens at 1000). Adversarial verify (2 independent agents over the final code): **no silent/stuck path** across all five outcomes (valid · empty-arrays · partial-object · parse-throw×2 · call-throw); `proofLoading` cleared on every exit; JSX balanced.
+

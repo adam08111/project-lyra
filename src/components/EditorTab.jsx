@@ -312,6 +312,12 @@ export default function EditorTab({
               <div style={{ fontSize: 13, color: COLORS.muted }}>Doing the magic...</div>
             </div>
           ) : proofread && (
+            proofread.error ? (
+              <div style={{ textAlign: "center", padding: "28px 20px" }}>
+                <div style={{ fontSize: 13, color: COLORS.muted, lineHeight: 1.6, marginBottom: 14 }}>{proofread.error}</div>
+                <button onClick={runProofread} style={{ ...s.chip, fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6, color: COLORS.heading, cursor: "pointer" }}>{"↻"} Try again</button>
+              </div>
+            ) : (
             <>
               {/* Tabs */}
               <div style={{ display: "flex", gap: 4, marginBottom: 16, background: COLORS.bg2, borderRadius: 10, padding: 3 }}>
@@ -325,7 +331,7 @@ export default function EditorTab({
               </div>
 
               {/* Grammar tab */}
-              {proofTab === "grammar" && proofread.grammar?.map((g, i) => (
+              {proofTab === "grammar" && (proofread.grammar?.length ? proofread.grammar.map((g, i) => (
                 <div key={i} style={{ ...s.card, marginBottom: 10, padding: 12 }}>
                   <div style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, background: "#FFF5F5", color: COLORS.red, display: "inline-block", marginBottom: 6 }}>{g.phrase}</div>
                   <div style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, background: "#F0FFF0", color: COLORS.green, display: "inline-block", marginLeft: 6, marginBottom: 6 }}>{g.correction}</div>
@@ -355,18 +361,18 @@ export default function EditorTab({
                     <MiniLessonCard content={miniLesson["proof_" + i].content} rule={g.rule} phrase={g.phrase} correction={g.correction} sendChat={sendChat} setTab={setTab} />
                   )}
                 </div>
-              ))}
+              )) : <div style={{ textAlign: "center", padding: "24px 16px", fontSize: 12, color: COLORS.muted }}>{"✓"} No grammar issues found.</div>)}
 
               {/* Style tab */}
-              {proofTab === "style" && proofread.style?.map((st, i) => (
+              {proofTab === "style" && (proofread.style?.length ? proofread.style.map((st, i) => (
                 <div key={i} style={{ ...s.card, marginBottom: 10, padding: 12, borderLeft: `3px solid ${COLORS.amber}` }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.amber, marginBottom: 6 }}>{st.observation}</div>
                   <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.5 }}>{st.suggestion}</div>
                 </div>
-              ))}
+              )) : <div style={{ textAlign: "center", padding: "24px 16px", fontSize: 12, color: COLORS.muted }}>{"✓"} No style notes — looks good.</div>)}
 
               {/* Vocabulary tab */}
-              {proofTab === "vocabulary" && proofread.vocabulary?.map((v, i) => (
+              {proofTab === "vocabulary" && (proofread.vocabulary?.length ? proofread.vocabulary.map((v, i) => (
                 <div key={i} style={{ ...s.card, marginBottom: 10, padding: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <span style={{ fontSize: 12, color: COLORS.muted, textDecoration: "line-through" }}>{v.weak}</span>
@@ -375,8 +381,9 @@ export default function EditorTab({
                   </div>
                   <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.5 }}>{v.reason}</div>
                 </div>
-              ))}
+              )) : <div style={{ textAlign: "center", padding: "24px 16px", fontSize: 12, color: COLORS.muted }}>{"✓"} No vocabulary upgrades suggested.</div>)}
             </>
+            )
           )}
         </div>
       )}
