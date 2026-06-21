@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { FeatherIcon } from "./Icons.jsx";
@@ -7,6 +8,7 @@ export default function GrammarLog({
   grammarLog, setGrammarLog, showGrammarLog, setShowGrammarLog,
   miniLesson, fetchMiniLesson, sendChat, setTab,
 }) {
+  const [hoverDelete, setHoverDelete] = useState(null); // §55: which card's delete-× is hovered
   if (!showGrammarLog) return null;
 
   return (
@@ -41,7 +43,25 @@ export default function GrammarLog({
                   <div style={{ fontSize: 11, color: COLORS.accent1, fontWeight: 700, marginBottom: 10, marginTop: i > 0 ? 16 : 0, textTransform: "uppercase", letterSpacing: 1.5 }}>{entry.date}</div>
                 )}
                 <div style={{ ...s.card, marginBottom: 12, padding: 14, borderLeft: `3px solid ${COLORS.red}`, position: "relative" }}>
-                  <button onClick={() => setGrammarLog(prev => prev.filter(e => e.id !== entry.id))} style={{ position: "absolute", top: 10, right: 10, width: 26, height: 26, borderRadius: 13, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: COLORS.muted, padding: 0 }}>×</button>
+                  {/* §55: destructive delete — red so the consequence is visible before the
+                      tap. 44px tap target (transparent), 26px red-tinted visible circle that
+                      strengthens on hover/press. Behaviour unchanged. */}
+                  <button
+                    onClick={() => setGrammarLog(prev => prev.filter(e => e.id !== entry.id))}
+                    onMouseEnter={() => setHoverDelete(entry.id)}
+                    onMouseLeave={() => setHoverDelete(c => (c === entry.id ? null : c))}
+                    onMouseDown={() => setHoverDelete(entry.id)}
+                    title="Delete this entry"
+                    aria-label="Delete this grammar entry"
+                    style={{ position: "absolute", top: 1, right: 1, width: 44, height: 44, borderRadius: 22, border: "none", background: "transparent", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <span style={{
+                      width: 26, height: 26, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
+                      border: `1.5px solid ${hoverDelete === entry.id ? COLORS.red : COLORS.red + "55"}`,
+                      background: hoverDelete === entry.id ? `${COLORS.red}26` : `${COLORS.red}0D`,
+                      color: COLORS.red, fontSize: 14, lineHeight: 1, transition: "all 0.15s ease",
+                    }}>×</span>
+                  </button>
 
                   <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, marginBottom: 8 }}>{entry.rule}</div>
 

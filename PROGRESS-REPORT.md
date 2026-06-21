@@ -1997,3 +1997,11 @@ Added **OUTPUT — WHAT THE STUDENT SEES** rules: (a) NEVER print phase/pass nam
 ### 54.2 VALIDATION — re-ran the 15-sentence draft; scaffolding gone
 Real `buildCoachPrompt` → live proxy @ 4096, HTTP 200. Automated checks all pass: **no markdown headers, no phase/pass labels, no `S`-notation, no LaTeX**, CJK = 0.7% (still §52 English-primary). The reply reads as a teacher: plain signposts (*"Let's look at your sentences first, then your argument flow"*, *"The flow of your argument"*), located leaps in plain words (*"Between your 7th and 9th sentences"*, *"In your 11th sentence"*), both repair directions, akin-to held as taste, one task. Leap **type** names (Size Mismatch, Two Tangled Arguments) are retained — pedagogical vocabulary the student should learn, not internal scaffolding. The §52 LaTeX residual did not surface this run.
 
+---
+
+## 55. UPDATE — 21 June 2026 — Grammar Log delete × is now red (destructive affordance)
+
+The per-card × in the Grammar Log (`GrammarLog.jsx`) rendered neutral grey — same weight as inert text — despite DELETING the card. Coloured it `COLORS.red` (#D94F4F) with a faint red-tinted circular background + faint red border at rest that strengthen on hover/press, inside a 44px tap target (26px visible circle). Delete behaviour unchanged. Verified live on the preview: rest glyph/border/bg = red at 100% / 33% / 5%, hover = red at 100% / 100% / 15%, 44×44 target, one × per card (3 cards). "Clear all" untouched (its own control).
+
+**Scope — proofread panel NOT included, by design:** the proofread panel's grammar cards have no per-card delete ×; its only × (`EditorTab.jsx:299`) just CLOSES the panel (non-destructive, reopenable by re-running Proofread), so it correctly stays neutral grey. Only destructive ×'s go red.
+
