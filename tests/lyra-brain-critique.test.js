@@ -32,6 +32,18 @@ describe("LYRA_BRAIN — Diagnostic Critique block", () => {
     expect(block).toMatch(/TWO TANGLED\s+ARGUMENTS leap NAMED here at the seam/);
   });
 
+  it("scopes ENGLISH-PRIMARY language discipline to the critique — 繁中 as support, never Chinese-only (§52)", () => {
+    // §52: the critique is itself an English lesson — reasons / logic / task in
+    // simple English; Chinese is a support gloss, never a full restatement or a
+    // Chinese-only section (the Chinese-dominant inversion that was observed).
+    expect(block).toMatch(/ENGLISH-PRIMARY/);
+    expect(block).toMatch(/繁中 AS SUPPORT/);
+    expect(block).toMatch(/never a substitute/);
+    expect(block).toMatch(/NEVER a Chinese-only reason or section/);
+    expect(block).toContain("原形動詞"); // grammar-term pairs stay allowed (support, not substitution)
+    expect(block).toMatch(/every reason and section ENGLISH-PRIMARY/); // silent gate enforces it
+  });
+
   it("forces sentence-by-sentence coverage (not grouped) + leaps with both directions", () => {
     expect(block).toMatch(/SENTENCE-BY-SENTENCE/);
     expect(block).toMatch(/Do NOT collapse this into a grouped/);   // explicitly bans the failure mode

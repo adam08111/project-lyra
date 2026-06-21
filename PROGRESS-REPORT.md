@@ -1938,3 +1938,19 @@ Fed a synthetic 12-sentence "AI teachers" speech (seeded with all four leap type
 
 **Minor residual to watch (NOT the §51 target):** one sentence fix drifted toward a vocabulary upgrade ("no money at all" → "financial ruin") rather than a pure illustration of the student's own meaning — the correction-vs-illustration line. Candidate for a future tightening; it is not the shallow-skim failure mode.
 
+---
+
+## 52. UPDATE — 21 June 2026 — Diagnostic Critique made ENGLISH-PRIMARY (繁中 as support, not substitute)
+
+*(Numbering: the task brief labelled this §49; the log is past that — §49 Feedback Loop, §50 Critique refined, §51 4th leap — so it lands as §52.)*
+
+**Bug (preview screenshot):** the critique returned English section *headings* but a Chinese-DOMINANT body — the reasons, the logic-pass reasoning, and the closing task were in 繁中 only. For an English-writing coach that is inverted: the student is learning to write English, so the teaching must happen IN English with Chinese as a comprehension scaffold. The §50 block never specified the language RATIO, so Gemini defaulted to the student's L1.
+
+### 52.1 The fix (`lyra-brain.js`, Diagnostic Critique block) — one scoped discipline
+Added a **LANGUAGE — ENGLISH-PRIMARY, 繁中 AS SUPPORT** paragraph, applied to all of: the sentence-by-sentence reasons, the logic pass, the correction-vs-taste notes, and the closing task. Every explanation is clear, simple English (14-year-old level); Traditional Chinese (繁體) appears as a SUPPORT gloss for a hard term or a one-line clarification — NOT a full Chinese restatement, and NEVER a Chinese-only reason or section. Grammar-term pairs ("base verb / 原形動詞") stay welcome — support, not substitution. A short clause was added to the silent pre-output gate to enforce it. **Scoped to THIS block only** (no restatement of the app's general bilingual rule). +1 guarding test. **337 tests green, build clean.** This English-default is also what makes the coming per-message 「翻譯成中文」 toggle meaningful (§53).
+
+### 52.2 VALIDATION — re-ran a 15-sentence AI-debate speech; inversion fixed
+Real `buildCoachPrompt` (60,679-byte system, `gemini-3-flash-preview` @ 4096) → live proxy, HTTP 200. **CJK ratio of the visible reply = 0.6%** (15 CJK chars vs 2,326 Latin): the whole critique — Pass A sentence marks, Pass B logic pass (3 located leaps incl. Two Tangled Arguments S7→S9 with both repair directions), and the one closing task — is now ENGLISH, with 繁中 only as parenthetical glosses ("風格選擇", "過度概括", "不合邏輯的推論"). The Chinese-dominant inversion is gone. Correction-vs-taste held (*"'akin to' … It's your call (風格選擇)"*).
+
+**Separate known issue re-surfaced (NOT §52 scope):** this run emitted LaTeX math arrows `$\rightarrow$` despite the block's plain-→ ban — model non-determinism on the Flash tier (the §50 run passed that check). Flagged per Brief 2 Step 6 as a separate tightening candidate; it does not affect the language fix.
+
