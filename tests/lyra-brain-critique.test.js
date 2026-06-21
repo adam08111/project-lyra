@@ -20,6 +20,18 @@ describe("LYRA_BRAIN — Diagnostic Critique block", () => {
     }
   });
 
+  it("forces TWO TANGLED ARGUMENTS to be named as a located leap, not deferred to the hand-back (§50 residual)", () => {
+    // §50 validation gap: the model named 3 leaps in the logic pass but surfaced
+    // the two-tangled split only in the closing hand-back. The type must now be a
+    // LOCATED leap (seam) named in the pass, with the hand-back-only path forbidden.
+    const tangle = block.split("TWO TANGLED ARGUMENTS")[1]?.split("For EACH leap")[0] || "";
+    expect(tangle).toMatch(/SEAM/);
+    expect(tangle).toMatch(/name it HERE in this pass/);
+    expect(tangle).toMatch(/ONLY in the closing\s+hand-back/);
+    // and the silent pre-output gate checks it was named here, not left for the hand-back
+    expect(block).toMatch(/TWO TANGLED\s+ARGUMENTS leap NAMED here at the seam/);
+  });
+
   it("forces sentence-by-sentence coverage (not grouped) + leaps with both directions", () => {
     expect(block).toMatch(/SENTENCE-BY-SENTENCE/);
     expect(block).toMatch(/Do NOT collapse this into a grouped/);   // explicitly bans the failure mode

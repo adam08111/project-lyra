@@ -1924,3 +1924,17 @@ Fed a **representative** messy 15-sentence AI-debate speech (the exact gold draf
 
 **Conclusion: checks 1–2 pass → the framework transferred. SHIP on the current `chat_coaching` tier** (gemini-3-flash-preview @ 4096) — no need to graduate critique to its own route + a stronger model. The forcing prompt reproduced gold-class depth on Flash and BEAT the gold on the akin-to guard. **Residual to watch:** the two-tangled-arguments leap surfaced only in the hand-back, not as a named 4th leap — a future tightening could push naming it explicitly, but it is not the shallow-skim failure mode. 335 tests green, build clean.
 
+---
+
+## 51. UPDATE — 21 June 2026 — §50 residual CLOSED: TWO TANGLED ARGUMENTS now named as a located leap
+
+§50.4 left exactly one gap: in the live Gemini run the **two-tangled-arguments** leap surfaced only in the closing hand-back, not as a named leap in the logic pass. Closed.
+
+### 51.1 The fix (`lyra-brain.js`, Diagnostic Critique block) — two surgical edits
+The TWO TANGLED ARGUMENTS type was worded as a meta-observation about a *fix* ("separating them dissolves the other leaps") — which is precisely why the model filed it under the hand-back rather than the logic pass. Reframed it as a **located leap that must be named in the pass**: locate it at the **SEAM where the second argument first intrudes** ("S8 starts a new claim, not a step in the S1-S7 chain"), name it HERE like the other three, with an explicit ban on surfacing it ONLY in the closing hand-back. The same check was added to the silent PRE-OUTPUT COVERAGE GATE ("if the draft runs two or more distinct claims, the TWO TANGLED ARGUMENTS leap NAMED here at the seam, not left for the hand-back?"). +1 guarding test in `lyra-brain-critique.test.js` (asserts the seam wording + the gate clause). **336 tests green, `vite build` clean.**
+
+### 51.2 VALIDATION — re-ran the §50.4 method; residual closed
+Fed a synthetic 12-sentence "AI teachers" speech (seeded with all four leap types + the akin-to trap) through the REAL `buildCoachPrompt` (59,855-byte system, `gemini-3-flash-preview` @ thinkingBudget 4096) to the live proxy on :3001. HTTP 200. The Logic Pass now names **TWO TANGLED ARGUMENTS as leap #2, located "S7 → S9"** — *"two distinct 'bombs': education quality (laziness) vs economics (jobs)… by calling them 'the same problem' in S9 you weaken both"* — with BOTH repair directions (build the bridge OR split into two paragraphs). That is the exact behaviour missing in §50.4. Also held: **Size Mismatch (S6 black hole)** and **Missing Causal Bridge (S10)** as separate located leaps; sentence-by-sentence (not grouped); and the **akin-to TASTE guard** (*"'akin to' is grammatically correct if you want to sound more academic"* — offered as a choice, not "corrected"). One bounded hand-back (split into two paragraphs).
+
+**Minor residual to watch (NOT the §51 target):** one sentence fix drifted toward a vocabulary upgrade ("no money at all" → "financial ruin") rather than a pure illustration of the student's own meaning — the correction-vs-illustration line. Candidate for a future tightening; it is not the shallow-skim failure mode.
+
