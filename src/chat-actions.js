@@ -17,6 +17,43 @@ export function cleanMessageText(text) {
 }
 
 /**
+ * Copy text to the clipboard, robust across contexts. navigator.clipboard only
+ * exists in a SECURE context (https / localhost); on a phone hitting the dev
+ * server over the LAN IP (http://192.168.x.x:3000) it is undefined, so we fall
+ * back to the legacy execCommand("copy") path. Returns true on success.
+ * @param {string} text
+ * @returns {Promise<boolean>}
+ */
+export async function copyToClipboard(text) {
+  const value = text || "";
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch (e) { /* secure-context write blocked (no focus / no permission) — fall through */ }
+  // Fallback for insecure contexts (phone on http://<LAN-IP>) and older browsers.
+  try {
+    if (typeof document === "undefined") return false;
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-9999px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();                          // execCommand("copy") needs a focused element with a live selection
+    ta.select();
+    ta.setSelectionRange(0, value.length); // iOS Safari needs the explicit range
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Can this message's turn be RELOADED (re-called)? Only AI messages that retain
  * the originating request text are reconstructable — the welcome greeting (§43)
  * and any legacy/edited message lack reqText, so reload must be disabled for

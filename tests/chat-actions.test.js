@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { cleanMessageText, canReloadMessage, getMessageTranslation } from "../src/chat-actions.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { cleanMessageText, canReloadMessage, getMessageTranslation, copyToClipboard } from "../src/chat-actions.js";
 import { buildMessageTranslatePrompt } from "../src/prompts.js";
 
 describe("§53 chat action row — pure helpers", () => {
@@ -53,6 +53,22 @@ describe("§53 chat action row — pure helpers", () => {
       const second = await getMessageTranslation(m, fetcher);
       expect(second).toBe("新的中文翻譯");
       expect(calls).toBe(1); // cached — no second call
+    });
+  });
+
+  describe("copyToClipboard (secure-context + insecure-context fallback)", () => {
+    afterEach(() => { vi.unstubAllGlobals(); });
+    it("uses navigator.clipboard.writeText when available and returns true", async () => {
+      let written = null;
+      vi.stubGlobal("navigator", { clipboard: { writeText: async (v) => { written = v; } } });
+      const ok = await copyToClipboard("hello 世界");
+      expect(ok).toBe(true);
+      expect(written).toBe("hello 世界");
+    });
+    it("returns false (no crash) when neither clipboard nor document is available", async () => {
+      vi.stubGlobal("navigator", {}); // insecure context → no navigator.clipboard; node env → no document
+      const ok = await copyToClipboard("x");
+      expect(ok).toBe(false);
     });
   });
 

@@ -1980,3 +1980,6 @@ Drove the app to a Persuasive chat. (1) Row shows under Lyra messages, **none on
 - LaTeX `$...$` (the §52 residual) would also land in copy output verbatim — same separate tightening candidate.
 - Verification created one throwaway writing ("Should AI be banned in schools?") in the preview's local data — safe to delete from the sidebar.
 
+### 53.4 Follow-up — Copy fixed for insecure contexts (phone on the LAN IP)
+**Bug (reported):** Copy did nothing. Cause: on a phone hitting the dev server over the LAN IP (`http://<ip>:3000`, an **insecure context**) `navigator.clipboard` is `undefined`, so `writeText` threw and the silent catch left Copy doing nothing (it would have worked on desktop `localhost` = secure). Fix: `copyToClipboard` (chat-actions.js) tries `navigator.clipboard.writeText` (secure context) then falls back to `document.execCommand("copy")` via a focused off-screen textarea (works on a real tap in insecure contexts). Copy now also copies **what's displayed** — the 繁中 when translated, else English. +2 tests (347 total), build clean. *Headless caveat: neither clipboard path can be demonstrated headlessly (both need a real user-activation/focus that programmatic clicks lack) — re-test on the device.*
+

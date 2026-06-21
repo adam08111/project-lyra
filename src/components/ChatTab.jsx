@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { COLORS, QUICK_ACTION_MESSAGES } from "../constants.js";
 import { formatSources } from "../utils.js";
-import { cleanMessageText, canReloadMessage, getMessageTranslation } from "../chat-actions.js";
+import { cleanMessageText, canReloadMessage, getMessageTranslation, copyToClipboard } from "../chat-actions.js";
 import { sharedStyles as s } from "../styles.js";
 import { FeatherIcon, CopyIcon, TranslateIcon, ReloadIcon } from "./Icons.jsx";
 import TypewriterBubble from "./TypewriterBubble.jsx";
@@ -63,12 +63,14 @@ export default function ChatTab({
   const [zhVisible, setZhVisible] = useState({}); // { [i]: true } → bubble shows 繁中
   const [zhLoading, setZhLoading] = useState({}); // { [i]: true } → translating
 
-  const handleCopy = async (i, text) => {
-    try {
-      await navigator.clipboard.writeText(cleanMessageText(text));
+  const handleCopy = async (i, m) => {
+    // Copy what the student SEES: the Chinese when they've translated, else English.
+    const shown = (zhVisible[i] && m.translation_zh) ? m.translation_zh : m.text;
+    const ok = await copyToClipboard(cleanMessageText(shown));
+    if (ok) {
       setCopiedIdx(i);
       setTimeout(() => setCopiedIdx(c => (c === i ? null : c)), 1500);
-    } catch (e) { /* clipboard blocked — fail silently, never crash the chat */ }
+    }
   };
 
   const handleTranslate = async (i, m) => {
@@ -204,7 +206,7 @@ export default function ChatTab({
                   Never on user bubbles. */}
               {m.role === "ai" && editingMsgIdx !== i && (
                 <div style={{ display: "flex", gap: 2, marginTop: 2, paddingLeft: 2, alignItems: "center" }}>
-                  <button onClick={(e) => { e.stopPropagation(); handleCopy(i, m.text); }} title="Copy" aria-label="Copy message" style={actionBtnStyle}>
+                  <button onClick={(e) => { e.stopPropagation(); handleCopy(i, m); }} title="Copy" aria-label="Copy message" style={actionBtnStyle}>
                     {copiedIdx === i
                       ? <span style={{ fontSize: 11, color: COLORS.green, fontFamily: "'Courier Prime', monospace" }}>{"✓"}</span>
                       : <CopyIcon size={15} />}
