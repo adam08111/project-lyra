@@ -1881,3 +1881,15 @@ The button renders only when `onApply` is passed (`{onApply && <button>}`). Stop
 ### 48.4 Parked (per the brief — not acted on)
 The bottom-row "Practice" may now be redundant with the per-card "Practise/Continue" (per-card is more precise — a technique, not the skill in abstract). Flagged for a future decision.
 
+---
+
+## 49. UPDATE — 21 June 2026 — Diagnostic Feedback Loop added to LYRA_BRAIN (the critique counterpart to the 4-Step Protocol)
+
+Lyra had a strong GENERATIVE method (the 4-Step Coaching Protocol — teach a skill forward) but only a thin diagnostic block for critiquing a submitted draft. Added a new gated `LYRA_BRAIN` section — **THE DIAGNOSTIC FEEDBACK LOOP** — the systematic 7-phase critique that coaches an existing draft BACKWARD, distilled from the user's spec.
+
+- **Gated** to "student submits a real DRAFT / PARAGRAPH for critique" — not casual replies or single sentences (defers to the existing MATCH THE RESPONSE + "DIAGNOSE, DON'T RE-TEACH" rules); one focus question per turn, lead with what works.
+- **The 7 phases:** 0 comprehend (reflect the intended meaning back; ASK if unparseable) → 1 name the failing layer + praise the strong one → 2 group errors into NAMED rules ranked by frequency (patterns, not instances) → 3 sentence-by-sentence with the REASON → 4 **logic as a SEPARATE pass** (name each LEAP — size-mismatch / stacked-different / missing-causal-bridge / two-tangled; offer build-bridge OR shrink-claim) → 5 **device-sizing** (the device must match the claim's size and CARRY the logic — the black-hole self-reinforcing-loop worked example) → 6 preserve voice, separate correction from taste → 7 hand back ONE bounded task, confirm stuck patterns with evidence.
+- Placed right after the 4-Step Protocol (its forward counterpart); the semicolon-ban + never-ghostwrite rules apply to every clean/target version modelled inside the loop. **Distilled (~600 words)** per the chosen approach — kept the directive essentials + the worked example, not the spec verbatim (LYRA_BRAIN rides every coaching call).
+
+`LYRA_BRAIN` is prepended to coaching / training / eval (not proofread / structural / skill_match), so the loop reaches the chat coach where draft critique happens. **329 tests green, `vite build` clean, `:3000` serves the updated brain.** The behavioural check is a live coaching test — submit a draft to Lyra and confirm she runs the loop (reflect-back → named-rule grouping → separate logic pass → device-sizing → hand-back).
+
