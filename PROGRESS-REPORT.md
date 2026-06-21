@@ -2005,3 +2005,29 @@ The per-card × in the Grammar Log (`GrammarLog.jsx`) rendered neutral grey — 
 
 **Scope — proofread panel NOT included, by design:** the proofread panel's grammar cards have no per-card delete ×; its only × (`EditorTab.jsx:299`) just CLOSES the panel (non-destructive, reopenable by re-running Proofread), so it correctly stays neutral grey. Only destructive ×'s go red.
 
+---
+
+## 56. UPDATE — 21 June 2026 — Adversarial review of §43–§55, then push + merge to origin/main
+
+*(Numbering: the task brief labelled this §51; the log is past that, so the review fixes land as §56/A2 + §56/C3 and this is §56.)*
+
+### PART 1 — review (20 hypotheses; fan-out of 5 area investigators + adversarial verify on the 7 CONFIRMED)
+The verify pass earned its keep: it **downgraded/refuted 3 of the 7** confirmed findings.
+
+| ID | Verdict (post-verify) | Evidence | Outcome |
+|----|------|----------|---------|
+| **A2** | CONFIRMED · medium · HELD | Reload re-runs `syncLearningData`; grammar + skills had NO dedup, growth had no content dedup AND double-incremented `lyra-growth-pending` (premature regen). `learning-sync.js:139-194` | **FIXED** `9cf71ca` |
+| **C3** | CONFIRMED · ↓high→low · HELD | Standing leak-ban present, but literal `A)`/`B)` pass labels (`lyra-brain.js:169/171/173/202`) contradicted the §54 "Pass A/B" ban. (Verify corrected the original's bad citations: 5 occurrences, self-check clean.) | **FIXED** `7a59b66` |
+| C1 | CONFIRMED · medium · HELD (observation) | Critique gate is in-prompt/model-judged, not a code predicate (`lyra-brain.js:161-165`). Fix is conditional ("if mis-firing seen"). | Design note (not fixed) |
+| C2 | CONFIRMED · ↓ to low/info | ~2.1K-token block rides every brain call, BUT verify refuted the cost argument — it's a stable *prefix* (ideal for Gemini caching), not cache-busting. | Design note (not fixed) |
+| C4, C5 | CONFIRMED · no defect | Correction-vs-taste is HARD + anchored (`:193-200`); no-rewrite illustration rule present + distinct (`:179-182`). | No action |
+| W2 | **REFUTED** | Claimed no timeout → session-long banner suppression; WRONG — `proxy.js:232` has a 180s upstream timeout → error SSE → client catch runs FALLBACK + clears suppression. Auto-recovers. | No action |
+| L1, A1, A3, A4, H1, H2, H3, S1, S2, S3, W1, W3, R1 | REJECTED (clean) | English-primary keeps 繁中 support; reload genuinely re-fires; translate caches + strips; copy clean (secure+insecure); back/exit no dead-ends; no revert leftovers; ☰/New-Writing correct; search/A–Z/category all filter the FULL store; Chinese search safe; fallback floor holds; reopen keeps original greeting; §47 removal clean. | No action |
+
+Incidental (out of scope, not fixed): stale unused import `parseStructureContent` at `StyleLab.jsx:16`; an inaccurate z-index comment at `StyleLab.jsx:1484-1486`.
+
+### PART 2 — push + merge
+All of **§51–§56 was local** (origin/main was `2471743` = §50; the brief's "34a3e16" was stale). Pushed branch `claude/thirsty-meninsky-bc7a11` to origin, then **fast-forwarded `origin/main` `2471743..7a59b66`** (FF verified ancestor; no force, no divergence). Post-push `origin/main..HEAD` is empty. **Final origin/main = `7a59b66`** carrying §51, §52, §53, §53-fix, §54, §55, §56/A2, §56/C3. Branch hygiene reported only (no deletes); this branch is now merged into main; unmerged: objective-ramanujan-974c10, start-lyra-preview-CLY2d, deep-logic-analysis-DESuG, continue-lyra-ufYB2.
+
+**Tests: 353 green before and after** (was 348 pre-review; +4 A2 dedup, +1 C3 guard). Build clean.
+
