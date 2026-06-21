@@ -878,6 +878,15 @@ Rules:
 - PRESERVE ANNOTATIONS: If the source contains annotation markers like {phrase}[label] (curly braces around a phrase, square-bracket label right after), keep BOTH the {...} braces and [...] brackets in the Chinese translation. Translate the phrase inside {} into Chinese. Translate the label inside [] into Chinese too. Example: source "{universally acknowledged}[adverb fronting]" → translation "{眾所公認}[副詞前置]". Never drop the {} or [] markers.
 - Output ONLY the EN/ZH pairs — no preamble, no commentary, no "Here is the translation"`;
 
+// §53 — translate ONE coaching CHAT MESSAGE into flowing Traditional Chinese on
+// demand (the per-message 繁中 toggle that pairs with the §52 English-primary
+// critique: English by default, full Chinese one tap away). Distinct from
+// translatePrompt above (the sentence-by-sentence EN/ZH-pair SOURCE-TEXT
+// translator) — this renders the whole reply as natural prose, not paired lines.
+export function buildMessageTranslatePrompt() {
+  return `Translate this English writing-coaching message into natural Traditional Chinese (繁體, never Simplified) for a 14-year-old Hong Kong student. Preserve the meaning, the structure (keep headings, lists, and line breaks), and any sentence examples exactly as written. Keep English grammar terms in parentheses where helpful (e.g. 原形動詞 (base verb)). Use STANDARD WRITTEN Chinese (書面語), natural Hong Kong/Taiwan style — never Cantonese colloquial/spoken forms (write 是 not 係, 的 not 嘅, 不 not 唔). Output ONLY the translation — no preamble, no commentary, no "Here is the translation".`;
+}
+
 /**
  * Explain ONE annotation label (e.g. "appositive", "ironic cliché") to a
  * 14-year-old Hong Kong English learner, using the exact phrase they tapped as

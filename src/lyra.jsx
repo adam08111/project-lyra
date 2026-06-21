@@ -3,7 +3,7 @@ import { COLORS, FONTS_LINK, writingTypes, getExamRules } from "./constants.js";
 import { keyframes, sharedStyles as s } from "./styles.js";
 import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
-import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt } from "./prompts.js";
+import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt, buildMessageTranslatePrompt } from "./prompts.js";
 import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
 import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
@@ -518,6 +518,8 @@ Rules:
     if (tab !== "chat" && typingMsg) {
       const entry = { role: "ai", text: typingMsg.text };
       if (Array.isArray(typingMsg.sources) && typingMsg.sources.length) entry.sources = typingMsg.sources;
+      if (typingMsg.id != null) entry.id = typingMsg.id;
+      if (typingMsg.reqText != null) { entry.reqText = typingMsg.reqText; entry.reqSearch = !!typingMsg.reqSearch; entry.reqScaffold = !!typingMsg.reqScaffold; }
       setMessages(prev => [...prev, entry]);
       setTypingMsg(null);
     }
@@ -564,10 +566,15 @@ Rules:
     // convention/formality block, not fire the previous type's snapshot.
   }, [draft, appliedSkill, typeLabel, examRules]);
 
-  const sendChat = useCallback(async (text, useSearch = false, scaffolding = false) => {
+  const sendChat = useCallback(async (text, useSearch = false, scaffolding = false, historyMsgs = null) => {
     if (!text.trim()) return;
+    // §53: when historyMsgs is supplied this is a RELOAD — re-fire WITHOUT
+    // appending a duplicate user message, and use the supplied history (the
+    // conversation before the originating user turn) instead of the `messages`
+    // closure, so it doesn't depend on a not-yet-flushed setMessages.
+    const isReload = historyMsgs !== null;
     const userMsg = { role: "user", text: text.trim() };
-    setMessages(prev => [...prev, userMsg]);
+    if (!isReload) setMessages(prev => [...prev, userMsg]);
     setChatLoading(true);
     setTypingMsg(null);
 
@@ -578,7 +585,7 @@ Rules:
     try {
       // Build conversation history with roles so Lyra knows who said what.
       // The §43 greeting is messages[0], so it's already included here.
-      const allMsgs = [...messages];
+      const allMsgs = isReload ? historyMsgs : [...messages];
       const history = allMsgs.length > 0
         ? "=== CONVERSATION SO FAR ===\n" + allMsgs.map(m => `${m.role === "user" ? "Student" : "Lyra"}: ${m.text}`).join("\n\n") + "\n=== END CONVERSATION ===\n\n"
         : "";
@@ -685,7 +692,9 @@ Rules:
 
       setChatLoading(false);
       chatAbortRef.current = null;
-      setTypingMsg({ role: "ai", text: displayText, sources, id: Date.now() });
+      // §53: stash the request params so the message's Reload action can re-fire
+      // the SAME call (see reloadChat + canReloadMessage).
+      setTypingMsg({ role: "ai", text: displayText, sources, id: Date.now(), reqText: text.trim(), reqSearch: useSearch, reqScaffold: scaffolding });
     } catch (e) {
       setChatLoading(false);
       chatAbortRef.current = null;
@@ -789,13 +798,42 @@ Rules:
   }, [topic, typeLabel]);
 
   const handleTypewriterDone = useCallback((msg) => {
-    // Carry sources (web-search grounding attributions) from typingMsg
-    // into the saved message so they persist on re-render / reload.
+    // Carry sources (web-search grounding attributions) + the §53 reload params
+    // (id, reqText/reqSearch/reqScaffold) from typingMsg into the saved message
+    // so they persist on re-render / reload.
     const entry = { role: "ai", text: msg.text };
     if (Array.isArray(msg.sources) && msg.sources.length) entry.sources = msg.sources;
+    if (msg.id != null) entry.id = msg.id;
+    if (msg.reqText != null) { entry.reqText = msg.reqText; entry.reqSearch = !!msg.reqSearch; entry.reqScaffold = !!msg.reqScaffold; }
     setMessages(prev => [...prev, entry]);
     setTypingMsg(null);
   }, []);
+
+  // §53: regenerate this AI turn — drop the reply (keep the originating user
+  // message + the prior history) and re-fire the SAME request via sendChat's
+  // historyMsgs path (no duplicate user message). Reconstructable only when the
+  // message kept reqText (canReloadMessage); the row disables reload otherwise.
+  // The new reply streams in through the normal typingMsg path, and its
+  // learning-sync runs again on the fresh message.
+  const reloadChat = useCallback((i) => {
+    const m = messages[i];
+    if (!m || m.role !== "ai" || !m.reqText) return;
+    let j = -1;
+    for (let k = i - 1; k >= 0; k--) { if (messages[k].role === "user") { j = k; break; } }
+    const historyMsgs = j >= 0 ? messages.slice(0, j) : [];
+    setMessages(prev => prev.slice(0, i)); // keep [0..i-1]: originating user msg + history; drop the reply
+    sendChat(m.reqText, !!m.reqSearch, !!m.reqScaffold, historyMsgs);
+  }, [messages, sendChat]);
+
+  // §53: translate ONE coaching message to flowing 繁中 on demand (lite tier,
+  // thinkingBudget 0). Returns the translation; the caller caches it on the
+  // message so a re-tap toggles instantly with no second call.
+  const translateText = useCallback(async (text) => {
+    const route = getRouteConfig("translate");
+    trackCall();
+    const result = await callAI(buildMessageTranslatePrompt(), text, false, 4096, route.thinkingBudget, undefined, undefined, route.model);
+    return (typeof result === "string" ? result : (result && result.text) || "").trim();
+  }, [trackCall]);
 
   // Add a student's chat sentence to the essay draft
   const addToDraft = useCallback((text) => {
@@ -1097,6 +1135,7 @@ Rules:
             typingMsg={typingMsg} setTypingMsg={setTypingMsg}
             chatLoading={chatLoading} sendChat={sendChat} stopChat={stopChat}
             handleTypewriterDone={handleTypewriterDone}
+            reloadChat={reloadChat} translateText={translateText}
             typeLabel={typeLabel}
             topic={topic} draft={draft} currentWords={currentWords}
             addToDraft={addToDraft}

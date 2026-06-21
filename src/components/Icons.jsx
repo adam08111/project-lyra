@@ -32,6 +32,33 @@ export const GalleryIcon = ({ size = 13, color = COLORS.muted }) => (
   </svg>
 );
 
+// §53 — chat message action-row icons (Copy · Translate · Reload). Same line-art
+// stroke idiom as the camera/gallery chips above; default to COLORS.muted.
+export const CopyIcon = ({ size = 15, color = COLORS.muted }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <rect x="9" y="9" width="12" height="12" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+export const TranslateIcon = ({ size = 15, color = COLORS.muted }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="m5 8 6 6" />
+    <path d="m4 14 6-6 2-3" />
+    <path d="M2 5h12" />
+    <path d="M7 2h1" />
+    <path d="m22 22-5-10-5 10" />
+    <path d="M14 18h6" />
+  </svg>
+);
+
+export const ReloadIcon = ({ size = 15, color = COLORS.muted }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+    <path d="M21 3v6h-6" />
+  </svg>
+);
+
 export const FeatherIcon = ({ size = 18, color = COLORS.heading }) => (
   <svg width={size} height={size} viewBox="0 0 36 36" fill="none" strokeLinecap="round" strokeLinejoin="round">
     <path d="M28 4c-2 3-4.5 7-7 12s-4.5 10-6.5 14.5L12 35" stroke={color} strokeWidth={1.3} fill="none"/>

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { COLORS, QUICK_ACTION_MESSAGES } from "../constants.js";
 import { formatSources } from "../utils.js";
+import { cleanMessageText, canReloadMessage, getMessageTranslation } from "../chat-actions.js";
 import { sharedStyles as s } from "../styles.js";
-import { FeatherIcon } from "./Icons.jsx";
+import { FeatherIcon, CopyIcon, TranslateIcon, ReloadIcon } from "./Icons.jsx";
 import TypewriterBubble from "./TypewriterBubble.jsx";
 
 // Render **bold** markdown as <strong> elements
@@ -18,6 +19,7 @@ const renderMd = (text) => {
 export default function ChatTab({
   messages, setMessages, typingMsg, setTypingMsg,
   chatLoading, sendChat, stopChat, handleTypewriterDone,
+  reloadChat, translateText,
   typeLabel, topic, draft, currentWords,
   onHelpMeStart, onDeploySkills, addToDraft, onSaveAchievement,
   onScrollChange,
@@ -53,6 +55,48 @@ export default function ChatTab({
   const [editingMsgIdx, setEditingMsgIdx] = useState(null);
   const [editingMsgText, setEditingMsgText] = useState("");
   const [activeMsgIdx, setActiveMsgIdx] = useState(null);
+
+  // §53 — Copy · Translate · Reload action row (AI messages only). UI state is
+  // keyed by message index; the translation itself is cached on the message
+  // (m.translation_zh) so a re-tap toggles with no second call.
+  const [copiedIdx, setCopiedIdx] = useState(null);
+  const [zhVisible, setZhVisible] = useState({}); // { [i]: true } → bubble shows 繁中
+  const [zhLoading, setZhLoading] = useState({}); // { [i]: true } → translating
+
+  const handleCopy = async (i, text) => {
+    try {
+      await navigator.clipboard.writeText(cleanMessageText(text));
+      setCopiedIdx(i);
+      setTimeout(() => setCopiedIdx(c => (c === i ? null : c)), 1500);
+    } catch (e) { /* clipboard blocked — fail silently, never crash the chat */ }
+  };
+
+  const handleTranslate = async (i, m) => {
+    if (zhLoading[i]) return;                                            // in-flight guard
+    if (zhVisible[i]) { setZhVisible(v => ({ ...v, [i]: false })); return; } // toggle back to English
+    if (m.translation_zh) { setZhVisible(v => ({ ...v, [i]: true })); return; } // cached → instant
+    setZhLoading(v => ({ ...v, [i]: true }));
+    try {
+      const zh = await getMessageTranslation(m, () => translateText(cleanMessageText(m.text)));
+      if (zh) {
+        setMessages(prev => prev.map((msg, idx) => idx === i ? { ...msg, translation_zh: zh } : msg));
+        setZhVisible(v => ({ ...v, [i]: true }));
+      }
+    } catch (e) { /* translation failed — stay in English, no crash */ }
+    finally { setZhLoading(v => ({ ...v, [i]: false })); }
+  };
+
+  const handleReload = (i) => {
+    if (chatLoading || typingMsg || !reloadChat) return; // a turn is already in flight
+    setCopiedIdx(null);
+    setZhVisible(v => { const n = { ...v }; delete n[i]; return n; }); // fresh slot for the regen
+    reloadChat(i);
+  };
+
+  const actionBtnStyle = {
+    width: 44, height: 36, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center",
+    background: "transparent", border: "none", borderRadius: 8, padding: 0, cursor: "pointer",
+  };
 
   // Auto-scroll: when Lyra just replied (last message is AI, nothing is
   // pending), anchor on the student's MOST RECENT message so they read
@@ -132,7 +176,7 @@ export default function ChatTab({
                     padding: "12px 16px", fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", cursor: "pointer",
                     outline: activeMsgIdx === i ? `2px solid ${COLORS.heading}` : "none", outlineOffset: 2,
                     transition: "outline 0.15s ease",
-                  }}>{renderMd(m.text)}</div>
+                  }}>{renderMd(m.role === "ai" && zhVisible[i] && m.translation_zh ? m.translation_zh : m.text)}</div>
               )}
 
               {/* Sources from web-search grounding (only on AI bubbles
@@ -152,6 +196,29 @@ export default function ChatTab({
                       {src.label}
                     </a>
                   ))}
+                </div>
+              )}
+
+              {/* §53: persistent Copy · Translate · Reload row — AI messages only,
+                  rendered once the message is in messages[] (i.e. streaming done).
+                  Never on user bubbles. */}
+              {m.role === "ai" && editingMsgIdx !== i && (
+                <div style={{ display: "flex", gap: 2, marginTop: 2, paddingLeft: 2, alignItems: "center" }}>
+                  <button onClick={(e) => { e.stopPropagation(); handleCopy(i, m.text); }} title="Copy" aria-label="Copy message" style={actionBtnStyle}>
+                    {copiedIdx === i
+                      ? <span style={{ fontSize: 11, color: COLORS.green, fontFamily: "'Courier Prime', monospace" }}>{"✓"}</span>
+                      : <CopyIcon size={15} />}
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); handleTranslate(i, m); }} title={zhVisible[i] ? "Show English" : "翻譯成中文"} aria-label="Translate message" disabled={!!zhLoading[i]} style={{ ...actionBtnStyle, opacity: zhLoading[i] ? 0.7 : 1 }}>
+                    {zhLoading[i]
+                      ? <span style={{ width: 6, height: 6, borderRadius: 3, background: COLORS.accent1, animation: "bounce 1s infinite", display: "inline-block" }} />
+                      : <TranslateIcon size={15} color={zhVisible[i] ? COLORS.heading : COLORS.muted} />}
+                  </button>
+                  {canReloadMessage(m) && (
+                    <button onClick={(e) => { e.stopPropagation(); handleReload(i); }} title="Regenerate" aria-label="Regenerate reply" disabled={chatLoading || !!typingMsg} style={{ ...actionBtnStyle, opacity: (chatLoading || typingMsg) ? 0.4 : 1, cursor: (chatLoading || typingMsg) ? "not-allowed" : "pointer" }}>
+                      <ReloadIcon size={15} />
+                    </button>
+                  )}
                 </div>
               )}
 
