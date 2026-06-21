@@ -44,6 +44,18 @@ describe("LYRA_BRAIN — Diagnostic Critique block", () => {
     expect(block).toMatch(/every reason and section ENGLISH-PRIMARY/); // silent gate enforces it
   });
 
+  it("bans leaking internal scaffolding into the visible reply — phase labels, markdown, S-notation (§54)", () => {
+    // §54: the prompt's own phase labels ("Pass A/B"), markdown headers (###), and
+    // S7→S9 shorthand were echoed to the student. The block must forbid all of it.
+    expect(block).toMatch(/OUTPUT — WHAT THE STUDENT SEES/);
+    expect(block).toMatch(/NEVER print the names of these phases or passes/);
+    expect(block).toMatch(/renders \*\*bold\*\* but NO other markdown/); // ** renders; headers/LaTeX don't
+    expect(block).toMatch(/no LaTeX or math/i);
+    expect(block).toMatch(/7th and 9th\s+sentences/);            // plain sentence references are modelled
+    expect(block).toMatch(/NEVER expose internal structure, labels, or notation/); // the standing class-closer
+    expect(block).toMatch(/no phase\/pass labels/);              // silent gate enforces it
+  });
+
   it("forces sentence-by-sentence coverage (not grouped) + leaps with both directions", () => {
     expect(block).toMatch(/SENTENCE-BY-SENTENCE/);
     expect(block).toMatch(/Do NOT collapse this into a grouped/);   // explicitly bans the failure mode
