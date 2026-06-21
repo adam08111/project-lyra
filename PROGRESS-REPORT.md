@@ -1896,3 +1896,31 @@ Lyra had a strong GENERATIVE method (the 4-Step Coaching Protocol — teach a sk
 ### 49.1 — v2 upgrade (completeness teeth)
 v1 *described* each coaching move but never forced it to completion → shallow, representative-sample output. v2 adds the parts that make the diagnosis EXHAUSTIVE: **THE TWO LAWS** (Law 1 — exhaustive diagnosis: every pass is a COMPLETE SWEEP, name ALL instances / find ALL leaps; a tidy 3-point summary of a 10-issue draft is a FAILURE. Law 2 — minimal homework: hand back ONE bounded task. "Diagnose everything; ask for one thing."), **INVENTORY-FIRST** in the mechanics pass (list every error sentence-by-sentence BEFORE grouping → cluster → count & rank; expect 3-6 patterns, sweep again if only one surfaced), **sentence-by-sentence as the DEFAULT** for drafts under ~250 words, **enumerate EVERY logic leap** (expect 2-4, never stop at the first; zero/one on an argument = go back), a **logic→rhetoric firewall** (an over-sized metaphor is a logic leap FIRST in Phase 4, repaired rhetorically SECOND in Phase 5 — the black-hole anchor reframed accordingly), genre/format flagging in Phase 1, and a **PRE-OUTPUT COVERAGE GATE** (a silent checklist run before replying). Net ~600 → ~900 words — the added length IS the completeness mandate (v2's whole point), and it rides only coaching calls. 329 tests, build clean, :3000 serves v2.
 
+---
+
+## 50. UPDATE — 21 June 2026 — Diagnostic Critique block refined + VALIDATED on Gemini (supersedes the §49 loop)
+
+The §49 v2 loop is **superseded** by a gold-anchored refinement. (The task labelled it §48; the log is past that, so it lands as §50.) The gap between a gold Opus critique and an earlier Lyra skim was RESOLUTION + PRIORITY + two rule-misses — NOT model intelligence — so the prompt forces the depth and a Flash-class model can hit the bar.
+
+### 50.1 The block (`lyra-brain.js`, gated) — `b635047`
+Renamed **DIAGNOSTIC CRITIQUE — full-resolution marking of a submitted draft**. Beyond v2 it forces:
+- **SENTENCE-BY-SENTENCE at full coverage** (each flawed sentence: original → flaw + reason → fix), and EXPLICITLY bans collapsing into a grouped ranked-rule list — that grouping was the FAILURE mode (v2's cluster-into-rules step removed). The fix is an **illustration** of the student's own meaning, not an upgrade.
+- **UNPARSEABLE → flag + labelled best-guess + ask**, never silent-fix.
+- **Separate logic pass** naming **EVERY leap by sentence-LOCATION + TYPE** (4 types: missing-causal-bridge, size-mismatch incl. over-sized metaphor, stacked-but-different, two-tangled-arguments), each with **BOTH** repair directions (build-bridge / shrink-claim), student chooses — never build the bridge for them.
+- **CORRECTION-vs-TASTE — HARD**, over-specified with the akin-to example (both the gold AND the failure "corrected" akin-to → is-akin-to; the prompt now forbids that exact move).
+- Logic billed **EQUAL** to grammar; plain → never LaTeX (the gold had a raw `$…$` render bug); hand back **ONE** task. +6 tests.
+
+### 50.2 Step 0 — trigger finding
+No "critique"/"mark my writing" action exists — chat chips are Skills/Outline/Brainstorm/Find-example/Help-me-start, and the editor's Proofread is a separate structured-JSON path. So critique is **chat-intent only** → the gate is an **in-prompt intent condition**, not a code predicate. Implemented as such.
+
+### 50.3 Dedup
+The block opens by **cross-referencing** the existing rules ("apply them, don't restate them": never-write-it, explain-the-why, warm-HK / lead-with-strengths / no-hollow-praise, one-question, EN+繁中, LYRA_LEARNING_DATA) rather than re-pasting them. A test guards that the block stays < 50% of the brain and contains the cross-reference, not a fresh restatement.
+
+### 50.4 VALIDATION on the preview — the framework TRANSFERRED to Gemini (Flash + 4096)
+Fed a **representative** messy 15-sentence AI-debate speech (the exact gold draft wasn't supplied — only one sentence; the reconstruction seeded all 4 leap types + the akin-to trap ×2 + the black-hole metaphor) through the REAL `buildCoachPrompt` (59 KB system, model `gemini-3-flash-preview`, thinkingBudget 4096) to the live proxy. HTTP 200. Judged vs the gold on the three checks:
+1. **Sentence-by-sentence with reasons (not grouped) — PASS.** Marked the flawed sentences 1→10, each original → fix → reason, plain → arrows, no LaTeX. The gold sentence resolved exactly: "Every decade's technology is different" with all three reasons.
+2. **Separate logic pass, leaps by location + type, both directions — STRONG PASS (one gap).** A distinct Logic Pass named **3 typed, located** leaps — Missing Causal Bridge (S5→S7), Stacked-but-Different (S8→S9: jobs-fear vs identity-fear), Size Mismatch (S6 black hole vs S8 money) — with both directions on the main one. NOT the failure's vague "one big jump." Gap: it didn't name the 4th type (two-tangled-arguments) as an explicit leap, though it caught it in the hand-back ("pick ONE: Lazy Students OR Job Loss").
+3. **Correction-vs-taste + no-rewrite — PASS (the headline win).** Gemini wrote verbatim: *"'Akin to' is a lovely, formal phrase (十分類似). It works well here!"* — treating it as TASTE, the exact thing BOTH the gold and the failure got wrong. Fixes illustrated the student's meaning without upgrading.
+
+**Conclusion: checks 1–2 pass → the framework transferred. SHIP on the current `chat_coaching` tier** (gemini-3-flash-preview @ 4096) — no need to graduate critique to its own route + a stronger model. The forcing prompt reproduced gold-class depth on Flash and BEAT the gold on the akin-to guard. **Residual to watch:** the two-tangled-arguments leap surfaced only in the hand-back, not as a named 4th leap — a future tightening could push naming it explicitly, but it is not the shallow-skim failure mode. 335 tests green, build clean.
+
