@@ -2050,3 +2050,22 @@ Traced the flow live. `runProofread` (`lyra.jsx`) called the Lite route at **`ma
 ### 57.2 Verification
 Live: real model at 4096 → full `{g:4,s:2,v:3}` JSON, both naive and robust parsers OK (was truncated to 39–229 response tokens at 1000). Adversarial verify (2 independent agents over the final code): **no silent/stuck path** across all five outcomes (valid · empty-arrays · partial-object · parse-throw×2 · call-throw); `proofLoading` cleared on every exit; JSX balanced.
 
+---
+
+## 58. UPDATE — 22 June 2026 — Proofread cards now carry Lyra's judgment (correction-vs-taste, no-fabrication, no-rewrite) — still Lite/fast/card-based
+
+Proofread (Lite, `brain:false`) shared NONE of Lyra's pedagogy, so it contradicted the chat critique — e.g. flagging "akin to" as a grammar error while the critique correctly treats it as a style CHOICE. Fix: give proofread the JUDGMENT it was missing via a distilled (~350-token) rules block — NOT the full ~9K-token LYRA_BRAIN, NOT a flip to Pro/brain, NOT sentence-by-sentence.
+
+### 58.0 Step-0 findings
+- **Formality/exam context already wired** — `buildProofreadPrompt` has the formal/spoken/creative split + `examBlock`, and `runProofread` passes `typeLabel` + `examRules`. So formality is reused, not re-added.
+- **Rules were inline-only in LYRA_BRAIN** — correction-vs-taste (`:193-200`) and no-rewrite/illustration (`:179-182`) lived only in the critique block; no shared constant. No-fabrication had no proofread-relevant rule.
+
+### 58.1 Single source of truth (extracted, not copied)
+New `src/judgment-rules.js`: extracted **`CORRECTION_VS_TASTE`** and **`NO_REWRITE_ILLUSTRATION`** verbatim from the critique block, added **`NO_FABRICATION`** (proofread-specific), and composed **`PROOFREAD_JUDGMENT_RULES`**. **Both** `LYRA_BRAIN` (critique) and `buildProofreadPrompt` (proofread) now import the SAME constants — they cannot drift to different definitions (the exact failure the task flagged). Chose EXTRACTION over a proofread-scoped copy precisely to kill that drift risk; the critique interpolates the constants and behaves identically (the §50/§52/§54 critique tests + brain tests — 30 — stay green, satisfying Step 3's "behave identically").
+
+### 58.2 Proofread wiring + scope guards
+`PROOFREAD_JUDGMENT_RULES` is **prepended** to `buildProofreadPrompt`; the JSON card shape, formality context, exam rules, and `appliedSuggestions` handling are untouched. Proofread STAYS Lite (`brain:false`), card-based (NOT sentence-by-sentence), and does NOT get the full brain. +3 tests (single-source assertions incl. both prompts embedding the shared constants). **363 tests, build clean.**
+
+### 58.3 VERIFICATION (live, the AI-debate draft)
+Through the now-judgment-aware `buildProofreadPrompt` @ 4096: **"akin to" is NOT flagged as a grammar error** (consistent with the critique) and is not mis-corrected; real errors ARE flagged with explanations + a 繁中 gloss (e.g. *"Good morning everyone, today" → comma splice (逗號連接句)*); **no padding** (grammar 2 / style 2 / vocab 3 — honest, not maxed). Still Lite/fast/card-based.
+

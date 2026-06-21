@@ -1,4 +1,5 @@
 import { LYRA_BRAIN } from "./lyra-brain.js";
+import { PROOFREAD_JUDGMENT_RULES } from "./judgment-rules.js";
 
 // §43 — the OPENING GREETING. Generated (not templated) so it responds to THIS
 // student + THIS topic in Lyra's real voice. brain:true → LYRA_BRAIN prepended.
@@ -272,7 +273,12 @@ RULES WHEN A SKILL IS DEPLOYED:
 
   const sourceBlock = sourceContext ? `\nSOURCE TEXT: The student studied a reference text (${sourceContext.authorName}). When proofreading, consider alignment with the ${sourceContext.techniqueCount || 0} techniques they extracted.` : "";
 
-  return `You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).
+  // §58: prepend the distilled JUDGMENT block so the Lite proofread cards apply the
+  // SAME standards as the chat critique (correction-vs-taste, no-fabrication,
+  // no-rewrite, formality) — without flipping to brain:true or the full LYRA_BRAIN.
+  return PROOFREAD_JUDGMENT_RULES + `
+
+You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).
 ${isSpoken ? `FORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address are correct for this genre — never flag them. In vocabulary upgrades, flag slang or chat-style words, but keep suggestions natural to say aloud rather than stiffly academic.` : isFormal ? `FORMALITY: This is FORMAL writing. In vocabulary upgrades, flag any informal, colloquial, or slang words and suggest formal academic equivalents that preserve the student's exact intended meaning.` : `FORMALITY: This is creative/narrative writing. Vocabulary suggestions should improve vividness and precision, but casual language is acceptable if it fits the student's voice.`}${appliedCtx}${skillCtx}${examBlock}${sourceBlock}
 
 Analyse the student's writing. Return ONLY a single raw JSON object — start your reply with { and end with } — with NO markdown code fences, NO explanation, and NO prose or commentary before or after it. The exact shape:
