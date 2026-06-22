@@ -319,6 +319,37 @@ describe("buildCoachPrompt — search block is gated on searchActive", () => {
   });
 });
 
+describe("§66 buildProofreadPrompt — thin known-weaknesses injection", () => {
+  const ctx = {
+    level: "Developing Writer (rising)",
+    focus: [
+      { rule: "Subject-verb agreement", status: "active", note: "he go" },
+      { rule: "Article usage", status: "active", note: "best idea" },
+    ],
+    wins: ["Run-on sentences"],
+    watchList: ["Tense consistency"],
+  };
+
+  it("injects the FOCUS weakness rule-names when a profile exists", () => {
+    const p = buildProofreadPrompt("dogs", "Essay", [], null, null, undefined, ctx);
+    expect(p).toContain("KNOWN PATTERNS TO WATCH FOR THIS STUDENT");
+    expect(p).toContain("Subject-verb agreement, Article usage");
+  });
+
+  it("stays thin: NO win-citing, NO prose memory in proofread (that's the chat's job)", () => {
+    const p = buildProofreadPrompt("dogs", "Essay", [], null, null, undefined, ctx);
+    expect(p).not.toContain("Run-on sentences");          // wins never go to proofread
+    expect(p).not.toContain("mark a WIN");
+    expect(p).toContain("NO FABRICATION");                 // honesty guard still holds
+  });
+
+  it("cold start: nothing injected when there's no profile (null/omitted)", () => {
+    expect(buildProofreadPrompt("dogs", "Essay", [], null, null, undefined, null))
+      .not.toContain("KNOWN PATTERNS TO WATCH FOR THIS STUDENT");
+    expect(buildProofreadPrompt("dogs", "Essay", [])).not.toContain("KNOWN PATTERNS TO WATCH FOR THIS STUDENT");
+  });
+});
+
 describe("§66 buildCoachPrompt — growth-profile injection", () => {
   const ctx = {
     level: "Developing Writer (rising)",

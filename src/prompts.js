@@ -270,7 +270,7 @@ OTHER RULES:
 - If a sentence is too simple to restructure without changing its meaning, skip it and pick another sentence.${activeSkillCtx ? `\n- Do NOT suggest changes that contradict or undo the deployed skill's techniques. Suggestions should complement the student's chosen style.` : ""}`;
 }
 
-export function buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, sourceContext) {
+export function buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, sourceContext, studentContext = null) {
   const formalTypes = ["Complaint Letter", "Formal Business Email", "Exam Essay", "Report", "Persuasive Writing", "Letter to the Editor"];
   const isFormal = formalTypes.includes(typeLabel);
   const isSpoken = typeLabel === "Speech / Talk";
@@ -298,13 +298,21 @@ RULES WHEN A SKILL IS DEPLOYED:
 
   const sourceBlock = sourceContext ? `\nSOURCE TEXT: The student studied a reference text (${sourceContext.authorName}). When proofreading, consider alignment with the ${sourceContext.techniqueCount || 0} techniques they extracted.` : "";
 
+  // §66 — thin known-weaknesses list: the FOCUS weakness rule-names from the growth
+  // profile, so Lite proofread looks HARDEST where this student characteristically
+  // slips. Names only (Lite stays Lite); NO win-citing here — motivational memory is
+  // the chat's job, proofread is mechanical cards. NO FABRICATION still rules.
+  const knownWeakBlock = studentContext && studentContext.focus && studentContext.focus.length
+    ? `\n\nKNOWN PATTERNS TO WATCH FOR THIS STUDENT (from past work together — check these hardest, they tend to slip here): ${studentContext.focus.map((f) => f.rule).join(", ")}. This only tells you WHERE to look; still flag ONLY real errors actually present (NO FABRICATION).`
+    : "";
+
   // §58: prepend the distilled JUDGMENT block so the Lite proofread cards apply the
   // SAME standards as the chat critique (correction-vs-taste, no-fabrication,
   // no-rewrite, formality) — without flipping to brain:true or the full LYRA_BRAIN.
   return PROOFREAD_JUDGMENT_RULES + `
 
 You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).
-${isSpoken ? `FORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address are correct for this genre — never flag them. In vocabulary upgrades, flag slang or chat-style words, but keep suggestions natural to say aloud rather than stiffly academic.` : isFormal ? `FORMALITY: This is FORMAL writing. In vocabulary upgrades, flag any informal, colloquial, or slang words and suggest formal academic equivalents that preserve the student's exact intended meaning.` : `FORMALITY: This is creative/narrative writing. Vocabulary suggestions should improve vividness and precision, but casual language is acceptable if it fits the student's voice.`}${appliedCtx}${skillCtx}${examBlock}${sourceBlock}
+${isSpoken ? `FORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address are correct for this genre — never flag them. In vocabulary upgrades, flag slang or chat-style words, but keep suggestions natural to say aloud rather than stiffly academic.` : isFormal ? `FORMALITY: This is FORMAL writing. In vocabulary upgrades, flag any informal, colloquial, or slang words and suggest formal academic equivalents that preserve the student's exact intended meaning.` : `FORMALITY: This is creative/narrative writing. Vocabulary suggestions should improve vividness and precision, but casual language is acceptable if it fits the student's voice.`}${appliedCtx}${skillCtx}${examBlock}${sourceBlock}${knownWeakBlock}
 
 Analyse the student's writing. Return ONLY a single raw JSON object — start your reply with { and end with } — with NO markdown code fences, NO explanation, and NO prose or commentary before or after it. The exact shape:
 {"grammar":[{"rule":"Rule Name","explanation":"2-3 sentence explanation of the rule and how to avoid it","instances":[{"wrong":"the exact flagged text from the draft","right":"the corrected text"}],"example_wrong":"a DIFFERENT example sentence showing the error","example_correct":"that same example sentence CORRECTED"}],"style":[{"observation":"what you noticed","suggestion":"specific actionable advice"}],"vocabulary":[{"weak":"weak word","stronger":"better word","reason":"contextual reasoning explaining why this synonym matches the student's intended meaning"}],"strengths":"One sentence about what they did well","nextFocus":"One clear next task"}

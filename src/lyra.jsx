@@ -884,7 +884,9 @@ Rules:
     }
 
     const proofRoute = getRouteConfig("proofread");
-    const sys = buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules);
+    // §66: proofread also reads the growth profile — a thin name-list of this
+    // student's known weak patterns so Lite looks hardest where they slip.
+    const sys = buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, undefined, getStudentContext());
     // §61: make the call abortable (the × cancels it) and bound it with a client-side
     // soft timeout, so the heavier §59 call (cap ~100 + grouping) can never trap the
     // student on an eternal "Doing the magic" spinner.
