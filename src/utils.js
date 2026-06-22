@@ -161,6 +161,38 @@ export function extractJsonObject(text) {
   return JSON.parse(t);
 }
 
+// §59 — group proofread grammar issues into ONE entry per underlying RULE
+// (patterns over instances), ranked most-frequent-first. Accepts the grouped
+// shape (entry.instances:[{wrong,right}]) OR the legacy flat shape
+// (entry.phrase/correction) and merges flat entries that share a rule — so the
+// UI always shows one card per rule no matter which shape the model returns.
+// Each group: { rule, explanation, instances:[{wrong,right}], example_wrong, example_correct }.
+export function groupGrammarByRule(grammar) {
+  if (!Array.isArray(grammar)) return [];
+  const byRule = new Map();
+  for (const g of grammar) {
+    if (!g) continue;
+    const rule = (g.rule || "General").toString().trim() || "General";
+    const key = rule.toLowerCase();
+    if (!byRule.has(key)) {
+      byRule.set(key, { rule, explanation: "", instances: [], example_wrong: "", example_correct: "" });
+    }
+    const grp = byRule.get(key);
+    if (!grp.explanation && g.explanation) grp.explanation = g.explanation;
+    if (!grp.example_wrong && g.example_wrong) grp.example_wrong = g.example_wrong;
+    if (!grp.example_correct && g.example_correct) grp.example_correct = g.example_correct;
+    const raw = (Array.isArray(g.instances) && g.instances.length)
+      ? g.instances
+      : [{ wrong: g.phrase ?? g.wrong, right: g.correction ?? g.right }];
+    for (const it of raw) {
+      const wrong = (it && (it.wrong ?? it.phrase)) || "";
+      const right = (it && (it.right ?? it.correction)) || "";
+      if (wrong || right) grp.instances.push({ wrong, right });
+    }
+  }
+  return [...byRule.values()].sort((a, b) => b.instances.length - a.instances.length);
+}
+
 // Truncate at word boundary with ellipsis
 export const truncate = (t, max) => { if (t.length <= max) return t; const cut = t.slice(0, max).replace(/\s+\S*$/, ""); return (cut || t.slice(0, max)) + "\u2026"; };
 

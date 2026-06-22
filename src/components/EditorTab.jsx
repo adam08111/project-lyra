@@ -5,6 +5,7 @@ import { FeatherIcon } from "./Icons.jsx";
 import MiniLessonCard from "./MiniLessonCard.jsx";
 import { SavedSkills } from "./StyleLab.jsx";
 import { parseStructureContent } from "./XRayView.jsx";
+import { groupGrammarByRule } from "../utils.js";
 
 const mono = "'Courier Prime', monospace";
 
@@ -35,6 +36,9 @@ export default function EditorTab({
   const [activeTechIdx, setActiveTechIdx] = useState(null);
   const [showSkills, setShowSkills] = useState(false);
   const [showNudge, setShowNudge] = useState(false);
+  const [expandedRules, setExpandedRules] = useState(() => new Set()); // §59: which grammar rule-cards show all instances
+  const toggleRule = (i) => setExpandedRules(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
+  const INSTANCE_PREVIEW = 3; // show first N instances per rule, then "and X more"
 
   // Blank page nudge — show after 60s if editor is still empty
   useEffect(() => {
@@ -331,22 +335,35 @@ export default function EditorTab({
               </div>
 
               {/* Grammar tab */}
-              {proofTab === "grammar" && (proofread.grammar?.length ? proofread.grammar.map((g, i) => (
+              {proofTab === "grammar" && (proofread.grammar?.length ? groupGrammarByRule(proofread.grammar).map((grp, i) => (
                 <div key={i} style={{ ...s.card, marginBottom: 10, padding: 12 }}>
-                  <div style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, background: "#FFF5F5", color: COLORS.red, display: "inline-block", marginBottom: 6 }}>{g.phrase}</div>
-                  <div style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, background: "#F0FFF0", color: COLORS.green, display: "inline-block", marginLeft: 6, marginBottom: 6 }}>{g.correction}</div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.heading, marginBottom: 4, marginTop: 6 }}>{g.rule}</div>
-                  <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.5, marginBottom: 8 }}>{g.explanation}</div>
-                  {(g.example_wrong || g.example_correct) && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading }}>{grp.rule}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.red, background: "#FFF5F5", borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>{grp.instances.length} {grp.instances.length === 1 ? "place" : "places"}</div>
+                  </div>
+                  {(expandedRules.has(i) ? grp.instances : grp.instances.slice(0, INSTANCE_PREVIEW)).map((it, j) => (
+                    <div key={j} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#FFF5F5", color: COLORS.red }}>{it.wrong}</span>
+                      <span style={{ fontSize: 12, color: COLORS.muted }}>{"→"}</span>
+                      <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#F0FFF0", color: COLORS.green }}>{it.right}</span>
+                    </div>
+                  ))}
+                  {grp.instances.length > INSTANCE_PREVIEW && (
+                    <button onClick={() => toggleRule(i)} style={{ background: "none", border: "none", color: COLORS.heading, fontFamily: mono, fontSize: 11, cursor: "pointer", padding: "2px 0", marginBottom: 4, textDecoration: "underline" }}>
+                      {expandedRules.has(i) ? "Show less" : `and ${grp.instances.length - INSTANCE_PREVIEW} more`}
+                    </button>
+                  )}
+                  <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.5, margin: "6px 0 8px" }}>{grp.explanation}</div>
+                  {(grp.example_wrong || grp.example_correct) && (
                     <div style={{ background: COLORS.bg2, borderRadius: 8, padding: 10, marginBottom: 6 }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>Example</div>
-                      {g.example_wrong && <div style={{ fontSize: 11, color: COLORS.red, lineHeight: 1.5, marginBottom: 4 }}>{"\u2717"} {g.example_wrong}</div>}
-                      {g.example_correct && <div style={{ fontSize: 11, color: COLORS.green, lineHeight: 1.5 }}>{"\u2713"} {g.example_correct}</div>}
+                      {grp.example_wrong && <div style={{ fontSize: 11, color: COLORS.red, lineHeight: 1.5, marginBottom: 4 }}>{"\u2717"} {grp.example_wrong}</div>}
+                      {grp.example_correct && <div style={{ fontSize: 11, color: COLORS.green, lineHeight: 1.5 }}>{"\u2713"} {grp.example_correct}</div>}
                     </div>
                   )}
                   <div style={{ fontSize: 10, color: COLORS.accent2, marginTop: 4 }}>Saved to Grammar Log</div>
                   <button onClick={() => {
-                    const fakeEntry = { id: "proof_" + i, rule: g.rule, phrase: g.phrase, correction: g.correction, explanation: g.explanation };
+                    const fakeEntry = { id: "proof_" + i, rule: grp.rule, phrase: grp.instances[0]?.wrong, correction: grp.instances[0]?.right, explanation: grp.explanation };
                     fetchMiniLesson(fakeEntry);
                   }} style={{ marginTop: 8, width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: miniLesson["proof_" + i]?.content ? COLORS.bg3 : COLORS.card, fontFamily: mono, fontSize: 11, cursor: "pointer", color: COLORS.heading, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.2s" }}>
                     {miniLesson["proof_" + i]?.loading ? (
@@ -358,7 +375,7 @@ export default function EditorTab({
                     )}
                   </button>
                   {miniLesson["proof_" + i]?.content && !miniLesson["proof_" + i]?.loading && (
-                    <MiniLessonCard content={miniLesson["proof_" + i].content} rule={g.rule} phrase={g.phrase} correction={g.correction} sendChat={sendChat} setTab={setTab} />
+                    <MiniLessonCard content={miniLesson["proof_" + i].content} rule={grp.rule} phrase={grp.instances[0]?.wrong} correction={grp.instances[0]?.right} sendChat={sendChat} setTab={setTab} />
                   )}
                 </div>
               )) : <div style={{ textAlign: "center", padding: "24px 16px", fontSize: 12, color: COLORS.muted }}>{"✓"} No grammar issues found.</div>)}

@@ -2069,3 +2069,26 @@ New `src/judgment-rules.js`: extracted **`CORRECTION_VS_TASTE`** and **`NO_REWRI
 ### 58.3 VERIFICATION (live, the AI-debate draft)
 Through the now-judgment-aware `buildProofreadPrompt` @ 4096: **"akin to" is NOT flagged as a grammar error** (consistent with the critique) and is not mis-corrected; real errors ARE flagged with explanations + a 繁中 gloss (e.g. *"Good morning everyone, today" → comma splice (逗號連接句)*); **no padding** (grammar 2 / style 2 / vocab 3 — honest, not maxed). Still Lite/fast/card-based.
 
+---
+
+## 59. UPDATE — 22 June 2026 — Proofread cap 4 → ~100 AND grouped by rule (patterns over instances)
+
+"up to 4 grammar issues" hid the true scale (a weak draft has dozens). Raised the cap to ~100 AND grouped repeated errors under one named rule so 100 isn't an unscrollable wall and the cards honour "patterns over instances".
+
+### 59.0 Step 0
+The "4" was **prompt-only** (`buildProofreadPrompt`; the render never sliced). The shape was **FLAT** (one entry per occurrence). The "patterns/rule" clustering doctrine lives in **report-card-brain** (the Growth Report); the chat critique itself does sentence-by-sentence (NOT grouped — §50), so proofread's grouping aligns with the report-card patterns doctrine, a different surface.
+
+### 59.1 Cap (commit `ad66947`)
+`buildProofreadPrompt` grammar limit 4 → **up to 100, framed as a CEILING not a target** with the §58 no-fabrication rule reinforced inline. Modest bump: style → 6, vocab → 8 (grammar was the one needing the lift).
+
+### 59.2 Grouping + render (commit `7d... this commit`)
+- **Grouped JSON shape**: one grammar entry per RULE with an `instances:[{wrong,right}]` array, ranked most-frequent-first.
+- **`groupGrammarByRule` (utils.js)** — pure/testable: normalises the grouped shape OR the legacy flat shape, merges same-rule entries (case-insensitive), ranks by instance count. Guarantees one card per rule no matter what the model returns.
+- **EditorTab**: one card per rule (rule + "N places" badge + first 3 instances + "and N more" expandable + explanation + example + Teach me this + Saved to Grammar Log). Progressive, not a wall.
+- **Grammar-log save (lyra.jsx)**: one entry per rule-GROUP (representative instance), not one per occurrence — the log isn't spammed.
+- **`maxTokens` 4096 → 8192**: the 100-cap enlarges the payload and thinking tokens count toward the budget; a low cap truncated the grouped JSON → parse fail. Bigger budget = slower/pricier on a heavily-flawed draft, acceptable for the thoroughness the cap exists to provide (flagged).
+- +7 tests. **370 green, build clean.** Critique unchanged.
+
+### 59.3 Verification (live, error-dense run-on)
+20 grammar instances (vs old 4) grouped into **4 rule-cards — Subject-Verb Agreement (9), Noun Pluralization (8), Article Usage (2), Double Negatives (1) — most-frequent-first ✓**, bilingual rule names (主謂一致 …), **"akin to" NOT flagged as a grammar error ✓** (§58 held at the higher cap), no padding (style 2 / vocab 5). Grammar-log gets 4 entries (one per rule), not 20.
+

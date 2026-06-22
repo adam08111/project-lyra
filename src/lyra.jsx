@@ -5,7 +5,7 @@ import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt, buildMessageTranslatePrompt } from "./prompts.js";
 import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
-import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject } from "./utils.js";
+import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import WordLookup from "./components/WordLookup.jsx";
 import { snapshotBackup } from "./backup.js";
@@ -874,11 +874,13 @@ Rules:
     for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
       try {
         trackCall();
-        // 4096, not 1000: the model can spend ~1–1.8K thinking tokens (which count
-        // toward maxOutputTokens), so a low cap truncated the JSON mid-object →
-        // parse failed → empty panel. 4096 leaves room for thinking + the full
-        // grammar/style/vocab payload (matches the chat_coaching budget).
-        const result = await callAI(sys, draft, false, 4096, proofRoute.thinkingBudget, undefined, undefined, proofRoute.model);
+        // 8192: thinking tokens count toward maxOutputTokens, and §59 raised the
+        // grammar cap to ~100 (grouped by rule) so the JSON payload is larger — a
+        // low cap truncated it mid-object → parse failed → empty panel. 8192 leaves
+        // room for thinking + the full grouped grammar/style/vocab payload. (Bigger
+        // budget = slower/pricier on a heavily-flawed draft, but acceptable for the
+        // thoroughness the raised cap exists to provide.)
+        const result = await callAI(sys, draft, false, 8192, proofRoute.thinkingBudget, undefined, undefined, proofRoute.model);
         const obj = extractJsonObject(result);
         // A usable result has at least one of the three arrays.
         if (obj && (Array.isArray(obj.grammar) || Array.isArray(obj.style) || Array.isArray(obj.vocabulary))) parsed = obj;
@@ -895,15 +897,17 @@ Rules:
     setProofread(parsed);
     setProofTab("grammar");
     if (parsed.grammar?.length) {
-      const newEntries = parsed.grammar.map(g => ({
+      // §59: save ONE grammar-log entry per RULE-GROUP (a representative instance),
+      // not one per occurrence — don't spam the log with 30 rows for one rule.
+      const newEntries = groupGrammarByRule(parsed.grammar).map(grp => ({
         id: Date.now() + "_" + Math.random().toString(36).slice(2, 6),
         date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-        phrase: g.phrase,
-        correction: g.correction,
-        rule: g.rule,
-        explanation: g.explanation,
-        example_wrong: g.example_wrong || "",
-        example_correct: g.example_correct || "",
+        phrase: grp.instances[0]?.wrong || "",
+        correction: grp.instances[0]?.right || "",
+        rule: grp.rule,
+        explanation: grp.explanation,
+        example_wrong: grp.example_wrong || "",
+        example_correct: grp.example_correct || "",
         topic: topic?.slice(0, 60) || "Untitled",
       }));
       setGrammarLog(prev => [...newEntries, ...prev]);
