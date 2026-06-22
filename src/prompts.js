@@ -33,7 +33,32 @@ HARD LIMITS:
 Write the greeting now.`;
 }
 
-export function buildCoachPrompt(topic, type, wordCount, examRules, sourceContext, searchActive = false) {
+// §66 — format the distilled growth-profile slice (getStudentContext) into the
+// coaching prompt: a clearly-framed "what you know about this student" block PLUS
+// the usage discipline that is the heart of the feature — ANTICIPATE silently,
+// recite never, speak the memory out loud ONLY to mark a win. Returns "" on cold
+// start (null ctx) so coaching runs normally with no memory references. Kept
+// compact + stable per-student → prefix-cacheable like the §48 block.
+function formatCoachContext(ctx) {
+  if (!ctx) return "";
+  const lines = [];
+  if (ctx.level) lines.push(`• Level: ${ctx.level}`);
+  if (ctx.focus && ctx.focus.length) {
+    lines.push(`• Working on: ${ctx.focus.map((f) => `${f.rule} (${f.status}${f.note ? ` — ${f.note}` : ""})`).join("; ")}`);
+  }
+  if (ctx.watchList && ctx.watchList.length) lines.push(`• Watch also: ${ctx.watchList.join(", ")}`);
+  if (ctx.wins && ctx.wins.length) lines.push(`• Recently cleaned up (cite ONLY to celebrate progress, NEVER to remind them they once failed): ${ctx.wins.join(", ")}`);
+  if (!lines.length) return "";
+  return `\n\n═══ WHAT YOU KNOW ABOUT THIS STUDENT (from your ongoing work together) ═══
+${lines.join("\n")}
+
+USE THIS LIKE A COACH WHO REMEMBERS — never like someone reading a file at them:
+• ANTICIPATE, don't recite: when you see one of the "working on" patterns, you already expected it — coach it as a familiar, fixable thing ("there's that agreement slip again — you know this one, what's the rule?"), sharper and more directly than a cold first encounter. NEVER open with their weaknesses, NEVER list their deficits, NEVER say "your profile shows…" or "weakness #N". They should FEEL known, not graded.
+• Speak the memory out loud ONLY to mark a WIN: when a pattern they used to get wrong is right this time, NAME it as progress ("you used to miss this constantly — clean this time; that's real growth"). Citing improvement motivates; citing weakness accuses — speak the former, stay quiet on the latter.
+• Inherit the report-card tone: strengths first, weaknesses as "what we're working on", never "you always fail at".`;
+}
+
+export function buildCoachPrompt(topic, type, wordCount, examRules, sourceContext, searchActive = false, studentContext = null) {
   const examBlock = examRules ? `\n${examRules}\nYou MUST follow these exam rules in ALL coaching advice. If a technique or suggestion would violate these rules, do NOT suggest it — even if the technique is otherwise good writing. The student's exam score depends on this.` : "";
   const sourceBlock = sourceContext ? `\n\nSOURCE TEXT GROUNDING:\nThe student analysed a reference text before starting.\nAuthor/style: ${sourceContext.authorName}\nSignature: ${sourceContext.targetVoice || ""}\nTechniques: ${sourceContext.techniqueCount || 0} extracted\n\nGround coaching in these techniques. Use the 4-step protocol:\nSource → Effect → Vocabulary → Parallel Universe varieties.` : "";
   // §34/H11: the "execute Google Search BEFORE answering" block is only
@@ -54,7 +79,7 @@ FIND-AN-EXAMPLE MODE (the student asks for an example/evidence):
 • Return 1-2 REAL examples (Hong Kong preferred): each a one-fragment description + the source name.
 • After each example, ask ONE question that prompts the student to write the link themselves — "How would you show this proves your point?". NEVER write the linking sentence for them: that explanation step is the mark-bearing skill they must produce.`
     : `EXAMPLES & FRESH FACTS — NO LIVE SEARCH THIS TURN: you do NOT have a live web search on this message, so never claim to have searched and never invent facts, statistics, sources, or events. If the student asks for ideas/angles or a real example: identify the point that needs support (ASK if none is clear yet — don't dump unrelated facts), help them develop it from THEIR draft and their own knowledge with Socratic questions, and point them to the "Brainstorm ideas" / "Find an example" buttons for results grounded in real, recent web sources.`;
-  return LYRA_BRAIN + `\n\nYou are Lyra, a warm, expert English writing coach. You are guiding a student who is writing a ${type} about: "${topic}" (target: ${wordCount} words).${examBlock}${sourceBlock}
+  return LYRA_BRAIN + formatCoachContext(studentContext) + `\n\nYou are Lyra, a warm, expert English writing coach. You are guiding a student who is writing a ${type} about: "${topic}" (target: ${wordCount} words).${examBlock}${sourceBlock}
 
 GENRE CHECK: If the student's topic text contains an explicit format instruction (a letter, a speech, a story, a report, an article) that contradicts the declared writing type, say so plainly in your FIRST reply before any coaching — name what the question asks for, what we're set up for, and that the examiner's expectations differ. Ask once whether to switch. If the student has already decided (or after they answer), respect it and never raise it again.
 

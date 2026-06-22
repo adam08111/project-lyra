@@ -319,6 +319,34 @@ describe("buildCoachPrompt — search block is gated on searchActive", () => {
   });
 });
 
+describe("§66 buildCoachPrompt — growth-profile injection", () => {
+  const ctx = {
+    level: "Developing Writer (rising)",
+    focus: [{ rule: "Subject-verb agreement", status: "active", note: "he go, data show" }],
+    wins: ["Run-on sentences"],
+    watchList: ["Article usage"],
+  };
+
+  it("injects the student-context block + the usage discipline when a profile exists", () => {
+    const p = buildCoachPrompt("dogs", "Essay", 300, undefined, undefined, false, ctx);
+    expect(p).toContain("WHAT YOU KNOW ABOUT THIS STUDENT");
+    expect(p).toContain("Developing Writer (rising)");
+    expect(p).toContain("Subject-verb agreement");
+    expect(p).toContain("Run-on sentences");           // win → ammunition for explicit citing
+    expect(p).toContain("Article usage");              // watch-list
+    // the heart of the feature: anticipate-not-recite + explicit-only-for-wins
+    expect(p).toContain("ANTICIPATE, don't recite");
+    expect(p).toContain("ONLY to mark a WIN");
+  });
+
+  it("cold start: no block, no memory references when there's no profile (null/omitted)", () => {
+    expect(buildCoachPrompt("dogs", "Essay", 300, undefined, undefined, false, null))
+      .not.toContain("WHAT YOU KNOW ABOUT THIS STUDENT");
+    // omitted entirely (existing 3-arg callers) → still no block, still works
+    expect(buildCoachPrompt("dogs", "Essay", 300)).not.toContain("WHAT YOU KNOW ABOUT THIS STUDENT");
+  });
+});
+
 describe("buildStyleProfilerPrompt — name-based section selection", () => {
   // The single SECTION COUNT line carries the chosen-section list; assert against
   // it specifically, since the format TEMPLATE below still names all 9 sections.

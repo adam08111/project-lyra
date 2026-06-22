@@ -7,6 +7,7 @@ import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildP
 import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
 import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
+import { getStudentContext } from "./growth-report.js";
 import WordLookup from "./components/WordLookup.jsx";
 import { snapshotBackup } from "./backup.js";
 import { LyraAvatar } from "./components/Icons.jsx";
@@ -663,7 +664,9 @@ Rules:
         targetVoice: targetVoice || appliedSkill.signatureStyle || "",
         techniqueCount: extractedSkills?.length || appliedSkill.analysedTechniques?.length || 0,
       } : null;
-      const baseSysPrompt = scaffolding ? buildScaffoldingPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj) : buildCoachPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj, useSearch);
+      // §66: coach FROM the growth profile — Lyra walks in already knowing this
+      // student (scaffolding is for a stuck blank-page student → no memory needed).
+      const baseSysPrompt = scaffolding ? buildScaffoldingPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj) : buildCoachPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj, useSearch, getStudentContext());
       const sysPrompt = antiBiasPrefix ? baseSysPrompt + antiBiasPrefix : baseSysPrompt;
       let result = await callAI(sysPrompt, fullMsg, useSearch, 4096, chatRoute.thinkingBudget, undefined, abortCtrl.signal, chatRoute.model);
 
