@@ -288,6 +288,13 @@ export default function Lyra() {
     // permanently empty chat.
     typedWelcome.current = (writing.messages || []).length > 0;
     chatAbortRef.current?.abort(); // cancel any in-flight greeting/turn from the prior writing
+    // §61 protocol: abort + NULL the proofread controller too, so a proofread
+    // started on the prior writing can't resolve into THIS one — nulling the ref
+    // makes runProofread's ownership guard reject the late run (it would otherwise
+    // still equal ctrl and contaminate the new writing's Grammar Log).
+    proofAbortRef.current?.abort();
+    proofAbortRef.current = null;
+    setProofLoading(false);
     setTypingMsg(null);
     setSuggestions(null);
     setProofread(null);
@@ -357,6 +364,13 @@ export default function Lyra() {
     typedWelcome.current = false;          // §43: New regenerates a fresh greeting
     setWelcomeHandledCue(false);
     chatAbortRef.current?.abort();         // cancel any in-flight greeting/turn
+    // §61 protocol: also abort + null the proofread controller and clear its
+    // spinner, or "New" leaves an orphaned proofread that resolves onto the blank
+    // writing (phantom spinner + stale Grammar-Log rows). Nulling defeats the
+    // late run via runProofread's ownership guard.
+    proofAbortRef.current?.abort();
+    proofAbortRef.current = null;
+    setProofLoading(false);
     setTypingMsg(null);
     setSuggestions(null);
     setProofread(null);

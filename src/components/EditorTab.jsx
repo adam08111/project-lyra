@@ -37,8 +37,8 @@ export default function EditorTab({
   const [activeTechIdx, setActiveTechIdx] = useState(null);
   const [showSkills, setShowSkills] = useState(false);
   const [showNudge, setShowNudge] = useState(false);
-  const [expandedRules, setExpandedRules] = useState(() => new Set()); // §59: which grammar rule-cards show all instances
-  const toggleRule = (i) => setExpandedRules(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
+  const [expandedRules, setExpandedRules] = useState(() => new Set()); // §59: which grammar rule-cards show all instances — keyed by rule name (stable), not array index (which re-points to a different rule each run)
+  const toggleRule = (rule) => setExpandedRules(prev => { const n = new Set(prev); n.has(rule) ? n.delete(rule) : n.add(rule); return n; });
   const INSTANCE_PREVIEW = 3; // show first N instances per rule, then "and X more"
 
   // §63: one-tap copy of the student's whole draft (reuses the §53 clipboard helper:
@@ -363,7 +363,7 @@ export default function EditorTab({
                     <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.heading }}>{grp.rule}</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.red, background: "#FFF5F5", borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>{grp.instances.length} {grp.instances.length === 1 ? "place" : "places"}</div>
                   </div>
-                  {(expandedRules.has(i) ? grp.instances : grp.instances.slice(0, INSTANCE_PREVIEW)).map((it, j) => (
+                  {(expandedRules.has(grp.rule) ? grp.instances : grp.instances.slice(0, INSTANCE_PREVIEW)).map((it, j) => (
                     <div key={j} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 4 }}>
                       <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#FFF5F5", color: COLORS.red }}>{it.wrong}</span>
                       <span style={{ fontSize: 12, color: COLORS.muted }}>{"→"}</span>
@@ -371,8 +371,8 @@ export default function EditorTab({
                     </div>
                   ))}
                   {grp.instances.length > INSTANCE_PREVIEW && (
-                    <button onClick={() => toggleRule(i)} style={{ background: "none", border: "none", color: COLORS.heading, fontFamily: mono, fontSize: 11, cursor: "pointer", padding: "2px 0", marginBottom: 4, textDecoration: "underline" }}>
-                      {expandedRules.has(i) ? "Show less" : `and ${grp.instances.length - INSTANCE_PREVIEW} more`}
+                    <button onClick={() => toggleRule(grp.rule)} style={{ background: "none", border: "none", color: COLORS.heading, fontFamily: mono, fontSize: 11, cursor: "pointer", padding: "2px 0", marginBottom: 4, textDecoration: "underline" }}>
+                      {expandedRules.has(grp.rule) ? "Show less" : `and ${grp.instances.length - INSTANCE_PREVIEW} more`}
                     </button>
                   )}
                   <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.5, margin: "6px 0 8px" }}>{grp.explanation}</div>

@@ -190,7 +190,13 @@ export function groupGrammarByRule(grammar) {
       if (wrong || right) grp.instances.push({ wrong, right });
     }
   }
-  return [...byRule.values()].sort((a, b) => b.instances.length - a.instances.length);
+  // Drop any group that ended up with no real instance — a Lite-tier reply that
+  // emits a rule header but truncates/omits its wrong→right pairs (common near
+  // the token ceiling) would otherwise render a hollow "0 places" card, suppress
+  // the "no issues" placeholder, and persist a blank junk row to the Grammar Log.
+  return [...byRule.values()]
+    .filter(g => g.instances.length)
+    .sort((a, b) => b.instances.length - a.instances.length);
 }
 
 // Truncate at word boundary with ellipsis

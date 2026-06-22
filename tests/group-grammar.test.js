@@ -41,6 +41,22 @@ describe("§59 groupGrammarByRule (patterns over instances)", () => {
     expect(g[0].instances[0]).toEqual({ wrong: "in", right: "on" });
   });
 
+  it("drops a group that has NO real instances (Lite truncated the wrong→right pairs)", () => {
+    // A rule header with no usable instance must NOT become a hollow "0 places"
+    // card or a blank Grammar-Log row — it is dropped entirely.
+    expect(groupGrammarByRule([{ rule: "Tense", explanation: "Use past tense." }])).toEqual([]);
+    expect(groupGrammarByRule([
+      { rule: "Spelling", explanation: "x", example_wrong: "a", example_correct: "b", instances: [{ wrong: "", right: "" }] },
+    ])).toEqual([]);
+    // A real group survives; the empty one beside it is removed.
+    const g = groupGrammarByRule([
+      { rule: "Tense", explanation: "Use past tense." },                       // empty → dropped
+      { rule: "Articles", instances: [{ wrong: "a apple", right: "an apple" }] }, // real → kept
+    ]);
+    expect(g.length).toBe(1);
+    expect(g[0].rule).toBe("Articles");
+  });
+
   it("is safe on empty / non-array", () => {
     expect(groupGrammarByRule([])).toEqual([]);
     expect(groupGrammarByRule(undefined)).toEqual([]);
