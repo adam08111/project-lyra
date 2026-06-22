@@ -2098,3 +2098,21 @@ The "4" was **prompt-only** (`buildProofreadPrompt`; the render never sliced). T
 
 The §55 red × (absolute, top-right 44px) overlapped long bilingual titles ("Singular Nouns and Adjective Forms (單數名詞與形容詞形式)") which had no reserved space. Fix (`GrammarLog.jsx`): the title gets `paddingRight: 44` so it wraps/stops BEFORE the × zone instead of running under it; the × stays out of flow, anchored top-right, red, ≥44px tap target. Verified live: with the long title injected, the title text area ends at x=586 while the × button starts at x=599 (no overlap), and the title wraps to a second line. 370 tests, build clean.
 
+---
+
+## 61. UPDATE — 22 June 2026 — Proofread × closes + aborts in every state; never-stuck soft timeout
+
+*(Numbering: the task brief labelled this §60; the log is already at §60 (title overlap), so it lands as §61.)*
+
+**Bug (screenshot):** the proofread panel stuck on "Doing the magic" and the × did nothing — student trapped.
+
+### 61.0 Step 0 (two causes)
+- **× dead during load**: `EditorTab` × did `onClick={() => setProofread(null)}`. During load `proofread` is already null and `proofLoading` is true, so the panel `{(proofread || proofLoading)}` stayed open — the × cleared neither `proofLoading` nor the in-flight call.
+- **Slow/hung call**: `runProofread` passed **no abort signal** and had **no client-side timeout**; the heavier §59 call (cap ~100 + grouping @ 8192) is slow, so a slow/hung call sat on the spinner until the proxy's 180s timeout ×2 retries (~minutes). Live timing: the call **resolves in ~22.5s** (flash-fallback w/ thinking) — genuinely slow, not fundamentally hung.
+
+### 61.1 Fix (one unit)
+Added `proofAbortRef` + an `AbortController` in `runProofread`, pass `ctrl.signal` to `callAI`, a **60s client-side soft timeout** (`timedOut → abort`), an ownership guard (a superseding cancel/run won't clobber state), and an abort-break in the retry loop (an aborted call doesn't retry). New **`cancelProofread`** (abort + `setProofLoading(false)` + `setProofread(null)`) is wired to the × so it **closes in EVERY state — loading, loaded, error** — and cancels the call. A timeout surfaces as a retryable error ("taking too long"), never an eternal spinner. Kept the §59 cap at 100: the defensive parse (§57) + abort + soft timeout make the heavy call safe without lowering it.
+
+### 61.2 Verification (live, error-dense draft)
+× tapped mid-load → **panel closes immediately + call aborts**; reopen → fresh, **resolves to grouped cards in 22.5s** (7 / 4 / 1 / 1 / 1 places); × also closes the loaded panel. Never eternal. 370 tests, build clean.
+

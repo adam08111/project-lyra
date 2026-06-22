@@ -45,6 +45,7 @@ export default function Lyra() {
   const [chatLoading, setChatLoading] = useState(false);
   const [typingMsg, setTypingMsg] = useState(null);
   const chatAbortRef = useRef(null);
+  const proofAbortRef = useRef(null); // §61: in-flight proofread call, so × / timeout can abort it
 
   // Editor
   const [title, setTitle] = useState("Untitled");
@@ -867,29 +868,42 @@ Rules:
 
     const proofRoute = getRouteConfig("proofread");
     const sys = buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules);
+    // §61: make the call abortable (the × cancels it) and bound it with a client-side
+    // soft timeout, so the heavier §59 call (cap ~100 + grouping) can never trap the
+    // student on an eternal "Doing the magic" spinner.
+    const ctrl = new AbortController();
+    proofAbortRef.current = ctrl;
+    let timedOut = false;
+    const softTimeout = setTimeout(() => { timedOut = true; ctrl.abort(); }, 60000);
+
     // The Lite tier sometimes returns prose, or fenced/preamble/truncated JSON.
-    // Parse defensively (extractJsonObject) and RETRY ONCE before giving up, so a
-    // bad first response never leaves the panel silently empty (the §57 bug).
+    // Parse defensively (extractJsonObject) and RETRY ONCE before giving up (§57).
     let parsed = null;
     for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
       try {
         trackCall();
-        // 8192: thinking tokens count toward maxOutputTokens, and §59 raised the
-        // grammar cap to ~100 (grouped by rule) so the JSON payload is larger — a
-        // low cap truncated it mid-object → parse failed → empty panel. 8192 leaves
-        // room for thinking + the full grouped grammar/style/vocab payload. (Bigger
-        // budget = slower/pricier on a heavily-flawed draft, but acceptable for the
-        // thoroughness the raised cap exists to provide.)
-        const result = await callAI(sys, draft, false, 8192, proofRoute.thinkingBudget, undefined, undefined, proofRoute.model);
+        // 8192: thinking tokens count toward maxOutputTokens, and §59 raised the cap
+        // to ~100 (grouped) so the payload is larger; pass ctrl.signal so the × and
+        // the soft timeout can abort the in-flight fetch.
+        const result = await callAI(sys, draft, false, 8192, proofRoute.thinkingBudget, undefined, ctrl.signal, proofRoute.model);
         const obj = extractJsonObject(result);
         // A usable result has at least one of the three arrays.
         if (obj && (Array.isArray(obj.grammar) || Array.isArray(obj.style) || Array.isArray(obj.vocabulary))) parsed = obj;
-      } catch (e) { /* prose / truncated / malformed — retry once, then error state */ }
+      } catch (e) {
+        if (ctrl.signal.aborted) break; // user cancel or timeout — don't retry
+        /* prose / truncated / malformed — retry once, then error state */
+      }
     }
+    clearTimeout(softTimeout);
+
+    // Ownership guard: if the × (cancelProofread) or a newer run superseded this one,
+    // it already reset the panel — don't clobber that state.
+    if (proofAbortRef.current !== ctrl) return;
+    proofAbortRef.current = null;
 
     if (!parsed) {
-      // Never a silent empty panel — show a visible, retryable error (see EditorTab).
-      setProofread({ error: "Couldn't check this right now — please try again." });
+      // Never a silent or eternal spinner — a visible, retryable error (see EditorTab).
+      setProofread({ error: timedOut ? "This is taking too long — please try again." : "Couldn't check this right now — please try again." });
       setProofLoading(false);
       return;
     }
@@ -916,6 +930,14 @@ Rules:
     }
     setProofLoading(false);
   }, [draft, topic, typeLabel, appliedSuggestions, appliedSkill, examRules]);
+
+  // §61: the × must close the proofread panel in EVERY state — including mid-load —
+  // and abort the in-flight call so it doesn't keep running into a closed panel.
+  const cancelProofread = useCallback(() => {
+    if (proofAbortRef.current) { proofAbortRef.current.abort(); proofAbortRef.current = null; }
+    setProofLoading(false);
+    setProofread(null);
+  }, []);
 
   // "I've rewritten it" — student signals they've rewritten, Lyra verifies in chat
   const applySuggestion = useCallback((sug) => {
@@ -1206,7 +1228,7 @@ Rules:
             applySuggestion={applySuggestion}
             proofread={proofread} setProofread={setProofread}
             proofTab={proofTab} setProofTab={setProofTab}
-            proofLoading={proofLoading} runProofread={runProofread}
+            proofLoading={proofLoading} runProofread={runProofread} cancelProofread={cancelProofread}
             checkFlash={checkFlash}
             miniLesson={miniLesson} fetchMiniLesson={fetchMiniLesson}
             sendChat={sendChat} setTab={setTab}
