@@ -2092,3 +2092,9 @@ The "4" was **prompt-only** (`buildProofreadPrompt`; the render never sliced). T
 ### 59.3 Verification (live, error-dense run-on)
 20 grammar instances (vs old 4) grouped into **4 rule-cards — Subject-Verb Agreement (9), Noun Pluralization (8), Article Usage (2), Double Negatives (1) — most-frequent-first ✓**, bilingual rule names (主謂一致 …), **"akin to" NOT flagged as a grammar error ✓** (§58 held at the higher cap), no padding (style 2 / vocab 5). Grammar-log gets 4 entries (one per rule), not 20.
 
+---
+
+## 60. UPDATE — 22 June 2026 — Grammar Log card title no longer collides with the × button
+
+The §55 red × (absolute, top-right 44px) overlapped long bilingual titles ("Singular Nouns and Adjective Forms (單數名詞與形容詞形式)") which had no reserved space. Fix (`GrammarLog.jsx`): the title gets `paddingRight: 44` so it wraps/stops BEFORE the × zone instead of running under it; the × stays out of flow, anchored top-right, red, ≥44px tap target. Verified live: with the long title injected, the title text area ends at x=586 while the × button starts at x=599 (no overlap), and the title wraps to a second line. 370 tests, build clean.
+

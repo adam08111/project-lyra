@@ -63,7 +63,9 @@ export default function GrammarLog({
                     }}>×</span>
                   </button>
 
-                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, marginBottom: 8 }}>{entry.rule}</div>
+                  {/* §60: reserve the top-right × zone so a long bilingual title wraps
+                      BEFORE the button (width 44 @ right:1) instead of running under it. */}
+                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, marginBottom: 8, paddingRight: 44 }}>{entry.rule}</div>
 
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
                     <div style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#FFF5F5", color: COLORS.red, flex: 1 }}>{entry.phrase}</div>
