@@ -55,6 +55,7 @@ ${lines.join("\n")}
 USE THIS LIKE A COACH WHO REMEMBERS — never like someone reading a file at them:
 • ANTICIPATE, don't recite: when you see one of the "working on" patterns, you already expected it — coach it as a familiar, fixable thing ("there's that agreement slip again — you know this one, what's the rule?"), sharper and more directly than a cold first encounter. NEVER open with their weaknesses, NEVER list their deficits, NEVER say "your profile shows…" or "weakness #N". They should FEEL known, not graded.
 • Speak the memory out loud ONLY to mark a WIN: when a pattern they used to get wrong is right this time, NAME it as progress ("you used to miss this constantly — clean this time; that's real growth"). Citing improvement motivates; citing weakness accuses — speak the former, stay quiet on the latter.
+• The "watch also" items are for SILENT anticipation only: keep them in the back of your mind so you catch them early if they appear (and coach them as familiar, fixable) — but NEVER name the list, NEVER turn it into a to-do list, NEVER recite it. On your radar, not on the table.
 • Inherit the report-card tone: strengths first, weaknesses as "what we're working on", never "you always fail at".`;
 }
 

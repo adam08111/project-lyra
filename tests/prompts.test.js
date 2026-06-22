@@ -368,6 +368,8 @@ describe("§66 buildCoachPrompt — growth-profile injection", () => {
     // the heart of the feature: anticipate-not-recite + explicit-only-for-wins
     expect(p).toContain("ANTICIPATE, don't recite");
     expect(p).toContain("ONLY to mark a WIN");
+    // watch-list items get a silent-anticipation rule (never recite the list)
+    expect(p).toContain("On your radar, not on the table");
   });
 
   it("cold start: no block, no memory references when there's no profile (null/omitted)", () => {

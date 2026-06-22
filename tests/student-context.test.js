@@ -54,6 +54,22 @@ describe("§66 getStudentContext (distil the growth profile)", () => {
     expect(ctx.wins).toContain("Subject-verb agreement");
   });
 
+  it("never cites a still-open rule as a win (no accuse-and-congratulate in one block)", () => {
+    // Profile drift: the same rule is an OPEN active focus AND lingers in graduated.
+    const ctx = getStudentContext({
+      weaknesses: [{ id: "sva", label: "Subject-verb agreement", status: "active", distinctForms: ["he go"], prescription: { en: "x" } }],
+      graduated: [{ id: "sva", label: "Subject-verb agreement" }, { id: "runon", label: "Run-on sentences" }],
+    });
+    expect(ctx.focus.map((f) => f.rule)).toContain("Subject-verb agreement"); // still coached
+    expect(ctx.wins).not.toContain("Subject-verb agreement");                  // NOT celebrated
+    expect(ctx.wins).toContain("Run-on sentences");                            // a genuine win survives
+  });
+
+  it("dedups distinctForms in the focus note (no 'he go, he go')", () => {
+    const ctx = getStudentContext({ weaknesses: [{ id: "x", label: "X", status: "active", distinctForms: ["", "he go", "he go"], prescription: { en: "p" } }] });
+    expect(ctx.focus[0].note).toBe("he go");
+  });
+
   it("cold start: returns null on no profile / empty profile (no injection)", () => {
     expect(getStudentContext(null)).toBeNull();
     expect(getStudentContext({})).toBeNull();

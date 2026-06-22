@@ -77,7 +77,7 @@ export function saveProfile(profile) {
 // forms the student actually produces (most useful for anticipation + detection),
 // else a trimmed prescription. Capped so the injected block stays small.
 function distillFocusNote(w) {
-  const forms = Array.isArray(w.distinctForms) ? w.distinctForms.filter(Boolean).slice(0, 2) : [];
+  const forms = Array.isArray(w.distinctForms) ? [...new Set(w.distinctForms.filter(Boolean))].slice(0, 2) : [];
   if (forms.length) return forms.join(", ").slice(0, 80);
   const presc = ((w.prescription && w.prescription.en) || "").toString().trim();
   return presc ? presc.slice(0, 80) : "";
@@ -122,12 +122,20 @@ export function getStudentContext(profile = loadProfile()) {
     .filter((f) => f.rule);
 
   // WINS = recently resolved / graduated rules — the ammunition for explicit,
-  // motivating win-citing in the chat. Names only, deduped. Cap 4.
+  // motivating win-citing in the chat. Names only, deduped. Cap 4. CRITICAL: a rule
+  // Lyra is still actively coaching (any OPEN weakness, by name) must NEVER also be
+  // cited as a cleaned-up win — else the same block both accuses and congratulates
+  // the same weakness. Profile drift makes this real (a stale graduated entry while
+  // a regression re-opens the rule), so the distiller reconciles defensively: open
+  // state wins over celebrate state.
+  const openRuleNames = new Set(
+    weaknesses.filter(isOpen).map((w) => (w.label || w.id || "").toString().trim()).filter(Boolean)
+  );
   const wins = [
     ...(Array.isArray(profile.graduated) ? profile.graduated : []).filter(Boolean).map((g) => (g.label || "").toString()),
     ...weaknesses.filter((w) => w.status === "resolved").map((w) => (w.label || "").toString()),
   ].map((s) => s.trim()).filter(Boolean);
-  const winsCapped = [...new Set(wins)].slice(0, 4);
+  const winsCapped = [...new Set(wins)].filter((s) => !openRuleNames.has(s)).slice(0, 4);
 
   // WATCH-LIST = other open weaknesses not already in focus, by NAME only. Cap 2.
   const watchList = [...new Set(
