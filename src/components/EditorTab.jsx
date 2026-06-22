@@ -231,8 +231,11 @@ export default function EditorTab({
         </div>
       </div>
 
-      {/* Editor area */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+      {/* Editor area — §62: framed as a paper "sheet" (white card on the parchment
+          bg) so the draft field reads as a defined page. Gutter margin lets the
+          parchment show around it; the textarea stays transparent + scrolls inside.
+          Toolbar above + Ask Lyra below stay OUTSIDE this frame as chrome. */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", margin: "0 18px 14px", border: `1px solid ${COLORS.border}`, borderRadius: 14, background: COLORS.card }}>
         <textarea
           ref={textareaRef}
           value={draft}

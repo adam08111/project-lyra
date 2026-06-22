@@ -2116,3 +2116,22 @@ Added `proofAbortRef` + an `AbortController` in `runProofread`, pass `ctrl.signa
 ### 61.2 Verification (live, error-dense draft)
 × tapped mid-load → **panel closes immediately + call aborts**; reopen → fresh, **resolves to grouped cards in 22.5s** (7 / 4 / 1 / 1 / 1 places); × also closes the loaded panel. Never eternal. 370 tests, build clean.
 
+---
+
+## 62. UPDATE — 22 June 2026 — Draft field framed as a paper "sheet"
+
+*(Numbering: the task brief labelled this §61; the log is already at §61, so it lands as §62.)*
+
+The draft text sat directly on the parchment bg with nothing delineating it. Framed the writing field as a defined sheet.
+
+### 62.0 Step-0 decision — style the existing wrapper, not the textarea
+The draft textarea was already `background: transparent`, `border: none`, `padding: 16px 18px`, `height: 100%` inside an "Editor area" wrapper (`flex:1; position:relative; overflow:hidden`) that also holds the blank-page nudge. Ghost text is disabled (no overlay). So I styled **the existing wrapper** as the sheet (no new element, no double-wrap) and left the textarea transparent inside it — gutter margin floats the sheet on the parchment while the textarea keeps its own padding + native scroll.
+
+### 62.1 The sheet (`EditorTab.jsx`)
+Wrapper gets `border: 1px solid COLORS.border (#E2E5EA)`, `borderRadius: 14`, `background: COLORS.card (#fff)`, `margin: 0 18px 14px` (parchment gutters + gap above Ask Lyra). White-on-parchment reads as paper; border defines it; no heavy shadow (matches the `card` idiom — calm, not boxy). `flex:1` means an empty draft fills the height like a page (min-height inherent). Toolbar (Skills/Proofread) above and the Ask Lyra bar below stay OUTSIDE the frame as chrome.
+
+### 62.2 Preserved / verified
+Monospace draft, placeholder, word-count + progress bar (chrome above), auto-save all unchanged. The wrapper already had `overflow:hidden` + the textarea scrolls natively, so mobile keyboard scroll is unaffected (only the visual frame was added — no clipping introduced). Verified live: sheet bg `#fff` on parchment `#F7F5F2`, border `0.8px` (1px) `#E2E5EA`, radius 14, 18px gutters, sheet width 394px (text ~358px — readable on the 430 column), textarea transparent. 370 tests, build clean.
+
+**Out of scope (noted for a future consistency pass):** the Style Lab Analyse "paste a passage" box is a similar textarea — the same paper treatment would give visual consistency, but not changed now.
+
