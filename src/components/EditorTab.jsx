@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
-import { FeatherIcon } from "./Icons.jsx";
+import { FeatherIcon, CopyIcon } from "./Icons.jsx";
 import MiniLessonCard from "./MiniLessonCard.jsx";
 import { SavedSkills } from "./StyleLab.jsx";
 import { parseStructureContent } from "./XRayView.jsx";
 import { groupGrammarByRule } from "../utils.js";
+import { copyToClipboard } from "../chat-actions.js";
 
 const mono = "'Courier Prime', monospace";
 
@@ -39,6 +40,14 @@ export default function EditorTab({
   const [expandedRules, setExpandedRules] = useState(() => new Set()); // §59: which grammar rule-cards show all instances
   const toggleRule = (i) => setExpandedRules(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
   const INSTANCE_PREVIEW = 3; // show first N instances per rule, then "and X more"
+
+  // §63: one-tap copy of the student's whole draft (reuses the §53 clipboard helper:
+  // secure-context navigator.clipboard with the insecure-context execCommand fallback).
+  const [copiedDraft, setCopiedDraft] = useState(false);
+  const handleCopyDraft = async () => {
+    const ok = await copyToClipboard(draft); // the verbatim draft — no markdown/stripping
+    if (ok) { setCopiedDraft(true); setTimeout(() => setCopiedDraft(false), 1500); }
+  };
 
   // Blank page nudge — show after 60s if editor is still empty
   useEffect(() => {
@@ -231,17 +240,27 @@ export default function EditorTab({
         </div>
       </div>
 
-      {/* Editor area — §62: framed as a paper "sheet" (white card on the parchment
-          bg) so the draft field reads as a defined page. Gutter margin lets the
-          parchment show around it; the textarea stays transparent + scrolls inside.
-          Toolbar above + Ask Lyra below stay OUTSIDE this frame as chrome. */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden", margin: "0 18px 14px", border: `1px solid ${COLORS.border}`, borderRadius: 14, background: COLORS.card }}>
+      {/* Editor area — §62 paper "sheet" (white card on parchment); §63 makes it a
+          column: a non-scrolling copy bar on top + the scrolling textarea below, so
+          the Copy button never sits over the draft text or caret. Toolbar above +
+          Ask Lyra below stay OUTSIDE this frame as chrome. */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", margin: "0 18px 14px", border: `1px solid ${COLORS.border}`, borderRadius: 14, background: COLORS.card }}>
+        {/* §63: one-tap Copy of the whole draft, top-right of the sheet (code-block
+            style); hidden on an empty draft; its own row → no text/caret overlap. */}
+        <div style={{ flexShrink: 0, height: 42, display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 8px" }}>
+          {draft.trim() && (
+            <button onClick={handleCopyDraft} aria-label="Copy your writing" title="Copy your writing"
+              style={{ display: "flex", alignItems: "center", gap: 5, minHeight: 36, padding: "6px 11px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.bg2, color: copiedDraft ? COLORS.green : COLORS.muted, fontFamily: mono, fontSize: 11, cursor: "pointer", transition: "color 0.15s ease" }}>
+              {copiedDraft ? <>{"✓"} Copied</> : <><CopyIcon size={13} color={COLORS.muted} /> Copy</>}
+            </button>
+          )}
+        </div>
         <textarea
           ref={textareaRef}
           value={draft}
           onChange={e => setDraft(e.target.value)}
           placeholder="Start writing here... Lyra is watching and will offer guidance as you go."
-          style={{ width: "100%", height: "100%", padding: "16px 18px", fontFamily: mono, fontSize: 15, lineHeight: 1.8, color: COLORS.text, background: "transparent", border: "none", resize: "none", position: "relative", zIndex: 2, boxSizing: "border-box" }}
+          style={{ width: "100%", flex: 1, minHeight: 0, padding: "6px 18px 16px", fontFamily: mono, fontSize: 15, lineHeight: 1.8, color: COLORS.text, background: "transparent", border: "none", resize: "none", position: "relative", zIndex: 2, boxSizing: "border-box" }}
         />
         {/* Blank page nudge */}
         {showNudge && currentWords < 20 && (

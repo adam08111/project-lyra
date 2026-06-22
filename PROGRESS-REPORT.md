@@ -2135,3 +2135,20 @@ Monospace draft, placeholder, word-count + progress bar (chrome above), auto-sav
 
 **Out of scope (noted for a future consistency pass):** the Style Lab Analyse "paste a passage" box is a similar textarea — the same paper treatment would give visual consistency, but not changed now.
 
+---
+
+## 63. UPDATE — 22 June 2026 — Copy-draft button on the writing field
+
+*(Numbering: the task brief labelled this §62; the log is already at §62, so it lands as §63. Distinct from the §53 chat action row, which copies Lyra's MESSAGES — this copies the STUDENT'S DRAFT.)*
+
+Students had no easy way to get their writing out (manual select-all on a phone is painful). Added a one-tap Copy button to the draft field.
+
+### 63.1 Placement — a non-scrolling copy bar, not a floating corner button
+The §62 sheet became a flex column: a **non-scrolling top bar** (the Copy button, right-aligned, code-block style) + the scrolling textarea below it (`flex:1; minHeight:0`). A *floating* corner button would cover the end of line 1 and any line that scrolls under it (the Grammar-Log overlap class); a separate row means it can **never** sit over the draft text or caret. Verified live: button bottom (≤ textarea top) — no overlap; top-right corner; 68×36 (matches the §53/icon-button idiom + ≥44px-wide tap target).
+
+### 63.2 Behaviour
+Copies the **verbatim draft** (the textarea value — no markdown/stripping; it's the student's plain text) via the **shared §53 `copyToClipboard`** (secure-context `navigator.clipboard` + insecure-context `execCommand` fallback — reused, not reinvented). Two-state feedback: `Copy` → `✓ Copied` for 1.5s → revert (same as §53). Clipboard failure is graceful (no crash). **Hidden on an empty draft** (`draft.trim()`).
+
+### 63.3 Verified
+Empty draft → button hidden ✓; type → button appears top-right ✓; no overlap with textarea/caret ✓ (its own row); reuses the §53 clipboard helper (already unit-tested) so the copy + secure/insecure paths are covered. Ghost text is disabled (no overlay to disturb); the §62 frame scroll is unchanged (textarea scrolls below the fixed bar). 370 tests, build clean.
+
