@@ -2193,3 +2193,36 @@ No project `CLAUDE.md` / `KARPATHY.md` / `golden-rules.md` / `architecture.md` /
 ### 65.3 Out of scope (noted)
 A pre-push git hook enforcing the session-end push is a reasonable FUTURE addition — noted in `CLAUDE.md`, not built (docs/process task only, one commit, no code changes).
 
+---
+
+## 66. UPDATE — 22 June 2026 — The coach who KNOWS the student (growth profile → coaching + proofread)
+
+*(Numbering: the task brief labelled this §63; the log is already past that — it lands as §66, the next linear section. Same reconciliation convention as the §62→§63 note.)*
+
+Lyra's longitudinal memory of each student — the growth profile (`lyra-growth-profile`, §20+: clustered weaknesses with status, occurrence counts, trajectory, recently-resolved wins) — was SILOED in the Report tab. The coaching chat and proofread never read it, so Lyra-in-the-chat was amnesiac about what Lyra-in-the-Report knew. §66 makes coaching + proofread COACH FROM the profile.
+
+**Design principle — "the coach who KNOWS the student", not "the coach who recites a file":** memory is ALWAYS used but mostly INVISIBLE (it makes Lyra ANTICIPATE characteristic errors and coach sharper, not announce them); it becomes EXPLICIT only to MARK A WIN (citing improvement motivates; citing weakness accuses). The growth profile stays the SINGLE SOURCE OF TRUTH — §66 adds RETRIEVAL, never a parallel cache that could drift.
+
+### 66.1 The distiller — `getStudentContext()` (`growth-report.js`)
+`getStudentContext(profile = loadProfile())` returns a COMPACT slice (not the whole profile — that's the §16.7 bloat trap on a Pro call every turn): level+trajectory; the 1-2 FOCUS weaknesses (the ones carrying a `prescription`, cap 3) each with a terse "what to watch for" (the concrete `distinctForms`, else the prescription); recently-resolved WINS (graduated + status-resolved, names only, cap 4 — the ammunition for explicit win-citing); a name-only WATCH-LIST (other open weaknesses, cap 2). Pure when passed a profile (unit-tested without localStorage); returns `null` on cold start / no signal so callers inject nothing. Staleness is documented in-function as eventually-consistent-by-design.
+
+### 66.2 Chat injection — `buildCoachPrompt` (`prompts.js`, `lyra.jsx`)
+`buildCoachPrompt` takes the slice and prepends a framed **WHAT YOU KNOW ABOUT THIS STUDENT** block right after `LYRA_BRAIN` (stable per-student → prefix-cacheable like the §48 block). The block carries the USAGE DISCIPLINE — *ANTICIPATE, don't recite* (coach a known weakness as familiar/fixable; never open with deficits, never "your profile shows…"); *speak the memory out loud ONLY to mark a WIN*; inherit the report-card tone (strengths first, "what we're working on", never "you always fail"). Wired on the coach path only (scaffolding, for a stuck blank-page student, gets no memory). The §48 critique lives inside `LYRA_BRAIN`, so a coaching turn that critiques a draft is covered.
+
+### 66.3 Proofread injection — `buildProofreadPrompt` (`prompts.js`, `lyra.jsx`)
+The Lite proofread gets an even thinner version: a name-only list of the FOCUS weakness rules ("known patterns to watch for this student: …") so it looks HARDEST where the student characteristically slips. Names only — Lite stays Lite; NO win-citing (motivational memory is the chat's job); NO FABRICATION still rules (the list says WHERE to look, never invents errors).
+
+### 66.4 Cold-start + staleness
+No profile → `getStudentContext()` returns null → no block in either prompt → coach/proofread run exactly as before (cold-start safe, verified). The injected slice is eventually-consistent with the Report (regenerates every N practices); weaknesses don't change turn-to-turn, so a few-practice lag is acceptable — deliberately NOT made live (the milestone-force regen §5 accelerates catching a just-beaten weakness).
+
+### 66.5 Verified
+Four commits (distiller / chat / proofread / review-fixes). Rendered the ACTUAL injected prompt text from a sample profile (node, no live-localStorage seeding) — coach block reads as a coach who knows the student, proofread block is thin + honesty-guarded, cold-start injects nothing. App compiles (Vite HMR) + mounts.
+
+Adversarial review (3 lenses × 2-skeptic refutation) found 3 real defects, all fixed in 66/review and on the design principle:
+- **(med)** the same rule could land in BOTH `focus` and `wins` on profile drift (open+graduated) → coach would accuse AND congratulate one weakness in a single block; the distiller now excludes any open-weakness name from wins (open state wins over celebrate state).
+- **(low)** `distillFocusNote` didn't dedup `distinctForms` ("he go, he go") → now Set-deduped like its siblings.
+- **(low)** the watch-list rendered with no usage discipline → added a silent-anticipation clause (on the radar, never recited).
+- Rejected correctly: routing "improving" weaknesses to wins (still open → premature celebration).
+
+**383 tests** (+12 over the §65 baseline: 7 distiller + 5 chat/proofread), full suite green.
+
