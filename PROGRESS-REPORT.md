@@ -2152,3 +2152,44 @@ Copies the **verbatim draft** (the textarea value — no markdown/stripping; it'
 ### 63.3 Verified
 Empty draft → button hidden ✓; type → button appears top-right ✓; no overlap with textarea/caret ✓ (its own row); reuses the §53 clipboard helper (already unit-tested) so the copy + secure/insecure paths are covered. Ghost text is disabled (no overlay to disturb); the §62 frame scroll is unchanged (textarea scrolls below the fixed bar). 370 tests, build clean.
 
+---
+
+## 64. UPDATE — 22 June 2026 — Adversarial review of §57–§63 (3 proofread fixes)
+
+*(Logged after the fact — this is the work already in commit `e8a28d8`, written into the log to keep the `§` sequence linear. The task brief for the CLAUDE.md work below ALSO said §64; since the commit log already holds §64, that work lands as §65 — same reconciliation as the §62→§63 note above.)*
+
+A multi-agent adversarial review (8 lenses × 3-skeptic refutation, **0 false positives**) of the unreviewed §57–§63 proofread / grammar-log / copy-draft surface found 3 real defects; all fixed, all matched against the actual code.
+
+### 64.1 Zero-instance grammar group (medium) — `utils.js`
+`groupGrammarByRule` could emit a group with no real instance when the Lite tier returns a rule header but truncates/omits its wrong→right pairs (common near the token ceiling) — rendering a hollow "0 places" card, suppressing the "✓ no issues" placeholder, and persisting a **blank junk row to the Grammar Log** in localStorage. Fixed by dropping zero-instance groups in the return (one `.filter` cascades to all three consumer sites). + regression test.
+
+### 64.2 Orphaned proofread on navigation (high) — `lyra.jsx`
+§61 wired the abort protocol into the × ONLY, not the two navigation paths (`loadWriting`, `resetToNew`). A proofread in flight when the student opened another writing / hit New resolved into the NEW writing — the ownership guard `proofAbortRef.current !== ctrl` passed because the ref was never nulled — **contaminating the new writing's Grammar Log** with the old draft's entries, plus a phantom "Doing the magic" spinner. Both paths now abort + NULL `proofAbortRef` and clear `proofLoading`, so the late run is rejected by the guard.
+
+### 64.3 Stale expand-state (low) — `EditorTab.jsx`
+`expandedRules` was keyed by array index and never reset, so a grammar card expanded in one run pre-expanded a DIFFERENT (frequency-ranked) rule the next run. Now keyed by the stable `grp.rule` string.
+
+### 64.4 Verified
+**371 tests** (+1 regression), Vite HMR clean, no console/server errors, app mounts. Committed `e8a28d8` (local; not yet on origin/main).
+
+---
+
+## 65. UPDATE — 22 June 2026 — CLAUDE.md consolidated into the enforceable discipline
+
+No project `CLAUDE.md` / `KARPATHY.md` / `golden-rules.md` / `architecture.md` / ADRs existed in the repo. The recurring §22–§63 failures were **drift over long sessions** — NOT blind-start: work sat local-only ~2 weeks (flagged 4×); rule definitions got duplicated and diverged (correction-vs-taste, no-fabrication, cluster-by-rule); prompt scaffolding leaked to students (3×); AI calls froze with no error state (2×). A one-time read at session start decays. Fix: a project-root `CLAUDE.md` (auto-loaded every session) that INLINES the non-negotiables so they stay in context, plus a before/during/after-session checklist targeting the skipped steps, plus pointers to the deeper docs.
+
+### 65.1 What was created
+- **`CLAUDE.md`** at the repo root. **## NON-NEGOTIABLES** — the 10 recurring-failure rules inlined (1–3 lines each): Karpathy discipline, push discipline, single-source-of-truth, no-scaffolding-leak, verify-before-fix, check-don't-assume, error-states/never-stuck, learning-sync dedup, mobile-first/preserve-overlays, pedagogy-is-law.
+- **## SESSION CHECKLIST** — BEFORE WORK / DURING / BEFORE SESSION END, foregrounding the most-skipped steps (push + FF-merge to `origin/main`; single-source-of-truth check; check-don't-assume; PROGRESS-REPORT section per unit).
+- **## DEEPER DOCS** — pointers to `lyra-brain.js`, `judgment-rules.js`, `report-card-brain.js`, `ai-router.js`, `LYRA-PROJECT-BRIEF.md`, `PROGRESS-REPORT.md`, `.cursorrules` (only files that exist).
+
+### 65.2 Inventory notes (Step 0)
+- `KARPATHY.md` did NOT exist → the short Karpathy discipline was inlined fresh (non-negotiable #1), not linked.
+- `golden-rules.md` / `architecture.md` / ADRs do NOT exist → not pointed to.
+- The closest existing "rules doc" is `.cursorrules`; its architecture lines (single-file app, `api.anthropic.com` via `api-patch.js`) are STALE vs the current multi-component + Gemini/proxy reality. `README.md` and `LYRA-PROJECT-BRIEF.md` are likewise stale on the API/stack (Anthropic / single-file ~1,384 lines). CLAUDE.md states the current facts and flags those docs as stale (defer to `ai-router.js` + the code). Not rewritten here (out of scope).
+- `lyra-brain.js` pedagogy constraints confirmed present as readable in-file comments (the pointer is valid).
+- AUGMENT, not overwrite: no existing CLAUDE.md to preserve; the accurate rules from `.cursorrules` (mobile-first 430px, AI-never-writes-for-the-student, formality-aware, COLORS palette, no emojis in chrome) are reflected, the stale ones dropped.
+
+### 65.3 Out of scope (noted)
+A pre-push git hook enforcing the session-end push is a reasonable FUTURE addition — noted in `CLAUDE.md`, not built (docs/process task only, one commit, no code changes).
+
