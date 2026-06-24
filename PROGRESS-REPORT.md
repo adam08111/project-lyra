@@ -2226,3 +2226,31 @@ Adversarial review (3 lenses × 2-skeptic refutation) found 3 real defects, all 
 
 **383 tests** (+12 over the §65 baseline: 7 distiller + 5 chat/proofread), full suite green.
 
+---
+
+## 67. UPDATE — 23 June 2026 — Critique covers EVERY sentence (match the gold standard)
+
+*(Numbering: the task brief labelled this §63; the log is past it — lands as §67.)*
+
+The gold Opus critique did all 15 sentences of a draft (each numbered, flaw+reason+fix; the unparseable one flagged + asked; then ALL logic leaps; then one task). Gemini sampled 6 sentences and bailed to the logic pass. Three causes, all fixed (commit per fix).
+
+### 67.0 Step-0 diagnosis (all three)
+- **What let it sample:** the §48 block said *"Take the FLAWED sentences one at a time"* — it only mandated covering flawed sentences, never numbering EVERY sentence. So the model picked a handful. (The "COMPLETE sweep, never a sample" line one above was undercut by the operative per-sentence instruction.)
+- **Old token value:** the coaching call passed **maxTokens 4096** with **thinkingBudget 4096** (chat_coaching route). Thinking counts toward maxOutputTokens, so thinking could consume the whole cap → the visible sweep truncated after ~6 sentences.
+- **Where the name leaked:** `antiBiasPrefix` (= `ANTI_BIAS_BLOCK`) is appended to the coaching prompt ONLY inside `if (savedSkills.length || appliedSkill)` (lyra.jsx ~623-645). A plain critique with no attached skill had NO anti-bias guard, and the §48 block didn't forbid named authors → the model invented "Maxine Eggenberger".
+
+### 67.1 Fix A — force numbered every-sentence coverage (`lyra-brain.js`)
+Rewrote the §48 coverage instruction to MANDATE completeness: number the draft 1..N, account for EVERY sentence in order, each on its own numbered line — no sampling, no "main ones", no batching, no early wrap to reach the logic pass ("a 15-sentence draft gets 15 numbered lines; if you stop before the last sentence you have failed the task"). Clean sentence → marked clean explicitly ("Sentence 7 — this one's fine"); unparseable → flag + best-guess + ask (unchanged). Silent pre-output gate now counts numbered lines against the sentence count. All existing rules intact (grouping ban, logic pass, correction-vs-taste, no-rewrite, EN-primary, no scaffolding leak).
+
+### 67.2 Fix B — raise maxTokens so the full sweep can't truncate (`ai-router.js`, `lyra.jsx`)
+Added `maxTokens` to the route config: **chat_coaching 16384**, scaffolding 8192 (both with margin over their 4096 thinking budget); the call now uses `chatRoute.maxTokens`. Single generous ceiling (output only bills when used; streaming covers UX) rather than app-side intent detection.
+
+### 67.3 Fix C — never name a real writer in critique (`lyra-brain.js`)
+Put the no-real-author rule in the critique block itself (always on the critique path, not gated on skills like `antiBiasPrefix`): NO REAL AUTHORS — never name/invoke a real writer or attribute a technique to one; lead with strengths by praising the student's OWN moves, never "very Hemingway"; only the anonymous Writer A/B labels from the student's own Style Lab cards are allowed.
+
+### 67.4 Validation (live model, real prompt + new budget)
+Ran a faithful 15-sentence AI-debate draft (planted flaws, an unparseable sentence 3, an oversized-metaphor size-mismatch, a two-tangled-arguments seam) through the real `buildCoachPrompt` → proxy → `gemini-3-flash-preview` at maxTokens 16384 (no live-browser-session interference). Result: **15 / 15 sentences covered**, each numbered with flaw→reason→fix; clean ones marked "This sentence is fine" (4, 9, 11, 15); sentence 3 flagged "I cannot fully decode this… my best guess is… does that match?"; logic pass named Size Mismatch (s7), Two Tangled Arguments (s8), Missing Causal Bridge (s10→11), each with both repair directions; **no real author names**; reached the hand-back task (not truncated); 繁中 as support glosses, no scaffolding leak. The two-passes-separate design held — sentence 11 was grammatically "fine" yet flagged in the logic pass as the overgeneralization.
+
+### 67.5 Verified
+Three commits (coverage / anti-bias / budget). **387 tests** (+4: every-sentence mandate, no-real-author, 2 budget), full suite green; app compiles + mounts; live critique validation above. The §48 sample failure is closed.
+
