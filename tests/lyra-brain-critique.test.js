@@ -73,6 +73,20 @@ describe("LYRA_BRAIN — Diagnostic Critique block", () => {
     expect(block).toMatch(/let the STUDENT choose/);
   });
 
+  it("§68: bans echoing internal pass/step labels (the 'Sentence-by-Sentence Pass' / 'Flag + Ask' leak)", () => {
+    // Live leak: the model printed "**Sentence-by-Sentence Pass**" as a header and
+    // "**Flag + Ask:**" as a label. Strengthen the ban AND remove the ALL-CAPS echo
+    // magnet ("FLAG + ASK") from the instructions so there's nothing to mirror.
+    expect(block).toMatch(/"Sentence-by-Sentence Pass"/); // named as banned
+    expect(block).toMatch(/"Logic Pass"/);                // banned
+    expect(block).toMatch(/"Flag \+ Ask"/);               // now explicitly banned
+    expect(block).toMatch(/a label in CAPS here is FOR YOU/); // the generalisation that catches future labels
+    expect(block).toMatch(/DON'T →/);                     // concrete don't→do example
+    // the instructions must NOT use the ALL-CAPS "FLAG + ASK" step-label any more
+    expect(block).not.toMatch(/→ FLAG \+ ASK/);
+    expect(block).not.toMatch(/: FLAG \+ ASK/);
+  });
+
   it("§67: MANDATES numbered every-sentence coverage — no sampling, clean sentences marked clean", () => {
     // The §48 sample bug: it said "take the FLAWED sentences", which let the model
     // pick a handful. Now it must number EVERY sentence 1..N and account for each.
