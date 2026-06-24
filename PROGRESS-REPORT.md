@@ -2272,3 +2272,21 @@ The prompt's OWN ALL-CAPS label tokens are echo magnets: the instruction wrote t
 ### 68.3 Verified
 Before: 1 leak in 2 live runs ("Sentence-by-Sentence Pass" + a soft "feedback" header). After: **4 / 4 live runs clean** — no sentence-by-sentence / logic-pass / flag-ask token in any form, no markdown headers, no author names, full 15/15 coverage retained; the model now opens with "Let's go through your sentences one by one:" and goes straight into "1.". **388 tests** (+1 leak-ban test).
 
+---
+
+## 69. UPDATE — 24 June 2026 — A re-mark request re-runs the FULL sweep, even mid-session
+
+Reported: a "mark my whole essay" turn came back as a short stance-tip + one grammar fix instead of the §67 every-sentence sweep. The pasted output ("I love that you've KEPT your black hole and athlete's-pace images…") shows it was a FOLLOW-UP after a prior critique — so the model handed back a single next-step (the §48 CLOSE move) instead of re-marking the revised draft.
+
+### 69.1 Diagnosis (honest: could NOT reproduce)
+Tried to reproduce the short reply across **13 live runs / 5 scenarios** — single-turn explicit mark, with conversation history, prior-critique history + a soft "check it", §66 growth-profile injected, and **HKDSE exam rules active** (the most promising lead, since the output fixated on stance). **All 13 gave the full 15/15 sweep.** The failure is nondeterministic; the §67 mandate is robust in every harness I could build. Latent risk identified in the code regardless: `buildCoachPrompt`'s "RESPONSE LENGTH" caps a "draft attempt" at 80–120 words, which can classify a whole-essay submission as a short turn and compete with the §48 full sweep; and nothing told the model that a follow-up re-mark should re-sweep rather than hand back one step.
+
+### 69.2 Fix (prompt reinforcement — user chose "always re-run the full sweep on a re-mark")
+- **`lyra-brain.js` §48 GATE:** added "RE-MARK = A FRESH FULL SWEEP, EVERY TIME" — a whole-draft mark / check / "mark again" / "is it better now?" re-runs the COMPLETE every-sentence sweep on the CURRENT draft, EVEN as a follow-up after an earlier version was marked; the "hand back ONE thing" CLOSE is never a substitute for the sweep; applies on turn 1 and turn 10 identically. (Only a question about ONE specific part stays focused.)
+- **`prompts.js` buildCoachPrompt:** a FULL-DRAFT CRITIQUE carve-out at the top of RESPONSE LENGTH that OVERRIDES the short-reply word-caps and disambiguates the small "draft attempt" rows from a whole-essay marking.
+
+This is REINFORCEMENT (the failure was never captured), not a fix validated against a repro — stated plainly so the record is honest.
+
+### 69.3 Verified
+**4 / 4 live runs** of the realistic failing shape (follow-up re-mark after a prior critique + HKDSE exam rules + soft "is it better now? check the whole thing again") → full **15/15** sweep, no scaffolding leak, ~640–840 words each. **390 tests** (+2: §48 re-mark clause, buildCoachPrompt cap-override). If a short reply recurs, the exact student message is needed to capture the precise trigger.
+
