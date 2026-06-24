@@ -73,6 +73,23 @@ describe("LYRA_BRAIN — Diagnostic Critique block", () => {
     expect(block).toMatch(/let the STUDENT choose/);
   });
 
+  it("§67: MANDATES numbered every-sentence coverage — no sampling, clean sentences marked clean", () => {
+    // The §48 sample bug: it said "take the FLAWED sentences", which let the model
+    // pick a handful. Now it must number EVERY sentence 1..N and account for each.
+    expect(block).toMatch(/EVERY SENTENCE, NUMBERED/);
+    expect(block).toMatch(/Number the draft's sentences/);
+    expect(block).toMatch(/each gets its own numbered line/);
+    expect(block).toMatch(/do NOT sample/);
+    expect(block).toMatch(/wrap up early/);                 // the bail-to-logic-pass failure mode
+    // clean sentences are explicitly marked, not skipped
+    expect(block).toMatch(/A CLEAN sentence/);
+    expect(block).toMatch(/this one's fine/);
+    // unparseable still flagged-and-asked (gold standard sentence 3)
+    expect(block).toMatch(/UNPARSEABLE sentence/);
+    // the silent gate now counts lines against the sentence count
+    expect(block).toMatch(/count your numbered lines against the draft's sentence count/);
+  });
+
   it("hard-codes the correction-vs-taste guard with the akin-to example", () => {
     expect(block).toMatch(/CORRECTION vs TASTE/);
     expect(block).toContain("akin to");
