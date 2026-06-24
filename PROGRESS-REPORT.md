@@ -2254,3 +2254,21 @@ Ran a faithful 15-sentence AI-debate draft (planted flaws, an unparseable senten
 ### 67.5 Verified
 Three commits (coverage / anti-bias / budget). **387 tests** (+4: every-sentence mandate, no-real-author, 2 budget), full suite green; app compiles + mounts; live critique validation above. The §48 sample failure is closed.
 
+---
+
+## 68. UPDATE — 23 June 2026 — Critique stops leaking its own pass/step labels
+
+The §67 validation run happened to come back clean, but a real run leaked internal scaffolding into the student-facing reply: a bold **"Sentence-by-Sentence Pass"** header, a **"Flag + Ask:"** label (and on softer runs a **"Sentence-by-sentence feedback"** header). The §54/§67 OUTPUT ban already listed the pass names, yet the model still echoed them — and "Flag + Ask" was never banned. Everything a model emits is read directly by a 14-year-old; no scaffolding may leak (NON-NEGOTIABLE #4).
+
+### 68.1 Root cause
+The prompt's OWN ALL-CAPS label tokens are echo magnets: the instruction wrote the unparseable step as "FLAG + ASK" and titled sections "SENTENCE-BY-SENTENCE…" / "LOGIC PASS", and nothing forbade a heading ABOVE the numbered list — so the model mirrored them as bold student-facing headers/labels. A static ban that merely names the forbidden strings loses to a strong in-prompt template.
+
+### 68.2 Fix (`lyra-brain.js`)
+- Removed the ALL-CAPS "FLAG + ASK" step-label from the instructions (now lowercase "flag it and ask"), so there is no label token to mirror; the unparseable note is modelled as plain speech ("Sentence 3 — I can't fully decode this one; my best guess is…").
+- The sentence pass must begin DIRECTLY with "1." — NO heading/title/bold label above the numbered list (the numbers ARE the structure), at most one plain lead-in line.
+- The logic pass opens with a plain spoken transition, never a "Logic Pass" label/title.
+- OUTPUT ban strengthened + generalised: any ALL-CAPS / label-shaped token here is FOR YOU not the student; no bold-faked headers; the phrases "Sentence-by-Sentence" and "Logic Pass" must not appear in the reply in ANY form ("…Pass", "…feedback", bold title); explicit DON'T→DO example. "Flag + Ask" added to the banned list.
+
+### 68.3 Verified
+Before: 1 leak in 2 live runs ("Sentence-by-Sentence Pass" + a soft "feedback" header). After: **4 / 4 live runs clean** — no sentence-by-sentence / logic-pass / flag-ask token in any form, no markdown headers, no author names, full 15/15 coverage retained; the model now opens with "Let's go through your sentences one by one:" and goes straight into "1.". **388 tests** (+1 leak-ban test).
+
