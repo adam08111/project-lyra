@@ -668,7 +668,10 @@ Rules:
       // student (scaffolding is for a stuck blank-page student → no memory needed).
       const baseSysPrompt = scaffolding ? buildScaffoldingPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj) : buildCoachPrompt(topic, typeLabel, wcLabel, examRules, sourceCtxObj, useSearch, getStudentContext());
       const sysPrompt = antiBiasPrefix ? baseSysPrompt + antiBiasPrefix : baseSysPrompt;
-      let result = await callAI(sysPrompt, fullMsg, useSearch, 4096, chatRoute.thinkingBudget, undefined, abortCtrl.signal, chatRoute.model);
+      // §67: maxTokens from the route (16384 for coaching) so a full numbered
+      // every-sentence critique + logic pass can't truncate — thinking counts toward
+      // the output cap, so the old shared 4096 truncated the sweep to a sample.
+      let result = await callAI(sysPrompt, fullMsg, useSearch, chatRoute.maxTokens || 8192, chatRoute.thinkingBudget, undefined, abortCtrl.signal, chatRoute.model);
 
       // When useSearch=true, callAI returns { text, sources } instead of a
       // raw string. Unpack here so downstream helpers (restoreAuthorNames,

@@ -55,6 +55,13 @@ const ROUTE_CONFIG = {
   chat_coaching: {
     model: MODELS.pro,
     thinkingBudget: 4096,
+    // §67: thinking tokens count toward maxOutputTokens, so the old shared 4096 cap
+    // left almost no room for visible text once thinking ran — a full 15-sentence
+    // diagnostic critique + logic pass truncated to a ~6-sentence sample. Budget
+    // generously: thinking (4096) + a long numbered sweep + logic pass + hand-back
+    // task. A ceiling only bills when actually used, and streaming covers the UX of
+    // a long reply, so a normal short chat turn pays nothing extra for the headroom.
+    maxTokens: 16384,
     brain: true,
   },
 
@@ -62,6 +69,9 @@ const ROUTE_CONFIG = {
   scaffolding: {
     model: MODELS.pro,
     thinkingBudget: 4096,
+    // Replies are short by design (one step/message), but keep a comfortable margin
+    // over the thinking budget so a thinking-heavy step never truncates mid-answer.
+    maxTokens: 8192,
     brain: true,
   },
 
