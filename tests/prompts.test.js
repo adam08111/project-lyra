@@ -372,6 +372,14 @@ describe("§66 buildCoachPrompt — growth-profile injection", () => {
     expect(p).toContain("On your radar, not on the table");
   });
 
+  it("§69: full-draft critique overrides the short-reply word-caps (re-mark stays a full sweep)", () => {
+    const p = buildCoachPrompt("dogs", "Essay", 300);
+    expect(p).toMatch(/FULL-DRAFT CRITIQUE — OVERRIDES EVERY CAP BELOW/);
+    expect(p).toMatch(/do NOT apply the word-caps below to it/);
+    expect(p).toMatch(/RE-RUNS the full sweep/);
+    expect(p).toMatch(/NOT a whole essay submitted for marking/); // disambiguates the small "draft attempt" rows
+  });
+
   it("cold start: no block, no memory references when there's no profile (null/omitted)", () => {
     expect(buildCoachPrompt("dogs", "Essay", 300, undefined, undefined, false, null))
       .not.toContain("WHAT YOU KNOW ABOUT THIS STUDENT");

@@ -73,6 +73,16 @@ describe("LYRA_BRAIN — Diagnostic Critique block", () => {
     expect(block).toMatch(/let the STUDENT choose/);
   });
 
+  it("§69: a follow-up re-mark request re-runs the FULL sweep, never a single next-step", () => {
+    // A 'mark it again' after a revision must re-run the complete every-sentence
+    // sweep on the current draft — not collapse to a stance tip / one fix (the
+    // CLOSE move) just because an earlier version was already marked.
+    expect(block).toMatch(/RE-MARK = A FRESH FULL SWEEP/);
+    expect(block).toMatch(/EVEN as a follow-up AFTER you already/);
+    expect(block).toMatch(/never\s*a substitute for it/);
+    expect(block).toMatch(/turn 1 and\s*on turn 10 identically/);
+  });
+
   it("§68: bans echoing internal pass/step labels (the 'Sentence-by-Sentence Pass' / 'Flag + Ask' leak)", () => {
     // Live leak: the model printed "**Sentence-by-Sentence Pass**" as a header and
     // "**Flag + Ask:**" as a label. Strengthen the ban AND remove the ALL-CAPS echo
