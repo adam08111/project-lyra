@@ -90,6 +90,17 @@ describe("LYRA_BRAIN — Diagnostic Critique block", () => {
     expect(block).toMatch(/count your numbered lines against the draft's sentence count/);
   });
 
+  it("§67: forbids naming any real author in the critique (the Maxine-Eggenberger leak)", () => {
+    // antiBiasPrefix (ANTI_BIAS_BLOCK) is only applied when skills are attached, so
+    // a plain critique with no skill had NO anti-bias guard → the model invented a
+    // real-author comparison. The rule must live in the critique block itself.
+    expect(block).toMatch(/NO REAL AUTHORS/);
+    expect(block).toMatch(/NEVER names or invokes a real writer/);
+    expect(block).toMatch(/never attributes a technique to one/i);
+    expect(block).toMatch(/praise the student's OWN moves/i);
+    expect(block).toMatch(/Writer A\/B/);   // the only names allowed are the anon Style Lab labels
+  });
+
   it("hard-codes the correction-vs-taste guard with the akin-to example", () => {
     expect(block).toMatch(/CORRECTION vs TASTE/);
     expect(block).toContain("akin to");
