@@ -61,6 +61,42 @@ export const countDedupedPractices = (reports) => groupReports(reports).length;
 export const reportTechniqueKey = (r) =>
   reportClean(r?.technique || (r?.skills && r?.skills[0] && r?.skills[0].skillName) || "").toLowerCase();
 
+// §72 — does this freeform text look like a sentence-by-sentence grammar critique
+// (numbered "original → correction" lines)? ACHIEVEMENTS are for SKILLS the student
+// earned through practice; a grammar critique belongs in the Grammar Log, never as a
+// skill win — so a critique saved as a freeform report (manual ★, or the
+// visible-report fallback) must be kept OUT of the Achievements tab. A real skill /
+// before-after report has 0 such lines; a sweep has many → threshold 2. Self-contained
+// (no imports — report-utils stays dependency-free; no cycle with chat-actions).
+export function isGrammarCritiqueText(text) {
+  if (!text) return false;
+  let n = 0;
+  for (const line of String(text).split(/\r?\n/)) {
+    if (/^\s*\*{0,2}\d+[.)]\s/.test(line) && /→|->|—>/.test(line) && /["“”]|\*\*/.test(line)) {
+      if (++n >= 2) return true;
+    }
+  }
+  return false;
+}
+
+// §72 — a grammar RULE the model sometimes emits as a "technique" (so a grammar fix
+// gets saved as a structured Achievement headlined "Subject-verb agreement"). These
+// are corrections, not writing skills.
+const GRAMMAR_RULE_LABEL = /\b(subject[\s-]?verb|agreement|tenses?|articles?|plurals?|singular|possessives?|prepositions?|spelling|punctuation|run[\s-]?ons?|fragments?|comma splice|capitali[sz]ation|word order|noun|adjective|adverb|pronoun)\b/i;
+
+// §72 — is this masterclass report a grammar correction rather than a SKILL the
+// student earned? Two shapes: a freeform critique message saved verbatim, or a
+// structured report whose headline IS a grammar rule (with no real writing-skill
+// content). Such a report belongs in the Grammar Log, NOT the Achievements tab.
+export function isGrammarOnlyReport(r) {
+  if (!r) return false;
+  if (r.reportText && isGrammarCritiqueText(r.reportText)) return true;
+  const label = (r.technique || (r.skills && r.skills[0] && r.skills[0].skillName) || "").trim();
+  // headlined by a grammar rule AND carrying no real writing-skill structure
+  if (label && GRAMMAR_RULE_LABEL.test(label) && !(r.structures && r.structures.length)) return true;
+  return false;
+}
+
 /**
  * Group reports for the ACHIEVEMENTS tab: ONE card per technique practised.
  *
@@ -77,6 +113,11 @@ export const reportTechniqueKey = (r) =>
 export function groupAchievements(reports) {
   const groups = [];
   for (const r of reports || []) {
+    // §72: a grammar correction is not a skill achievement — keep it out of the
+    // Achievements tab (it lives in the Grammar Log). Covers a freeform critique
+    // saved verbatim AND a structured report headlined by a grammar rule. Filtering
+    // here covers the card list AND the tab count, for legacy + new entries.
+    if (isGrammarOnlyReport(r)) continue;
     const key = reportTechniqueKey(r);
     const w = reportWords(r.after || (r.skills && r.skills[0] && r.skills[0].studentApplication) || "");
     let g = key

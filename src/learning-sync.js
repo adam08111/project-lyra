@@ -8,7 +8,7 @@
  * The student never sees this. The app strips it before display.
  */
 
-import { reportWords, reportSameMoment } from "./report-utils.js";
+import { reportWords, reportSameMoment, isGrammarCritiqueText } from "./report-utils.js";
 import { QUICK_ACTION_MESSAGES } from "./constants.js";
 
 const MARKER = /<!--LYRA_LEARNING_DATA\n?([\s\S]*?)\nLYRA_LEARNING_DATA-->/;
@@ -415,6 +415,9 @@ export function maybeSaveVisibleReport(displayText, ctx) {
  */
 export function saveMasterclassReport(report) {
   try {
+    // §72: a grammar critique is never a skill achievement — don't store a freeform
+    // critique message (manual ★ save, or the visible-report fallback) as a card.
+    if (report && report.reportText && isGrammarCritiqueText(report.reportText)) return null;
     const existing = JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]");
     // Dedup: the auto-save, the visible-report fallback, and the manual
     // "Save this turn" button can all fire for the SAME turn. If this exact

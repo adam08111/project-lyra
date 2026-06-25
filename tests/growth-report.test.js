@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupReports, groupAchievements, consolidateMistakes, buildDelta } from "../src/report-utils.js";
+import { groupReports, groupAchievements, consolidateMistakes, buildDelta, isGrammarCritiqueText, isGrammarOnlyReport } from "../src/report-utils.js";
 import {
   milestoneImminent,
   effectiveRegenThreshold,
@@ -109,6 +109,24 @@ describe("groupAchievements — one card per technique (Achievements tab)", () =
     ];
     // Two unrelated sentences, no technique → must stay two cards, not collapse.
     expect(groupAchievements(reports)).toHaveLength(2);
+  });
+
+  it("§72: keeps grammar OUT of the Achievements tab (freeform critique AND grammar-rule-titled report)", () => {
+    const critiqueText = `Let's go through your sentences one by one:\n1. "Every decades technology is difference." → "Every decade's technology is different." (agreement)\n2. "2010s of popularity was smartwatch." → "In the 2010s, smartwatches were popular." (plural)`;
+    const reports = [
+      { id: "r_crit", source: "manual", reportText: critiqueText, after: "Here's my current draft: ..." }, // a saved grammar critique (freeform)
+      { id: "r_grule", technique: "Subject-verb agreement", after: "The data show a trend.", skills: [{ skillName: "Subject-verb agreement" }] }, // grammar rule as a "technique"
+      { id: "r_skill", technique: "Painted Style Pictures", after: "The red dress exudes a commanding presence.", skills: [{ skillName: "Painted Style Pictures" }] }, // a REAL skill win
+    ];
+    const groups = groupAchievements(reports);
+    expect(groups).toHaveLength(1);                                  // both grammar reports filtered out
+    expect(groups[0].display.technique).toBe("Painted Style Pictures"); // only the skill win remains
+    // the detectors
+    expect(isGrammarCritiqueText(critiqueText)).toBe(true);
+    expect(isGrammarCritiqueText("You nailed the concession-then-punch — that landing hits hard!")).toBe(false);
+    expect(isGrammarOnlyReport({ technique: "Subject-verb agreement", after: "x" })).toBe(true);
+    expect(isGrammarOnlyReport({ technique: "Painted Style Pictures", after: "x" })).toBe(false);
+    expect(isGrammarOnlyReport({ technique: "Concession Then Punch", after: "x" })).toBe(false);
   });
 });
 
