@@ -3,6 +3,12 @@ import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { FeatherIcon } from "./Icons.jsx";
 import MiniLessonCard from "./MiniLessonCard.jsx";
+import { stripMd, truncate } from "../utils.js";
+
+// §70 — clean a stored field for DISPLAY: strip markdown (**bold**, *italic*, `code`)
+// and trim. The card renders plain text, and entries saved before the §70 parser fix
+// have raw ** in them — fixing it here cleans BOTH legacy and new entries, no migration.
+const clean = (t) => stripMd((t || "").replace(/`/g, ""));
 
 export default function GrammarLog({
   grammarLog, setGrammarLog, showGrammarLog, setShowGrammarLog,
@@ -65,16 +71,16 @@ export default function GrammarLog({
 
                   {/* §60: reserve the top-right × zone so a long bilingual title wraps
                       BEFORE the button (width 44 @ right:1) instead of running under it. */}
-                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, marginBottom: 8, paddingRight: 44 }}>{entry.rule}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.heading, marginBottom: 8, paddingRight: 44 }}>{clean(entry.rule)}</div>
 
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                    <div style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#FFF5F5", color: COLORS.red, flex: 1 }}>{entry.phrase}</div>
+                    <div style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#FFF5F5", color: COLORS.red, flex: 1 }}>{clean(entry.phrase)}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#F0FFF0", color: COLORS.green, flex: 1 }}>{entry.correction}</div>
+                    <div style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#F0FFF0", color: COLORS.green, flex: 1 }}>{clean(entry.correction)}</div>
                   </div>
 
-                  <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, marginBottom: 10 }}>{entry.explanation}</div>
+                  <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.6, marginBottom: 10 }}>{clean(entry.explanation)}</div>
 
                   {(entry.example_wrong || entry.example_correct) && (
                     <div style={{ background: COLORS.bg2, borderRadius: 10, padding: 12 }}>
@@ -88,7 +94,7 @@ export default function GrammarLog({
                     </div>
                   )}
 
-                  <div style={{ fontSize: 10, color: COLORS.accent2, marginTop: 8 }}>From: {entry.topic}</div>
+                  <div style={{ fontSize: 10, color: COLORS.accent2, marginTop: 8 }}>From: {truncate(entry.topic || "", 48)}</div>
 
                   <button onClick={() => fetchMiniLesson(entry)} style={{ marginTop: 10, width: "100%", padding: "9px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.border}`, background: miniLesson[entry.id]?.content ? COLORS.bg3 : COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 12, cursor: "pointer", color: COLORS.heading, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" }}>
                     {miniLesson[entry.id]?.loading ? (
