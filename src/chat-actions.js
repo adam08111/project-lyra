@@ -16,13 +16,17 @@ export function cleanMessageText(text) {
   return stripMd(stripLearningData(text || ""));
 }
 
-// §70 — strip the wrapping **bold** and "quotes" off a parsed original/correction,
-// keeping the sentence's own internal/trailing punctuation.
-function unwrapFix(s) {
-  let t = (s || "").trim();
-  t = t.replace(/^\*+/, "").replace(/\*+$/, "").trim();          // bold markers
-  t = t.replace(/^["“'']+/, "").replace(/["”'']+$/, "").trim();  // wrapping quotes (straight + curly)
-  return t;
+// §70 — the Grammar-Log card renders PLAIN text, so every markdown marker the model
+// emits — **bold**, *italic*, `code` (wrapping AND inline, e.g. the 繁中 explanation's
+// "**agreement**") — must be stripped or raw */` leak onto the card.
+function stripMarks(s) {
+  return (s || "").replace(/[*`]/g, "").trim();
+}
+// A whole-sentence field (phrase / correction) is additionally wrapped in "quotes" —
+// strip those too. The explanation is free text that may legitimately quote a word,
+// so it gets stripMarks ONLY (keeps its inner quotes).
+function cleanField(s) {
+  return stripMarks(s).replace(/^["“'']+/, "").replace(/["”'']+$/, "").trim();
 }
 
 // §70 — name a rule for the Grammar-Log card title from the explanation text
@@ -48,13 +52,16 @@ function deriveRule(explanation) {
  * can save them to the Grammar Log with one tap (the hidden LYRA_LEARNING_DATA
  * auto-sync is unreliable on a long sweep — the model often omits it).
  *
- * Matches the §67 sweep format — a numbered line whose original and correction are
- * separated by a plain → (or the word "becomes"): `N. <original> → <correction>
- * (explanation)`. Tolerates **bold** and "quotes" (straight or curly) around either
- * side. Lines WITHOUT an arrow — a clean sentence ("7. This one's fine.") or an
- * unparseable one ("3. I can't fully decode this…") — have no original→correction
- * pair and are skipped. Deduped by phrase+correction. Returns [] when there's
- * nothing parseable (a normal coaching turn).
+ * The §67 sweep line comes in two shapes (lyra-brain.js:217 + the worked example):
+ *   TWO-ARROW (canonical):  N. "original" → the reason(s) → "fixed"
+ *   ONE-ARROW (shorter):    N. "original" → "fixed" (reason)
+ * So we split on EVERY arrow: the FIRST segment is the original, the LAST is the
+ * fix, anything in the middle is the reason. The original/fix are quoted or **bold**;
+ * an OUTLINE line ("1. Introduction → hook the reader") is neither, so it's skipped —
+ * the button must never appear on a plan/recap turn. A flagged-undecodable line
+ * ("I can't fully decode this…") is skipped even if its guess contains an arrow (it
+ * is not a verified correction). A clean "7. This one's fine." has no arrow and is
+ * skipped. Deduped by phrase+correction. Returns [] on a normal coaching turn.
  *
  * @param {string} text - the visible message text (displayText, LEARNING_DATA already stripped)
  * @returns {{ phrase: string, correction: string, explanation: string, rule: string }[]}
@@ -63,19 +70,28 @@ export function parseChatGrammarFixes(text) {
   if (!text) return [];
   const out = [];
   const seen = new Set();
+  const isMarked = (s) => /["“”]|\*/.test(s || ""); // double-quoted or **bolded** ⇒ a real critique line (not an outline; a bare contraction apostrophe doesn't count)
   for (const raw of text.split(/\r?\n/)) {
     const numMatch = raw.match(/^\s*\*{0,2}(\d+)[.)]\s+(.+)$/);
     if (!numMatch) continue;
     const body = numMatch[2];
-    const arrow = body.match(/\s*(?:→|->|—>|\bbecomes\b)\s*/);
-    if (!arrow) continue;
-    const left = body.slice(0, arrow.index);
-    let right = body.slice(arrow.index + arrow[0].length);
-    let explanation = "";
-    const explMatch = right.match(/\(([^)]*)\)\s*$/); // a trailing (reason)
-    if (explMatch) { explanation = explMatch[1].trim(); right = right.slice(0, explMatch.index); }
-    const phrase = unwrapFix(left);
-    const correction = unwrapFix(right);
+    // A flagged-undecodable line is a best-GUESS, not a verified fix — never save it.
+    if (/can'?t (fully )?decode|best guess|tell me if|not sure|might mean/i.test(body)) continue;
+    const parts = body.split(/\s*(?:→|->|—>)\s*/);
+    if (parts.length < 2) continue;                                   // no arrow → clean / unparseable line
+    if (!isMarked(parts[0]) && !isMarked(parts[parts.length - 1])) continue; // outline, not a correction
+    let right = parts[parts.length - 1];
+    let explanation = parts.slice(1, -1).join("; ");                  // two-arrow: the middle reason(s)
+    // Peel a trailing "(reason)" off the fix — greedy (absorbs nested parens) and
+    // tolerant of a sentence-final period/punctuation after the closing ")".
+    const explMatch = right.match(/\(([\s\S]*)\)\s*[.。!?！？,，;；]?\s*$/);
+    if (explMatch) {
+      explanation = explanation ? `${explanation}; ${explMatch[1]}` : explMatch[1];
+      right = right.slice(0, explMatch.index);
+    }
+    const phrase = cleanField(parts[0]);
+    const correction = cleanField(right);
+    explanation = stripMarks(explanation);
     if (!phrase || !correction || phrase === correction) continue;
     const key = phrase.toLowerCase() + "|" + correction.toLowerCase();
     if (seen.has(key)) continue;

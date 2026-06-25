@@ -5,7 +5,7 @@ import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt, buildMessageTranslatePrompt } from "./prompts.js";
 import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
-import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule } from "./utils.js";
+import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule, truncate } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import { getStudentContext } from "./growth-report.js";
 import WordLookup from "./components/WordLookup.jsx";
@@ -944,7 +944,7 @@ Rules:
         explanation: grp.explanation,
         example_wrong: grp.example_wrong || "",
         example_correct: grp.example_correct || "",
-        topic: topic?.slice(0, 60) || "Untitled",
+        topic: topic ? truncate(topic, 60) : "Untitled", // §70: word-boundary, not a mid-word slice
       }));
       setGrammarLog(prev => [...newEntries, ...prev]);
       setCheckFlash(true);
@@ -1241,13 +1241,20 @@ Rules:
                 explanation: f.explanation || "",
                 example_wrong: "",
                 example_correct: "",
-                topic: topic?.slice(0, 60) || "Untitled",
+                topic: topic ? truncate(topic, 60) : "Untitled", // word-boundary + ellipsis, not a mid-word slice
                 source: "coaching",
               }));
+              // Dedup against the CURRENT log (phrase|correction) up front so the
+              // success flash only fires when something genuinely NEW is saved — a
+              // §69 re-mark re-enables the button on the new message, and re-tapping
+              // it must not flash "saved!" for a no-op.
+              const seen = new Set(grammarLog.map(e => `${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
+              const fresh = newEntries.filter(e => !seen.has(`${e.phrase.toLowerCase()}|${e.correction.toLowerCase()}`));
+              if (!fresh.length) return;
               setGrammarLog(prev => {
-                const seen = new Set(prev.map(e => `${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
-                const fresh = newEntries.filter(e => !seen.has(`${e.phrase.toLowerCase()}|${e.correction.toLowerCase()}`));
-                return [...fresh, ...prev];
+                const seenP = new Set(prev.map(e => `${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
+                const reallyFresh = fresh.filter(e => !seenP.has(`${e.phrase.toLowerCase()}|${e.correction.toLowerCase()}`));
+                return [...reallyFresh, ...prev];
               });
               setCheckFlash(true);
               setTimeout(() => setCheckFlash(false), 2000);
