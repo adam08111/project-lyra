@@ -2329,3 +2329,18 @@ Per the user: **Achievements** are for SKILLS the student earned through practic
 
 **Fix:** removed that render section (display-only → cleans existing AND new cards). Deliberately KEPT `report.grammar` in the stored masterclass-report data — the Continuous Growth Report's `consolidateMistakes` / `buildDelta` read it to track mistakes over time, and practice-chat grammar lives only there; deleting it would break the Growth Report. The Achievements trigger was already skill-based (an authentic growth / before-after win, never grammar alone), so nothing creates a grammar-only Achievement. Verified live (fresh server): no "Grammar & Proofreading" in the DOM, clean console, app healthy. **397 tests**.
 
+---
+
+## 72. UPDATE — 25 June 2026 — Grammar critiques fully out of Achievements (freeform + grammar-rule-titled)
+
+§71 was incomplete: a grammar critique the student saved via "★ Save this turn" landed in Achievements as a FREEFORM `reportText` card (headline "Writing win", body = the whole sentence-by-sentence sweep) — §71 only removed the structured `report.grammar` section. Inspecting the user's real store (`lyra-masterclass-reports`, 10 entries) also surfaced a STRUCTURED report headlined "Subject-verb agreement" — a grammar rule masquerading as a skill.
+
+**Fix (`report-utils.js`, the `groupAchievements` chokepoint — covers card list + tab count, legacy + new):**
+- `isGrammarCritiqueText(text)` — a message with ≥2 numbered "original → correction" lines is a grammar sweep, not a skill.
+- `isGrammarOnlyReport(r)` — that, OR a report whose headline IS a grammar rule (`GRAMMAR_RULE_LABEL`: subject-verb / agreement / tense / articles / plural / possessive / preposition / spelling / …) with no real writing-skill structure.
+- `groupAchievements` skips `isGrammarOnlyReport(r)`; `saveMasterclassReport` also refuses to STORE a freeform critique (no growth-report value — its grammar is already in the grammar-log). `report.grammar` data is otherwise KEPT (display-side filtering only; no Growth-Report breakage).
+
+Verified on the user's real store: **6 → 4 achievements** (the freeform "Writing win" critique and the "Subject-verb agreement" card filtered out; the 4 real skills — Analogy, Logical Imagery, The Helpful Professional, Painted Style Pictures — remain). **398 tests** (+1).
+
+**Flagged, not fixed (separate concern):** one remaining achievement is titled "Analogy / **Maxine Eggenberger** style" — a real/hallucinated author name leaked into stored achievement data (the §67 anti-bias leak, from before that fix). Surfaced to the user for a decision (strip author names from achievement titles? delete the card?) rather than silently expanding scope.
+
