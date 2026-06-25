@@ -2308,3 +2308,13 @@ Maps the parsed fixes → Grammar-Log entries with the SAME shape as the proofre
 ### 70.4 Verified
 Bundled parser confirmed **in-browser** (dynamic import → 2 fixes parsed from a mixed quote/bold/繁中 sample, unparseable + clean lines skipped, rule names derived). The button rendered **live on the user's real HKDSE critique** as "+ Save 14 grammar fixes to Grammar Log" (14 parsed) — real end-to-end proof of parser + prop chain + conditional render; not clicked, to avoid writing to the user's real Grammar Log unprompted. No console errors, app mounts. **392 tests** (+2 parser tests).
 
+### 70.5 Bug fixes — raw markdown leak + 8 review findings
+The user saved fixes and the Grammar-Log card showed raw `**agreement**` (markdown asterisks) in the explanation: the parser kept the bold markers and the card renders plain text. Fixed (strip bold), then ran a 3-lens × 2-skeptic adversarial review of the whole §70 path which surfaced 8 confirmed defects — including a HIGH-severity miss the user's screenshot (a one-arrow line) had masked:
+- **(high)** The CANONICAL §67 sweep line has TWO arrows — `original → reason → fix` (lyra-brain.js:217) — but the parser split on the FIRST arrow, so the green "correct" pill got reason-blob + a raw `→` + the real fix, and the explanation was empty. Now splits on EVERY arrow: first=original, last=fix, middle=reason→explanation.
+- **(med)** Outlines (`1. Introduction → hook the reader`) parsed as fixes and the Save button appeared on plan turns → gate: real critiques double-quote or **bold** the sentence; outlines don't → skip.
+- **(med)** A flagged-undecodable line whose best-guess contained an arrow became a junk fix → skip by phrase.
+- **(med)** A nested-paren reason / period-after-`)` leaked into the correction → greedy trailing-`(reason)` + tolerant of sentence-final punctuation.
+- **(low)** single `*`/`` `code` `` survived the strip → now removed; topic mid-word `slice(0,60)` → word-boundary `truncate()` (also the §59 proofread sibling); the success badge flashed even when dedup added 0 (a §69 re-mark) → flash gated on genuinely-new entries.
+
+Verified in the live bundle: two-arrow → clean fix pill + reason in explanation; outline → 0 fixes; the original one-arrow card still clean. **397 tests** (+5).
+
