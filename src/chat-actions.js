@@ -16,6 +16,75 @@ export function cleanMessageText(text) {
   return stripMd(stripLearningData(text || ""));
 }
 
+// §70 — strip the wrapping **bold** and "quotes" off a parsed original/correction,
+// keeping the sentence's own internal/trailing punctuation.
+function unwrapFix(s) {
+  let t = (s || "").trim();
+  t = t.replace(/^\*+/, "").replace(/\*+$/, "").trim();          // bold markers
+  t = t.replace(/^["“'']+/, "").replace(/["”'']+$/, "").trim();  // wrapping quotes (straight + curly)
+  return t;
+}
+
+// §70 — name a rule for the Grammar-Log card title from the explanation text
+// (EN or 繁中). Conservative: defaults to "Grammar fix" rather than mislabel.
+function deriveRule(explanation) {
+  const e = (explanation || "").toLowerCase();
+  const map = [
+    [/agreement|主謂|單複數|一致/, "Subject-Verb Agreement"],
+    [/tense|時態|past tense|present tense|continuous/, "Tense"],
+    [/plural|singular|眾數|複數|單數/, "Plural / Singular"],
+    [/article|冠詞/, "Articles"],
+    [/possessive|所有格/, "Possessive"],
+    [/preposition|介詞/, "Prepositions"],
+    [/spelling|拼寫|串字/, "Spelling"],
+    [/word order|語序/, "Word Order"],
+  ];
+  for (const [re, name] of map) if (re.test(e)) return name;
+  return "Grammar fix";
+}
+
+/**
+ * §70 — parse the grammar corrections out of a Lyra chat critique so the student
+ * can save them to the Grammar Log with one tap (the hidden LYRA_LEARNING_DATA
+ * auto-sync is unreliable on a long sweep — the model often omits it).
+ *
+ * Matches the §67 sweep format — a numbered line whose original and correction are
+ * separated by a plain → (or the word "becomes"): `N. <original> → <correction>
+ * (explanation)`. Tolerates **bold** and "quotes" (straight or curly) around either
+ * side. Lines WITHOUT an arrow — a clean sentence ("7. This one's fine.") or an
+ * unparseable one ("3. I can't fully decode this…") — have no original→correction
+ * pair and are skipped. Deduped by phrase+correction. Returns [] when there's
+ * nothing parseable (a normal coaching turn).
+ *
+ * @param {string} text - the visible message text (displayText, LEARNING_DATA already stripped)
+ * @returns {{ phrase: string, correction: string, explanation: string, rule: string }[]}
+ */
+export function parseChatGrammarFixes(text) {
+  if (!text) return [];
+  const out = [];
+  const seen = new Set();
+  for (const raw of text.split(/\r?\n/)) {
+    const numMatch = raw.match(/^\s*\*{0,2}(\d+)[.)]\s+(.+)$/);
+    if (!numMatch) continue;
+    const body = numMatch[2];
+    const arrow = body.match(/\s*(?:→|->|—>|\bbecomes\b)\s*/);
+    if (!arrow) continue;
+    const left = body.slice(0, arrow.index);
+    let right = body.slice(arrow.index + arrow[0].length);
+    let explanation = "";
+    const explMatch = right.match(/\(([^)]*)\)\s*$/); // a trailing (reason)
+    if (explMatch) { explanation = explMatch[1].trim(); right = right.slice(0, explMatch.index); }
+    const phrase = unwrapFix(left);
+    const correction = unwrapFix(right);
+    if (!phrase || !correction || phrase === correction) continue;
+    const key = phrase.toLowerCase() + "|" + correction.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ phrase, correction, explanation, rule: deriveRule(explanation) });
+  }
+  return out;
+}
+
 /**
  * Copy text to the clipboard, robust across contexts. navigator.clipboard only
  * exists in a SECURE context (https / localhost); on a phone hitting the dev

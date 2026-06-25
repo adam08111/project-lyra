@@ -1,10 +1,45 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { COLORS, QUICK_ACTION_MESSAGES } from "../constants.js";
 import { formatSources } from "../utils.js";
-import { cleanMessageText, canReloadMessage, getMessageTranslation, copyToClipboard } from "../chat-actions.js";
+import { cleanMessageText, canReloadMessage, getMessageTranslation, copyToClipboard, parseChatGrammarFixes } from "../chat-actions.js";
 import { sharedStyles as s } from "../styles.js";
 import { FeatherIcon, CopyIcon, TranslateIcon, ReloadIcon } from "./Icons.jsx";
 import TypewriterBubble from "./TypewriterBubble.jsx";
+
+// §70 — one-tap "save the critique's grammar fixes to the Grammar Log" button.
+// Parses the visible message (memoised) and renders only when it carries real
+// original→correction fixes; saving is idempotent (marks the message saved).
+function GrammarFixSaver({ message, index, onSave, setMessages }) {
+  const fixes = useMemo(() => parseChatGrammarFixes(message.text), [message.text]);
+  if (!fixes.length) return null;
+  const saved = !!message.savedToGrammarLog;
+  return (
+    <div style={{ marginTop: 4, paddingLeft: 2 }}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (saved) return;
+          onSave(fixes);
+          setMessages(prev => prev.map((m, idx) => idx === index ? { ...m, savedToGrammarLog: true } : m));
+        }}
+        disabled={saved}
+        title={saved ? "Saved to your Grammar Log" : "Save these grammar fixes to your Grammar Log"}
+        aria-label="Save grammar fixes to Grammar Log"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10,
+          border: `1px solid ${saved ? COLORS.green : COLORS.border}`,
+          background: saved ? COLORS.green : COLORS.card,
+          color: saved ? "#fff" : COLORS.heading,
+          fontFamily: "'Courier Prime', monospace", fontSize: 11, fontWeight: 600,
+          cursor: saved ? "default" : "pointer", transition: "all 0.2s",
+        }}>
+        {saved
+          ? `✓ Saved ${fixes.length} to Grammar Log`
+          : `+ Save ${fixes.length} grammar ${fixes.length === 1 ? "fix" : "fixes"} to Grammar Log`}
+      </button>
+    </div>
+  );
+}
 
 // Render **bold** markdown as <strong> elements
 const renderMd = (text) => {
@@ -21,7 +56,7 @@ export default function ChatTab({
   chatLoading, sendChat, stopChat, handleTypewriterDone,
   reloadChat, translateText,
   typeLabel, topic, draft, currentWords,
-  onHelpMeStart, onDeploySkills, addToDraft, onSaveAchievement,
+  onHelpMeStart, onDeploySkills, addToDraft, onSaveAchievement, onSaveCorrections,
   onScrollChange,
 }) {
   const [chatInput, setChatInput] = useState("");
@@ -222,6 +257,13 @@ export default function ChatTab({
                     </button>
                   )}
                 </div>
+              )}
+
+              {/* §70: one-tap save of the critique's grammar fixes to the Grammar Log
+                  — only renders on an AI message that actually contains parseable
+                  "original → correction" fixes (a normal coaching turn shows nothing). */}
+              {m.role === "ai" && editingMsgIdx !== i && onSaveCorrections && (
+                <GrammarFixSaver message={m} index={i} onSave={onSaveCorrections} setMessages={setMessages} />
               )}
 
               {/* Action buttons */}

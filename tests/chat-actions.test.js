@@ -1,6 +1,31 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { cleanMessageText, canReloadMessage, getMessageTranslation, copyToClipboard } from "../src/chat-actions.js";
+import { cleanMessageText, canReloadMessage, getMessageTranslation, copyToClipboard, parseChatGrammarFixes } from "../src/chat-actions.js";
 import { buildMessageTranslatePrompt } from "../src/prompts.js";
+
+describe("§70 parseChatGrammarFixes — save chat critique fixes to the Grammar Log", () => {
+  it("parses numbered original → correction lines (quotes + bold), skips clean / unparseable / no-change", () => {
+    const critique = [
+      "Let's go through your sentences one by one:",
+      `1. "Every decades technology is difference." → "Every decade's technology is different." (Every 之後要接單數名詞; agreement)`,
+      `2. **2010s of popularity was smartwatch.** → **In the 2010s, smartwatches were popular.** (提及一般類別時用眾數)`,
+      "3. Sentence 3 — I can't fully decode this one; my best guess is \"X,\" but tell me if I'm wrong.", // unparseable → skip
+      "4. This sentence is fine.",                                  // clean → skip
+      `5. "Some teachers think AI helps." → "Some teachers think AI helps."`, // no change → skip
+    ].join("\n");
+    const fixes = parseChatGrammarFixes(critique);
+    expect(fixes.length).toBe(2);
+    expect(fixes[0]).toMatchObject({ phrase: "Every decades technology is difference.", correction: "Every decade's technology is different.", rule: "Subject-Verb Agreement" });
+    expect(fixes[1]).toMatchObject({ phrase: "2010s of popularity was smartwatch.", correction: "In the 2010s, smartwatches were popular.", rule: "Plural / Singular" });
+    expect(fixes[0].explanation).toContain("agreement");
+  });
+
+  it("dedups repeated fixes and returns [] for a normal coaching turn", () => {
+    const dup = `1. "a are" → "a is" (agreement)\n2. "a are" → "a is" (agreement)`;
+    expect(parseChatGrammarFixes(dup).length).toBe(1);
+    expect(parseChatGrammarFixes("Great work! What's your main point? Try writing one more sentence.")).toEqual([]);
+    expect(parseChatGrammarFixes("")).toEqual([]);
+  });
+});
 
 describe("§53 chat action row — pure helpers", () => {
   describe("cleanMessageText (copy / translate input)", () => {

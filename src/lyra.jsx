@@ -1225,6 +1225,33 @@ Rules:
                 reportText: lyraText,
               });
             }}
+            onSaveCorrections={(fixes) => {
+              // §70: save the grammar fixes parsed from a chat critique into the
+              // Grammar Log (the hidden LYRA_LEARNING_DATA auto-sync is unreliable on
+              // a long sweep). Same entry shape + phrase|correction dedup as the
+              // proofread / coaching sync so a re-tap or a re-mark can't duplicate.
+              if (!fixes?.length) return;
+              const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+              const newEntries = fixes.map(f => ({
+                id: Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                date,
+                rule: f.rule || "Grammar fix",
+                phrase: f.phrase,
+                correction: f.correction,
+                explanation: f.explanation || "",
+                example_wrong: "",
+                example_correct: "",
+                topic: topic?.slice(0, 60) || "Untitled",
+                source: "coaching",
+              }));
+              setGrammarLog(prev => {
+                const seen = new Set(prev.map(e => `${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
+                const fresh = newEntries.filter(e => !seen.has(`${e.phrase.toLowerCase()}|${e.correction.toLowerCase()}`));
+                return [...fresh, ...prev];
+              });
+              setCheckFlash(true);
+              setTimeout(() => setCheckFlash(false), 2000);
+            }}
             onHelpMeStart={() => sendChat("I'm stuck and don't know how to start. Help me begin writing.", false, true)}
             onDeploySkills={() => {
               let saved = [];
