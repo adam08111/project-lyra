@@ -2290,3 +2290,21 @@ This is REINFORCEMENT (the failure was never captured), not a fix validated agai
 ### 69.3 Verified
 **4 / 4 live runs** of the realistic failing shape (follow-up re-mark after a prior critique + HKDSE exam rules + soft "is it better now? check the whole thing again") → full **15/15** sweep, no scaffolding leak, ~640–840 words each. **390 tests** (+2: §48 re-mark clause, buildCoachPrompt cap-override). If a short reply recurs, the exact student message is needed to capture the precise trigger.
 
+---
+
+## 70. UPDATE — 25 June 2026 — Save a chat critique's grammar fixes to the Grammar Log (one tap)
+
+The sentence-by-sentence critique gives grammar corrections in the chat, but they only reach the Grammar Log via the hidden `LYRA_LEARNING_DATA` auto-sync — which the model often omits on a long 15-sentence sweep (lyra.jsx already had a "when the AI forgets the hidden block" backstop). So the fixes the student SEES in chat were not getting saved. Added a visible per-message button to save them.
+
+### 70.1 Parser — `parseChatGrammarFixes` (`chat-actions.js`, pure + tested)
+Pulls the `N. <original> → <correction> (explanation)` lines out of a critique message. Line-based, tolerant: handles `**bold**` and `"quotes"` (straight + curly) around either side, `→`/`becomes` as the arrow; SKIPS lines with no arrow — a clean "this one's fine" or an unparseable "I can't decode this" — and same-text no-change lines; dedups by phrase+correction; derives a Grammar-Log card title (rule) from the EN/繁中 explanation via a conservative keyword map (agreement / tense / plural / article / possessive / preposition / spelling), default "Grammar fix". Returns `[]` on a normal coaching turn.
+
+### 70.2 UI — `GrammarFixSaver` (`ChatTab.jsx`)
+A button under any AI message that carries parseable fixes: "+ Save N grammar fixes to Grammar Log" → "✓ Saved N to Grammar Log" (memoised on `message.text`, idempotent via `message.savedToGrammarLog`, hidden entirely on a normal turn). No emoji in chrome; mobile-friendly chip styling.
+
+### 70.3 Wiring — `onSaveCorrections` (`lyra.jsx`)
+Maps the parsed fixes → Grammar-Log entries with the SAME shape as the proofread/coaching sync (rule, phrase, correction, explanation, topic, `source:"coaching"`) and the SAME phrase|correction dedup, so a re-tap or overlap with the auto-sync can't duplicate; flashes the log badge (`checkFlash`).
+
+### 70.4 Verified
+Bundled parser confirmed **in-browser** (dynamic import → 2 fixes parsed from a mixed quote/bold/繁中 sample, unparseable + clean lines skipped, rule names derived). The button rendered **live on the user's real HKDSE critique** as "+ Save 14 grammar fixes to Grammar Log" (14 parsed) — real end-to-end proof of parser + prop chain + conditional render; not clicked, to avoid writing to the user's real Grammar Log unprompted. No console errors, app mounts. **392 tests** (+2 parser tests).
+
