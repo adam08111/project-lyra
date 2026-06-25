@@ -2318,3 +2318,14 @@ The user saved fixes and the Grammar-Log card showed raw `**agreement**` (markdo
 
 Verified in the live bundle: two-arrow → clean fix pill + reason in explanation; outline → 0 fixes; the original one-arrow card still clean. **397 tests** (+5).
 
+### 70.6 Render-layer cleanup (legacy entries)
+The §70/fix cleaned only NEW saves; entries saved before it kept raw `**` in the stored data and still rendered with literal asterisks (and a mid-word "From: …Module: Lea"). Fixed at the DISPLAY layer in `GrammarLog.jsx`: each shown field runs through `clean()` (stripMd + backtick strip), and the topic through word-boundary `truncate()` — cleans EVERY card, legacy + new, no data migration. Verified on the user's real entry (no `**`, clean "From: HKDSE … (Part B)…").
+
+---
+
+## 71. UPDATE — 25 June 2026 — Grammar fixes out of the Achievements tab
+
+Per the user: **Achievements** are for SKILLS the student earned through practice (techniques, structures, vocabulary, before/after wins) — NOT grammar corrections, which belong in the Grammar Log. The `AchievementCard` (`StyleLab.jsx`) rendered a "4 · Grammar & Proofreading" section from `report.grammar`, so grammar fixes appeared in the Achievements tab.
+
+**Fix:** removed that render section (display-only → cleans existing AND new cards). Deliberately KEPT `report.grammar` in the stored masterclass-report data — the Continuous Growth Report's `consolidateMistakes` / `buildDelta` read it to track mistakes over time, and practice-chat grammar lives only there; deleting it would break the Growth Report. The Achievements trigger was already skill-based (an authentic growth / before-after win, never grammar alone), so nothing creates a grammar-only Achievement. Verified live (fresh server): no "Grammar & Proofreading" in the DOM, clean console, app healthy. **397 tests**.
+
