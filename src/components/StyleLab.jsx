@@ -948,17 +948,12 @@ function AchievementCard({ report, index, onRemove }) {
                   ))}
                 </>
               )}
-              {report.grammar?.length > 0 && (
-                <>
-                  <div style={sectionTitle}>4 · Grammar & Proofreading</div>
-                  {report.grammar.map((gr, i) => (
-                    <div key={i} style={{ ...bodyText, marginBottom: 4 }}>
-                      <strong>{gr.phrase} → {gr.correction}</strong>{gr.explanation ? ` — ${toWrittenChinese(gr.explanation)}` : ""}
-                      {gr.chinese ? <div style={{ fontSize: 11, color: COLORS.muted }}>{toWrittenChinese(gr.chinese)}</div> : null}
-                    </div>
-                  ))}
-                </>
-              )}
+              {/* §71: Achievements are for SKILLS the student earned through practice
+                  (techniques, structures, vocabulary, before/after wins) — NOT grammar
+                  corrections. Grammar lives in the Grammar Log. The report still STORES
+                  report.grammar (the Continuous Growth Report's consolidateMistakes /
+                  buildDelta read it to track mistakes over time — practice-chat grammar
+                  lives only there), but it is NOT shown on the Achievements card. */}
             </>
           ) : (
             <div style={{ ...bodyText, whiteSpace: "pre-wrap", marginTop: 12 }}>{renderReportMd(report.reportText)}</div>
