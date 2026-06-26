@@ -272,7 +272,7 @@ OTHER RULES:
 - If a sentence is too simple to restructure without changing its meaning, skip it and pick another sentence.${activeSkillCtx ? `\n- Do NOT suggest changes that contradict or undo the deployed skill's techniques. Suggestions should complement the student's chosen style.` : ""}`;
 }
 
-export function buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, sourceContext, studentContext = null) {
+export function buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, sourceContext, studentContext = null, conversationContext = null) {
   const formalTypes = ["Complaint Letter", "Formal Business Email", "Exam Essay", "Report", "Persuasive Writing", "Letter to the Editor"];
   const isFormal = formalTypes.includes(typeLabel);
   const isSpoken = typeLabel === "Speech / Talk";
@@ -308,13 +308,20 @@ RULES WHEN A SKILL IS DEPLOYED:
     ? `\n\nKNOWN PATTERNS TO WATCH FOR THIS STUDENT (from past work together — check these hardest, they tend to slip here): ${studentContext.focus.map((f) => f.rule).join(", ")}. This only tells you WHERE to look; still flag ONLY real errors actually present (NO FABRICATION).`
     : "";
 
+  // §75 — ONE LYRA: the writing-tab proofread and the chat coach are the SAME Lyra.
+  // Feed the proofread the recent chat so its cards never contradict what the chat
+  // already said (a deliberate choice it blessed, advice it gave, a point it made).
+  const coachingBlock = conversationContext
+    ? `\n\nYOU ARE ONE LYRA, NOT TWO. The chat coach and this writing-tab proofread are the SAME you — the student must never catch you disagreeing with yourself. Your recent conversation with this student in the chat:\n${conversationContext}\n\nStay CONSISTENT with it: do NOT contradict advice you already gave; do NOT flag or "correct" something you already discussed, blessed, or called a deliberate stylistic choice; judge with the SAME standards. If a card would disagree with what you told them in chat, your chat self wins — drop the card or align it. Build on what you already said.`
+    : "";
+
   // §58: prepend the distilled JUDGMENT block so the Lite proofread cards apply the
   // SAME standards as the chat critique (correction-vs-taste, no-fabrication,
   // no-rewrite, formality) — without flipping to brain:true or the full LYRA_BRAIN.
   return PROOFREAD_JUDGMENT_RULES + `
 
 You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).
-${isSpoken ? `FORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address are correct for this genre — never flag them. In vocabulary upgrades, flag slang or chat-style words, but keep suggestions natural to say aloud rather than stiffly academic.` : isFormal ? `FORMALITY: This is FORMAL writing. In vocabulary upgrades, flag any informal, colloquial, or slang words and suggest formal academic equivalents that preserve the student's exact intended meaning.` : `FORMALITY: This is creative/narrative writing. Vocabulary suggestions should improve vividness and precision, but casual language is acceptable if it fits the student's voice.`}${appliedCtx}${skillCtx}${examBlock}${sourceBlock}${knownWeakBlock}
+${isSpoken ? `FORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address are correct for this genre — never flag them. In vocabulary upgrades, flag slang or chat-style words, but keep suggestions natural to say aloud rather than stiffly academic.` : isFormal ? `FORMALITY: This is FORMAL writing. In vocabulary upgrades, flag any informal, colloquial, or slang words and suggest formal academic equivalents that preserve the student's exact intended meaning.` : `FORMALITY: This is creative/narrative writing. Vocabulary suggestions should improve vividness and precision, but casual language is acceptable if it fits the student's voice.`}${appliedCtx}${skillCtx}${examBlock}${sourceBlock}${knownWeakBlock}${coachingBlock}
 
 Analyse the student's writing. Return ONLY a single raw JSON object — start your reply with { and end with } — with NO markdown code fences, NO explanation, and NO prose or commentary before or after it. The exact shape:
 {"grammar":[{"rule":"Rule Name","explanation":"2-3 sentence explanation of the rule and how to avoid it","instances":[{"wrong":"the exact flagged text from the draft","right":"the corrected text"}],"example_wrong":"a DIFFERENT example sentence showing the error","example_correct":"that same example sentence CORRECTED"}],"style":[{"observation":"what you noticed","suggestion":"specific actionable advice"}],"vocabulary":[{"weak":"weak word","stronger":"better word","reason":"contextual reasoning explaining why this synonym matches the student's intended meaning"}],"strengths":"One sentence about what they did well","nextFocus":"One clear next task"}

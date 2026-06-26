@@ -887,9 +887,17 @@ Rules:
     }
 
     const proofRoute = getRouteConfig("proofread");
+    // §75: ONE LYRA — feed the proofread the recent chat so its cards stay consistent
+    // with what the chat coach already told this student (no self-contradiction). Last
+    // ~6 turns, each capped, so the Lite call stays lean.
+    const convoCtx = (messages || [])
+      .slice(-6)
+      .map(m => `${m.role === "user" ? "Student" : "Lyra"}: ${(m.text || "").replace(/<!--[\s\S]*?-->/g, "").trim().slice(0, 400)}`)
+      .filter(line => line.length > 8)
+      .join("\n\n") || null;
     // §66: proofread also reads the growth profile — a thin name-list of this
     // student's known weak patterns so Lite looks hardest where they slip.
-    const sys = buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, undefined, getStudentContext());
+    const sys = buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, undefined, getStudentContext(), convoCtx);
     // §61: make the call abortable (the × cancels it) and bound it with a client-side
     // soft timeout, so the heavier §59 call (cap ~100 + grouping) can never trap the
     // student on an eternal "Doing the magic" spinner.
@@ -953,7 +961,7 @@ Rules:
       setTimeout(() => setCheckFlash(false), 2000);
     }
     setProofLoading(false);
-  }, [draft, topic, typeLabel, appliedSuggestions, appliedSkill, examRules]);
+  }, [draft, topic, typeLabel, appliedSuggestions, appliedSkill, examRules, messages]);
 
   // §61: the × must close the proofread panel in EVERY state — including mid-load —
   // and abort the in-flight call so it doesn't keep running into a closed panel.

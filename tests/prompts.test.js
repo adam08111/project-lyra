@@ -348,6 +348,16 @@ describe("§66 buildProofreadPrompt — thin known-weaknesses injection", () => 
       .not.toContain("KNOWN PATTERNS TO WATCH FOR THIS STUDENT");
     expect(buildProofreadPrompt("dogs", "Essay", [])).not.toContain("KNOWN PATTERNS TO WATCH FOR THIS STUDENT");
   });
+
+  it("§75 ONE LYRA: proofread carries the chat conversation so it can't contradict the chat coach", () => {
+    const convo = `Student: is "akin to" okay here?\n\nLyra: yes — "akin to" is a deliberate formal choice, keep it.`;
+    const p = buildProofreadPrompt("dogs", "Essay", [], null, null, undefined, null, convo);
+    expect(p).toContain("YOU ARE ONE LYRA, NOT TWO");
+    expect(p).toContain("akin to");                         // the conversation is in the prompt
+    expect(p).toContain("your chat self wins");             // chat coaching overrides a contradicting card
+    // omitted → no block (no conversation yet)
+    expect(buildProofreadPrompt("dogs", "Essay", [])).not.toContain("YOU ARE ONE LYRA");
+  });
 });
 
 describe("§66 buildCoachPrompt — growth-profile injection", () => {
