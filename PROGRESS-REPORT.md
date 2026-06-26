@@ -2393,3 +2393,15 @@ The §75 sequel (user chose "auto-load when the editor is empty"). When a studen
 
 Verified: 4 unit tests (loads ≥50-word draft into empty editor; never overwrites; ignores short questions / reloads / search / scaffolding). **403 tests**; app compiles + mounts, no console errors. Together with §75 the two coaches now share judgment + profile + skills + exam rules + the draft + the conversation + the same starting text — functionally one Lyra.
 
+---
+
+## 77. UPDATE — 27 June 2026 — "My Writing" Lyra sees the FULL chat conversation
+
+§75 fed the proofread only the last ~6 turns (for Lite leanness). The user wants the writing-tab Lyra to see ALL chats and conversation, so it shares everything the chat coach knows.
+
+**Fix:**
+- `utils.js` `buildConversationContext(messages, { maxTotal = 40000, maxPerMsg = 2000 })` — pure + tested. Renders the WHOLE conversation labelled Student/Lyra, strips the hidden `LYRA_LEARNING_DATA`. Only a pathological session exceeds the (generous) budget — then the MOST RECENT turns are kept and an explicit "(…earlier conversation trimmed…)" marker is prepended (never a silent cut). A normal session passes in full.
+- `runProofread` uses it instead of the `slice(-6)`; the §75 block now reads "your FULL conversation … everything you have discussed together".
+
+Verified end-to-end (node): all 12 turns of a sample conversation reach the proofread prompt (oldest + newest), with the one-Lyra framing; the chat coach already sends the full history. **406 tests** (+3); app compiles + mounts. Both Lyras now see the entire conversation.
+
