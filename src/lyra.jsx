@@ -5,7 +5,7 @@ import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt, buildMessageTranslatePrompt } from "./prompts.js";
 import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
-import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule, shouldAutoLoadDraft } from "./utils.js";
+import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule, shouldAutoLoadDraft, buildConversationContext } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import { getStudentContext } from "./growth-report.js";
 import WordLookup from "./components/WordLookup.jsx";
@@ -896,14 +896,10 @@ Rules:
     }
 
     const proofRoute = getRouteConfig("proofread");
-    // §75: ONE LYRA — feed the proofread the recent chat so its cards stay consistent
-    // with what the chat coach already told this student (no self-contradiction). Last
-    // ~6 turns, each capped, so the Lite call stays lean.
-    const convoCtx = (messages || [])
-      .slice(-6)
-      .map(m => `${m.role === "user" ? "Student" : "Lyra"}: ${(m.text || "").replace(/<!--[\s\S]*?-->/g, "").trim().slice(0, 400)}`)
-      .filter(line => line.length > 8)
-      .join("\n\n") || null;
+    // §75/§77: ONE LYRA — feed the proofread the FULL chat conversation so its cards
+    // stay consistent with everything the chat coach told this student (no
+    // self-contradiction). The whole history, not just the last few turns.
+    const convoCtx = buildConversationContext(messages);
     // §66: proofread also reads the growth profile — a thin name-list of this
     // student's known weak patterns so Lite looks hardest where they slip.
     const sys = buildProofreadPrompt(topic, typeLabel, appliedSuggestions, activeSkillCtx, examRules, undefined, getStudentContext(), convoCtx);

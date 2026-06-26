@@ -211,6 +211,26 @@ export function shouldAutoLoadDraft({ text, draft, isReload, scaffolding, useSea
   return (text || "").trim().split(/\s+/).filter(Boolean).length >= 50;
 }
 
+// \u00a777 \u2014 render the FULL chat conversation for the "My Writing" proofread to read, so
+// it sees everything the chat coach knows (every chat, not just the last few). Strips
+// the hidden LYRA_LEARNING_DATA, labels each turn Student/Lyra. Only a pathological
+// session exceeds the budget \u2014 then the MOST RECENT turns are kept and an explicit
+// "earlier trimmed" marker is prepended (never a silent cut). Returns null if empty.
+export function buildConversationContext(messages, { maxTotal = 40000, maxPerMsg = 2000 } = {}) {
+  const lines = (Array.isArray(messages) ? messages : [])
+    .map((m) => `${m && m.role === "user" ? "Student" : "Lyra"}: ${String((m && m.text) || "").replace(/<!--[\s\S]*?-->/g, "").trim().slice(0, maxPerMsg)}`)
+    .filter((l) => l.length > 8);
+  if (!lines.length) return null;
+  const kept = [];
+  let total = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (total + lines[i].length + 2 > maxTotal && kept.length) { kept.unshift("(\u2026earlier conversation trimmed\u2026)"); break; }
+    total += lines[i].length + 2;
+    kept.unshift(lines[i]);
+  }
+  return kept.join("\n\n");
+}
+
 // Parse AI response into writing technique objects
 // Extracts: technique, description, example, source, url, and optionally paragraphRole
 export function parseTechniques(result) {

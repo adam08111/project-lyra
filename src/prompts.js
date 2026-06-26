@@ -312,7 +312,7 @@ RULES WHEN A SKILL IS DEPLOYED:
   // Feed the proofread the recent chat so its cards never contradict what the chat
   // already said (a deliberate choice it blessed, advice it gave, a point it made).
   const coachingBlock = conversationContext
-    ? `\n\nYOU ARE ONE LYRA, NOT TWO. The chat coach and this writing-tab proofread are the SAME you — the student must never catch you disagreeing with yourself. Your recent conversation with this student in the chat:\n${conversationContext}\n\nStay CONSISTENT with it: do NOT contradict advice you already gave; do NOT flag or "correct" something you already discussed, blessed, or called a deliberate stylistic choice; judge with the SAME standards. If a card would disagree with what you told them in chat, your chat self wins — drop the card or align it. Build on what you already said.`
+    ? `\n\nYOU ARE ONE LYRA, NOT TWO. The chat coach and this writing-tab proofread are the SAME you — the student must never catch you disagreeing with yourself. Your FULL conversation with this student in the chat (everything you have discussed together):\n${conversationContext}\n\nStay CONSISTENT with it: do NOT contradict advice you already gave; do NOT flag or "correct" something you already discussed, blessed, or called a deliberate stylistic choice; judge with the SAME standards. If a card would disagree with what you told them in chat, your chat self wins — drop the card or align it. Build on what you already said.`
     : "";
 
   // §58: prepend the distilled JUDGMENT block so the Lite proofread cards apply the
