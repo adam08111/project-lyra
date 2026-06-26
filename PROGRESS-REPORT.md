@@ -2379,5 +2379,17 @@ The student sees two Lyras — the chat coach (`buildCoachPrompt`, Pro) and the 
 
 Verified: the block renders with the chat inline + "your chat self wins"; absent with no conversation. **399 tests** (+1).
 
-**Remaining (offered to the user, not built):** auto-loading a draft the student PASTES into the chat into "My Writing" so the proofread grades the same text (today the proofread grades the editor `draft`; a chat-pasted essay is seen as context but not graded unless also in the editor). Left as a decision (auto-load when the editor is empty? prompt "Add to My Writing"? keep the manual "Add to essay"?).
+**Remaining (offered to the user, not built):** auto-loading a draft the student PASTES into the chat into "My Writing" so the proofread grades the same text (today the proofread grades the editor `draft`; a chat-pasted essay is seen as context but not graded unless also in the editor). Left as a decision (auto-load when the editor is empty? prompt "Add to My Writing"? keep the manual "Add to essay"?). → resolved in §76.
+
+---
+
+## 76. UPDATE — 27 June 2026 — ONE LYRA, ONE TEXT: paste a draft in chat → auto-load into "My Writing"
+
+The §75 sequel (user chose "auto-load when the editor is empty"). When a student pastes a substantial draft into the chat while "My Writing" is empty, it now also loads into the editor — so the proofread grades the SAME text both Lyras discuss, not an empty editor.
+
+**Fix:**
+- `utils.js` `shouldAutoLoadDraft({ text, draft, isReload, scaffolding, useSearch })` — pure + tested. True only for a real typed turn that reads like a draft (≥ 50 words), never a reload / quick-action (search) / scaffolding, and NEVER when the editor already has content (no overwrite of the student's work).
+- `sendChat` (`lyra.jsx`) calls it right after appending the student's message; on a match it `setDraft(text)` and drops a one-line chat notice ("✎ I've loaded this into My Writing…") so it isn't surprising. `draft` is already in `sendChat`'s deps, so the empty-check is fresh.
+
+Verified: 4 unit tests (loads ≥50-word draft into empty editor; never overwrites; ignores short questions / reloads / search / scaffolding). **403 tests**; app compiles + mounts, no console errors. Together with §75 the two coaches now share judgment + profile + skills + exam rules + the draft + the conversation + the same starting text — functionally one Lyra.
 
