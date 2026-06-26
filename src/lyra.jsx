@@ -5,7 +5,7 @@ import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt, buildMessageTranslatePrompt } from "./prompts.js";
 import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
-import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule, truncate } from "./utils.js";
+import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import { getStudentContext } from "./growth-report.js";
 import WordLookup from "./components/WordLookup.jsx";
@@ -944,7 +944,9 @@ Rules:
         explanation: grp.explanation,
         example_wrong: grp.example_wrong || "",
         example_correct: grp.example_correct || "",
-        topic: topic ? truncate(topic, 60) : "Untitled", // §70: word-boundary, not a mid-word slice
+        // §73: writing id (resolves the full title live) + a topic-snippet fallback.
+        writingId: activeWritingId,
+        topic: (topic || "Untitled").slice(0, 200),
       }));
       setGrammarLog(prev => [...newEntries, ...prev]);
       setCheckFlash(true);
@@ -1241,7 +1243,10 @@ Rules:
                 explanation: f.explanation || "",
                 example_wrong: "",
                 example_correct: "",
-                topic: topic ? truncate(topic, 60) : "Untitled", // word-boundary + ellipsis, not a mid-word slice
+                // §73: store the writing's id (the "From:" line resolves its full title
+                // live, collapsed at display) + a topic snippet as a fallback label.
+                writingId: activeWritingId,
+                topic: (topic || "Untitled").slice(0, 200),
                 source: "coaching",
               }));
               // Dedup against the CURRENT log (phrase|correction) up front so the
@@ -1309,6 +1314,7 @@ Rules:
         showGrammarLog={showGrammarLog} setShowGrammarLog={setShowGrammarLog}
         miniLesson={miniLesson} fetchMiniLesson={fetchMiniLesson}
         sendChat={sendChat} setTab={setTab}
+        currentTopic={topic} currentTitle={title} currentWritingId={activeWritingId}
       />
 
       {/* Style Lab Overlay */}

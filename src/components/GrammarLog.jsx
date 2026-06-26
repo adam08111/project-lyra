@@ -12,9 +12,12 @@ const clean = (t) => stripMd((t || "").replace(/`/g, ""));
 
 export default function GrammarLog({
   grammarLog, setGrammarLog, showGrammarLog, setShowGrammarLog,
-  miniLesson, fetchMiniLesson, sendChat, setTab,
+  miniLesson, fetchMiniLesson, sendChat, setTab, currentTopic, currentTitle, currentWritingId,
 }) {
   const [hoverDelete, setHoverDelete] = useState(null); // §55: which card's delete-× is hovered
+  // §73: which cards have their "From:" title expanded to full (collapsed by default).
+  const [expandedFrom, setExpandedFrom] = useState(() => new Set());
+  const toggleFrom = (id) => setExpandedFrom(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   if (!showGrammarLog) return null;
 
   return (
@@ -94,7 +97,37 @@ export default function GrammarLog({
                     </div>
                   )}
 
-                  <div style={{ fontSize: 10, color: COLORS.accent2, marginTop: 8 }}>From: {truncate(entry.topic || "", 48)}</div>
+                  {/* §73: "From:" shows the writing's title (full text available but
+                      COLLAPSED by default). Tap to expand to the full title, tap again
+                      to collapse — no more permanent "…" hiding it. Falls back to the
+                      topic for entries saved before the title was stored. */}
+                  {(() => {
+                    // Show the source writing's TITLE (full text available, COLLAPSED
+                    // by default). The title isn't copied into every entry — we resolve
+                    // it live: an entry from the current writing (matched by id, or by a
+                    // legacy entry's stored topic being a prefix of the live topic) shows
+                    // the current full title; otherwise fall back to the stored topic.
+                    const stored = entry.topic || "";
+                    const base = clean(stored).replace(/(\.{3}|…)\s*$/, "").trim();
+                    const isCurrent =
+                      (entry.writingId && currentWritingId && entry.writingId === currentWritingId) ||
+                      (base && clean(currentTopic || "").startsWith(base));
+                    const label = (isCurrent && currentTitle) ? clean(currentTitle) : clean(entry.title || stored);
+                    if (!label) return null;
+                    const isExp = expandedFrom.has(entry.id);
+                    const short = truncate(label, 46);
+                    const canExpand = short !== label;
+                    return (
+                      <div
+                        onClick={canExpand ? () => toggleFrom(entry.id) : undefined}
+                        title={canExpand ? (isExp ? "Tap to collapse" : "Tap to see the full title") : undefined}
+                        style={{ fontSize: 10, color: COLORS.accent2, marginTop: 8, lineHeight: 1.5, cursor: canExpand ? "pointer" : "default" }}
+                      >
+                        From: {isExp ? label : short}
+                        {canExpand && <span style={{ color: COLORS.muted, marginLeft: 5 }}>{isExp ? "▲ less" : "▼ more"}</span>}
+                      </div>
+                    );
+                  })()}
 
                   <button onClick={() => fetchMiniLesson(entry)} style={{ marginTop: 10, width: "100%", padding: "9px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.border}`, background: miniLesson[entry.id]?.content ? COLORS.bg3 : COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 12, cursor: "pointer", color: COLORS.heading, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" }}>
                     {miniLesson[entry.id]?.loading ? (
