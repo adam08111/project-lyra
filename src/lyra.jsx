@@ -5,7 +5,7 @@ import { callAI } from "./api.js";
 import { getRouteConfig } from "./ai-router.js";
 import { buildCoachPrompt, buildScaffoldingPrompt, buildStructuralPrompt, buildProofreadPrompt, buildWelcomePrompt, buildMessageTranslatePrompt } from "./prompts.js";
 import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./welcome.js";
-import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule } from "./utils.js";
+import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule, shouldAutoLoadDraft } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import { getStudentContext } from "./growth-report.js";
 import WordLookup from "./components/WordLookup.jsx";
@@ -591,6 +591,15 @@ Rules:
     const isReload = historyMsgs !== null;
     const userMsg = { role: "user", text: text.trim() };
     if (!isReload) setMessages(prev => [...prev, userMsg]);
+    // §76: ONE LYRA, ONE TEXT — a substantial draft pasted into the chat while
+    // "My Writing" is EMPTY auto-loads into the editor, so the proofread grades the
+    // SAME text both Lyras discuss. Never overwrites existing work; only a real typed
+    // turn (not a reload / quick-action / scaffolding) that reads like a draft
+    // (>= 50 words), not a short question.
+    if (shouldAutoLoadDraft({ text, draft, isReload, scaffolding, useSearch })) {
+      setDraft(text.trim());
+      setMessages(prev => [...prev, { role: "ai", text: "✎ I've loaded this into \"My Writing\" so we both work on the same text — open that tab to edit or proofread it (trim anything there that isn't your essay)." }]);
+    }
     setChatLoading(true);
     setTypingMsg(null);
 

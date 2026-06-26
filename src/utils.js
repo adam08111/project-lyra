@@ -202,6 +202,15 @@ export function groupGrammarByRule(grammar) {
 // Truncate at word boundary with ellipsis
 export const truncate = (t, max) => { if (t.length <= max) return t; const cut = t.slice(0, max).replace(/\s+\S*$/, ""); return (cut || t.slice(0, max)) + "\u2026"; };
 
+// \u00a776 \u2014 should a chat message auto-load into the (empty) "My Writing" editor? Only a
+// real typed turn that reads like a DRAFT (>= 50 words), never a reload / quick-action
+// / scaffolding, and never when the editor already has content (no overwrite).
+export function shouldAutoLoadDraft({ text, draft, isReload, scaffolding, useSearch } = {}) {
+  if (isReload || scaffolding || useSearch) return false;
+  if (draft && draft.trim()) return false;
+  return (text || "").trim().split(/\s+/).filter(Boolean).length >= 50;
+}
+
 // Parse AI response into writing technique objects
 // Extracts: technique, description, example, source, url, and optionally paragraphRole
 export function parseTechniques(result) {
