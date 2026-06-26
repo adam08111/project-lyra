@@ -2357,3 +2357,15 @@ The user flagged the "From: HKDSE English Language Paper 2 (Part B)…" line THR
 
 Verified live on the user's real entry: collapsed "From: Exam Essay — HKDSE English Language Paper 2…▼ more"; expand reveals the full title and ends cleanly (no "…"); tap toggles both ways; no console errors. **398 tests**.
 
+---
+
+## 74. UPDATE — 26 June 2026 — Copy button on every chat bubble (student + Lyra), sticky while scrolling
+
+Two asks: a Copy button on the STUDENT'S messages too (it was Lyra-only, in the §53 bottom row), and the Copy button reachable wherever you scroll a long message (Claude-style), on both sides.
+
+**Fix (`ChatTab.jsx`):**
+- Every message bubble (role user AND ai) now has a Copy button pinned **top-right** with `position: sticky; top: 6` (floated right) so it stays visible as you scroll through a long message, instead of being buried at the message's bottom. White-on-gradient on the student bubble, muted on Lyra's card; reuses `handleCopy` → `copyToClipboard` (secure-context + the §53 insecure-context `execCommand` fallback) with the ✓ feedback.
+- Removed the now-redundant Copy from the AI bottom action row; that row keeps Translate · Reload.
+
+Verified live: the copy button renders on both `user` and `ai` bubbles (3 on the current thread), computed `position` is `sticky`, click fires with no console error. The actual clipboard write + ✓ can't be demonstrated headlessly (no real user-activation/focus — same known limitation as §53), but it's the same helper already working on-device for the Lyra copy. **398 tests**.
+
