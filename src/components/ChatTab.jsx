@@ -212,8 +212,26 @@ export default function ChatTab({
                     borderRadius: m.role === "user" ? "18px 4px 18px 18px" : "4px 18px 18px 18px",
                     padding: "12px 16px", fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", cursor: "pointer",
                     outline: activeMsgIdx === i ? `2px solid ${COLORS.heading}` : "none", outlineOffset: 2,
-                    transition: "outline 0.15s ease",
-                  }}>{renderMd(m.role === "ai" && zhVisible[i] && m.translation_zh ? m.translation_zh : m.text)}</div>
+                    transition: "outline 0.15s ease", position: "relative",
+                  }}>
+                  {/* §74: Copy on EVERY bubble (student + Lyra), pinned top-right and
+                      sticky so it stays in reach while scrolling a long message. */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleCopy(i, m); }}
+                    title="Copy" aria-label="Copy message"
+                    style={{
+                      position: "sticky", top: 6, float: "right", marginLeft: 10, marginBottom: 2,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: 26, height: 26, borderRadius: 7, border: "none", padding: 0, cursor: "pointer", zIndex: 3,
+                      background: m.role === "user" ? "rgba(255,255,255,0.22)" : COLORS.bg2,
+                      color: m.role === "user" ? "#fff" : COLORS.muted,
+                    }}>
+                    {copiedIdx === i
+                      ? <span style={{ fontSize: 12, fontWeight: 700, color: m.role === "user" ? "#fff" : COLORS.green }}>{"✓"}</span>
+                      : <CopyIcon size={13} color={m.role === "user" ? "#fff" : COLORS.muted} />}
+                  </button>
+                  {renderMd(m.role === "ai" && zhVisible[i] && m.translation_zh ? m.translation_zh : m.text)}
+                </div>
               )}
 
               {/* Sources from web-search grounding (only on AI bubbles
@@ -236,16 +254,10 @@ export default function ChatTab({
                 </div>
               )}
 
-              {/* §53: persistent Copy · Translate · Reload row — AI messages only,
-                  rendered once the message is in messages[] (i.e. streaming done).
-                  Never on user bubbles. */}
+              {/* §53/§74: Translate · Reload row — AI messages only (Copy moved to the
+                  sticky top-right button on the bubble, available on both sides). */}
               {m.role === "ai" && editingMsgIdx !== i && (
                 <div style={{ display: "flex", gap: 2, marginTop: 2, paddingLeft: 2, alignItems: "center" }}>
-                  <button onClick={(e) => { e.stopPropagation(); handleCopy(i, m); }} title="Copy" aria-label="Copy message" style={actionBtnStyle}>
-                    {copiedIdx === i
-                      ? <span style={{ fontSize: 11, color: COLORS.green, fontFamily: "'Courier Prime', monospace" }}>{"✓"}</span>
-                      : <CopyIcon size={15} />}
-                  </button>
                   <button onClick={(e) => { e.stopPropagation(); handleTranslate(i, m); }} title={zhVisible[i] ? "Show English" : "翻譯成中文"} aria-label="Translate message" disabled={!!zhLoading[i]} style={{ ...actionBtnStyle, opacity: zhLoading[i] ? 0.7 : 1 }}>
                     {zhLoading[i]
                       ? <span style={{ width: 6, height: 6, borderRadius: 3, background: COLORS.accent1, animation: "bounce 1s infinite", display: "inline-block" }} />
