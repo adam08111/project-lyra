@@ -2344,3 +2344,16 @@ Verified on the user's real store: **6 → 4 achievements** (the freeform "Writi
 
 **Flagged, not fixed (separate concern):** one remaining achievement is titled "Analogy / **Maxine Eggenberger** style" — a real/hallucinated author name leaked into stored achievement data (the §67 anti-bias leak, from before that fix). Surfaced to the user for a decision (strip author names from achievement titles? delete the card?) rather than silently expanding scope.
 
+---
+
+## 73. UPDATE — 26 June 2026 — Grammar-Log "From:" line: full title, collapsed by default
+
+The user flagged the "From: HKDSE English Language Paper 2 (Part B)…" line THREE times. The first two fixes (markdown strip §70.6, word-boundary truncate) treated symptoms. Reading the actual data finally showed the root cause: the writing's TITLE *is* the entire exam prompt — `generateTitle` produced "Exam Essay — HKDSE … [the whole 120-word brief]". There is no short title; a fixed truncation always looks broken. The user's ask: **full title available, but collapsed by default** ("full title but collapsed form").
+
+**Fix (`GrammarLog.jsx` + `lyra.jsx`):**
+- The "From:" line is collapsed by default ("…▼ more") and expands to the full title on tap ("▲ less") — a small `expandedFrom` Set keyed by entry id. No permanent mid-word "…".
+- It resolves the SOURCE writing's title LIVE rather than copying a 120-word title into every grammar entry: a new entry stores `writingId: activeWritingId`; a legacy entry (no id) is matched to the current writing when its stored topic is a prefix of the live topic. Falls back to the stored 200-char topic snippet for entries from other writings.
+- `lyra.jsx` passes `currentTitle` / `currentTopic` / `currentWritingId`; the §70 (chat-save) and §59 (proofread) grammar entries store `writingId` + a topic snippet instead of the duplicated/truncated title. Dropped the now-unused `truncate` import (orphan cleanup).
+
+Verified live on the user's real entry: collapsed "From: Exam Essay — HKDSE English Language Paper 2…▼ more"; expand reveals the full title and ends cleanly (no "…"); tap toggles both ways; no console errors. **398 tests**.
+
