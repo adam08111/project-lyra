@@ -2369,3 +2369,15 @@ Two asks: a Copy button on the STUDENT'S messages too (it was Lyra-only, in the 
 
 Verified live: the copy button renders on both `user` and `ai` bubbles (3 on the current thread), computed `position` is `sticky`, click fires with no console error. The actual clipboard write + ✓ can't be demonstrated headlessly (no real user-activation/focus — same known limitation as §53), but it's the same helper already working on-device for the Lyra copy. **398 tests**.
 
+---
+
+## 75. UPDATE — 26 June 2026 — ONE LYRA: the proofread reads the chat (no self-contradiction)
+
+The student sees two Lyras — the chat coach (`buildCoachPrompt`, Pro) and the "My Writing" proofread (`buildProofreadPrompt`, Lite) — and asked for them to be the SAME one so they never disagree and each understands the other's context + content. They already shared the judgment rules (§58 `judgment-rules.js`), the growth profile (§66), applied skills, exam rules, and the `draft` (single shared state). The gap: the proofread could NOT see the chat conversation, so it could flag something the chat coach had just blessed (a deliberate "akin to", a point it made).
+
+**Fix:** `buildProofreadPrompt` takes a `conversationContext` and prepends a "YOU ARE ONE LYRA, NOT TWO" block carrying the recent chat, instructing the proofread to stay consistent ("if a card would disagree with what you told them in chat, your chat self wins — drop the card or align it"). `runProofread` builds it from the last ~6 messages (each capped to 400 chars, HTML comments stripped) so the Lite call stays lean; `messages` added to the `runProofread` deps so the conversation is fresh at click time. The conversation also carries any draft the student pasted INTO the chat, so the proofread is aware of it even when it lives only in the chat.
+
+Verified: the block renders with the chat inline + "your chat self wins"; absent with no conversation. **399 tests** (+1).
+
+**Remaining (offered to the user, not built):** auto-loading a draft the student PASTES into the chat into "My Writing" so the proofread grades the same text (today the proofread grades the editor `draft`; a chat-pasted essay is seen as context but not graded unless also in the editor). Left as a decision (auto-load when the editor is empty? prompt "Add to My Writing"? keep the manual "Add to essay"?).
+
