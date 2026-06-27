@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupReports, groupAchievements, consolidateMistakes, buildDelta, isGrammarCritiqueText, isGrammarOnlyReport } from "../src/report-utils.js";
+import { groupReports, groupAchievements, consolidateMistakes, buildDelta, isGrammarCritiqueText, isGrammarOnlyReport, stripLeakedAuthor, reportTechniqueKey } from "../src/report-utils.js";
 import {
   milestoneImminent,
   effectiveRegenThreshold,
@@ -127,6 +127,66 @@ describe("groupAchievements — one card per technique (Achievements tab)", () =
     expect(isGrammarOnlyReport({ technique: "Subject-verb agreement", after: "x" })).toBe(true);
     expect(isGrammarOnlyReport({ technique: "Painted Style Pictures", after: "x" })).toBe(false);
     expect(isGrammarOnlyReport({ technique: "Concession Then Punch", after: "x" })).toBe(false);
+  });
+
+  it("§78: a leaked author title folds into the SAME card as the clean technique", () => {
+    const reports = [
+      { id: "report_3_a", technique: "Analogy", after: "Her silence was a locked door." },
+      { id: "report_2_b", technique: "Analogy / Maxine Eggenberger style", after: "The deadline loomed like a storm cloud." },
+      { id: "report_1_c", technique: "Analogy / Maxine Eggenberger style", after: "His patience was a fraying rope." },
+    ];
+    const groups = groupAchievements(reports);
+    expect(groups).toHaveLength(1); // leaked + clean variants merge, not three cards
+    expect(groups[0].members).toHaveLength(3);
+    expect(reportTechniqueKey(reports[1])).toBe("analogy"); // grouping key is author-stripped
+  });
+});
+
+describe("stripLeakedAuthor — author names never live in a skill TITLE (§78)", () => {
+  it("strips the reported leak shape and clear author attributions", () => {
+    expect(stripLeakedAuthor("Analogy / Maxine Eggenberger style")).toBe("Analogy");
+    expect(stripLeakedAuthor("Analogy / Maxine Eggenberger Style")).toBe("Analogy"); // case-insensitive
+    expect(stripLeakedAuthor("Vivid Imagery, George Orwell voice")).toBe("Vivid Imagery");
+    expect(stripLeakedAuthor("Plain Prose (Ernest Hemingway prose)")).toBe("Plain Prose");
+    expect(stripLeakedAuthor("Sharp Imagery (like George Orwell)")).toBe("Sharp Imagery");
+    expect(stripLeakedAuthor("Sparse Style à la Hemingway")).toBe("Sparse Style");
+    expect(stripLeakedAuthor("Short Sentences (after Orwell)")).toBe("Short Sentences");
+    expect(stripLeakedAuthor("Crisp Imagery Hemingway-esque")).toBe("Crisp Imagery");
+  });
+
+  it("NEVER touches legitimate Title-Case skill names (no false positives)", () => {
+    // The user's real skill cards + tricky look-alikes that must survive intact.
+    for (const name of [
+      "Painted Style Pictures",
+      "The Helpful Professional",
+      "Logical Imagery",
+      "Analogy",
+      "Start with a Shock",
+      "Concession Then Punch",
+      "Free Indirect Style",      // ends in "Style" but no separator before a name
+      "Personal, Conversational Style", // one word before "Style", not a full name
+      "Show, Don't Tell",          // contraction is not a name word
+      "Cause / Effect",            // single word after the slash
+      "Before / After",
+      "Compare / Contrast",
+      // Adversarial-review lock-ins: a bare separator before the everyday word
+      // "after"/"like"/"think" must NOT be read as a connective (the §78 HIGH finding).
+      "Before / After Snapshots",  // would have wrongly become "Before"
+      "Notes, After Reading",      // comma + "After" + a capitalised noun
+      "Compare / Contrast Techniques",
+      "Stream of Consciousness",
+      "Paint a Picture Like a Camera",
+      "Happily Ever After",
+    ]) {
+      expect(stripLeakedAuthor(name)).toBe(name);
+    }
+  });
+
+  it("never returns empty, and tolerates blank/missing input", () => {
+    expect(stripLeakedAuthor("")).toBe("");
+    expect(stripLeakedAuthor(null)).toBe("");
+    expect(stripLeakedAuthor(undefined)).toBe("");
+    expect(stripLeakedAuthor("Hemingway-esque")).toBe("Hemingway-esque"); // all-tail → keep original
   });
 });
 

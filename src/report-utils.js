@@ -57,9 +57,63 @@ export function groupReports(reports) {
 
 export const countDedupedPractices = (reports) => groupReports(reports).length;
 
+// §78 — strip an author-name attribution that leaked into a technique / skill
+// TITLE. The model occasionally welds a (real or hallucinated) writer's name onto
+// a technique name — the reported leak was an Achievement titled
+// "Analogy / Maxine Eggenberger style" (a §67-era anti-bias slip, from before that
+// fix). An Achievement title must name the SKILL, never a writer.
+//
+// We strip ONLY author-attribution SCAFFOLDING — a separator + a person-name + an
+// author-signal word ("style"/"voice"/"prose"), an "-esque"/"-ian" form, a
+// PARENTHESISED connective ("(like X)"), or an unambiguous marker ("à la X") — never
+// bare Title-Case words. So legitimate Title-Case skill names survive untouched:
+// "Painted Style Pictures", "The Helpful Professional", "Free Indirect Style",
+// "Show, Don't Tell", "Cause / Effect", "Before / After Snapshots". A person-name is
+// 2+ capitalised words with no internal apostrophe (so contractions like "Don't" are
+// never read as a name).
+const NAME_WORD = "[A-Z][a-zà-öø-ÿ]+(?:-[A-Z][a-zà-öø-ÿ]+)?"; // Orwell, Lloyd-Jones
+const FULL_NAME = `${NAME_WORD}(?:\\s+${NAME_WORD})+`; // Maxine Eggenberger
+const SEP = "[\\/(,;:|·•–—-]"; // an attribution separator
+// "<sep> Maxine Eggenberger style" / ", George Orwell voice" / "(Jane Austen prose)".
+// Requires a separator + a FULL person-name (2+ words) + an author-signal word, so
+// "Personal, Conversational Style" (one word before "Style") and "Free Indirect
+// Style" (no separator) are NOT touched.
+const AUTHOR_TAIL_STYLE = new RegExp(`\\s*${SEP}\\s*${FULL_NAME}(?:['’]s)?\\s+(?:style|styled|voice|prose|technique|writing)\\b\\s*\\)?\\s*$`, "i");
+// "Hemingway-esque", "Dickensian-style" at the end (one capitalised word + suffix)
+const AUTHOR_ESQUE = new RegExp(`\\s*${SEP}?\\s*${NAME_WORD}[-‑](?:esque|ian|like|style)\\b\\s*\\)?\\s*$`, "i");
+// PARENTHESISED connective attribution: "(like George Orwell)", "(after Dickens)",
+// "(as in Maxine Eggenberger)". The parentheses are the disambiguating boundary, so
+// even everyday words (like/after/think) are safe HERE — unlike a bare slash, where
+// "Before / After Snapshots" must survive. The "(" may be preceded by a separator.
+const AUTHOR_PAREN = new RegExp(`\\s*${SEP}?\\s*\\(\\s*(?:like|à la|a la|as in|after|inspired by|reminiscent of|think|cf\\.?)\\s+${NAME_WORD}(?:\\s+${NAME_WORD})*\\s*\\)\\s*$`, "i");
+// Unambiguous markers that are NOT ordinary English title words, so they are safe
+// WITHOUT parentheses: "Sparse Style à la Hemingway", "Pacing cf. Ernest Hemingway".
+const AUTHOR_LATIN = new RegExp(`\\s*${SEP}?\\s*(?:à la|a la|cf\\.)\\s+${NAME_WORD}(?:\\s+${NAME_WORD})*\\s*$`, "i");
+// A deliberate non-pattern: a bare "<sep> Firstname Lastname" with NO author-signal
+// word — and a bare separator before an everyday word like "after"/"like" — are NOT
+// stripped. They are indistinguishable from legitimate slash-pair skill names
+// ("Before / After Snapshots", "Cause / Effect"), and destroying a real card title is
+// worse than missing a rare unsignalled leak (the save-layer + prompt guard catch
+// those at the source going forward).
+
+export function stripLeakedAuthor(title) {
+  const original = String(title || "").trim();
+  let s = original;
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(AUTHOR_TAIL_STYLE, "").replace(AUTHOR_PAREN, "").replace(AUTHOR_LATIN, "").replace(AUTHOR_ESQUE, "");
+  } while (s !== prev);
+  s = s.replace(new RegExp(`[\\s${SEP.slice(1, -1)}]+$`, "u"), "").trim();
+  // Never return empty (a title that was ONLY an author tail) — keep the original.
+  return s || original;
+}
+
 // Identity of the technique/skill a report belongs to, normalised for grouping.
+// stripLeakedAuthor so a clean "Analogy" report and a leaked
+// "Analogy / Maxine Eggenberger style" report fold into the SAME card.
 export const reportTechniqueKey = (r) =>
-  reportClean(r?.technique || (r?.skills && r?.skills[0] && r?.skills[0].skillName) || "").toLowerCase();
+  stripLeakedAuthor(reportClean(r?.technique || (r?.skills && r?.skills[0] && r?.skills[0].skillName) || "")).toLowerCase();
 
 // §72 — does this freeform text look like a sentence-by-sentence grammar critique
 // (numbered "original → correction" lines)? ACHIEVEMENTS are for SKILLS the student
@@ -245,11 +299,13 @@ export function buildDelta({ reportClusters = [], grammarLog = [], structures = 
     const r = c.display || c;
     const hasStructured = !!(r.before || (r.skills && r.skills.length) || (r.grammar && r.grammar.length));
     return {
-      technique: r.technique || (r.skills && r.skills[0] && r.skills[0].skillName) || "",
+      // §78: strip any leaked author name so a LEGACY report (saved before the §78
+      // save guard) can't re-surface a writer's name in the growth-report LLM text.
+      technique: stripLeakedAuthor(r.technique || (r.skills && r.skills[0] && r.skills[0].skillName) || ""),
       before: r.before || "",
       after: r.after || "",
       why_better: r.why_better || "",
-      skills: (r.skills || []).map((s) => ({ skillName: s.skillName || "", studentApplication: s.studentApplication || "" })),
+      skills: (r.skills || []).map((s) => ({ skillName: stripLeakedAuthor(s.skillName || ""), studentApplication: s.studentApplication || "" })),
       vocabulary: r.vocabulary || [],
       // freeform chat dump only when there is no structured signal to mine
       reportText: !hasStructured && r.reportText ? r.reportText : undefined,

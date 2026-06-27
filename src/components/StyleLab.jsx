@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { groupAchievements } from "../report-utils.js";
+import { groupAchievements, stripLeakedAuthor } from "../report-utils.js";
 import { toWrittenChinese } from "../zh-register.js";
 import { loadTrainingChats, countThreadTurns } from "../training-threads.js";
 import GrowthReport from "./GrowthReport.jsx";
@@ -881,7 +881,10 @@ function AchievementCard({ report, index, onRemove }) {
     try { return new Date(report.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
     catch (e) { return ""; }
   })();
-  const headline = report.technique || (report.skills && report.skills[0] && report.skills[0].skillName) || "Writing win";
+  // §78: strip any author name that leaked into the title (e.g. a legacy
+  // "Analogy / Maxine Eggenberger style" card) — display-layer cleaning so even
+  // entries stored before the §78 save guard show a clean skill name, no migration.
+  const headline = stripLeakedAuthor(report.technique || (report.skills && report.skills[0] && report.skills[0].skillName) || "") || "Writing win";
   const sentence = report.after || "";
 
   const sectionTitle = { fontSize: 10, fontWeight: 700, color: COLORS.accent1, textTransform: "uppercase", letterSpacing: 1, marginTop: 12, marginBottom: 4, fontFamily: mono };
@@ -916,7 +919,7 @@ function AchievementCard({ report, index, onRemove }) {
                   <div style={sectionTitle}>1 · Skills Deployed</div>
                   {report.skills.map((sk, i) => (
                     <div key={i} style={bodyText}>
-                      <strong>{sk.skillName}</strong>{sk.sourceAuthor ? ` — learned from ${sk.sourceAuthor}` : ""}{sk.studentApplication ? `. ${sk.studentApplication}` : ""}
+                      <strong>{stripLeakedAuthor(sk.skillName)}</strong>{sk.sourceAuthor ? ` — learned from ${sk.sourceAuthor}` : ""}{sk.studentApplication ? `. ${sk.studentApplication}` : ""}
                     </div>
                   ))}
                 </>

@@ -8,7 +8,7 @@
  * The student never sees this. The app strips it before display.
  */
 
-import { reportWords, reportSameMoment, isGrammarCritiqueText } from "./report-utils.js";
+import { reportWords, reportSameMoment, isGrammarCritiqueText, stripLeakedAuthor } from "./report-utils.js";
 import { QUICK_ACTION_MESSAGES } from "./constants.js";
 
 const MARKER = /<!--LYRA_LEARNING_DATA\n?([\s\S]*?)\nLYRA_LEARNING_DATA-->/;
@@ -164,7 +164,8 @@ export function syncLearningData(data, ctx) {
       const existing = JSON.parse(localStorage.getItem("lyra-skill-deployments") || "[]");
       const newEntries = data.skills_deployed.map(s => ({
         id: "deploy_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-        skillName: s.skill_name,
+        // §78: a writer's name belongs in sourceAuthor, never welded into the skill name.
+        skillName: stripLeakedAuthor(s.skill_name || ""),
         sourceAuthor: s.source_author || "",
         sourceContext: s.source_context || "",
         studentApplication: s.student_application || "",
@@ -418,6 +419,16 @@ export function saveMasterclassReport(report) {
     // §72: a grammar critique is never a skill achievement — don't store a freeform
     // critique message (manual ★ save, or the visible-report fallback) as a card.
     if (report && report.reportText && isGrammarCritiqueText(report.reportText)) return null;
+    // §78: a writer's name must never live in a skill / technique TITLE (anti-bias,
+    // §67 — the reported "Analogy / Maxine Eggenberger style" leak). Strip any leaked
+    // author attribution before storing — the root-cause guard for EVERY save path
+    // (auto sync, training, manual ★, visible-report fallback). The source author is
+    // still kept in skills[].sourceAuthor for the "learned from …" detail.
+    report = {
+      ...report,
+      ...(report.technique ? { technique: stripLeakedAuthor(report.technique) } : {}),
+      ...(Array.isArray(report.skills) ? { skills: report.skills.map((s) => ({ ...s, skillName: stripLeakedAuthor(s.skillName || "") })) } : {}),
+    };
     const existing = JSON.parse(localStorage.getItem("lyra-masterclass-reports") || "[]");
     // Dedup: the auto-save, the visible-report fallback, and the manual
     // "Save this turn" button can all fire for the SAME turn. If this exact
