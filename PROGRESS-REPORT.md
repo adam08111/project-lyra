@@ -2405,3 +2405,33 @@ Verified: 4 unit tests (loads ≥50-word draft into empty editor; never overwrit
 
 Verified end-to-end (node): all 12 turns of a sample conversation reach the proofread prompt (oldest + newest), with the one-Lyra framing; the chat coach already sends the full history. **406 tests** (+3); app compiles + mounts. Both Lyras now see the entire conversation.
 
+---
+
+## 78. UPDATE — 27 June 2026 — Author names never live in an Achievement TITLE (the §72 flagged leak, closed)
+
+§72 fixed grammar-out-of-Achievements but FLAGGED, without fixing, a separate leak: an Achievement was stored titled "Analogy / **Maxine Eggenberger** style" — a real/hallucinated writer's name welded into the technique title (a §67-era anti-bias slip, from before that fix). An Achievement title must name the SKILL, never a writer. The user chose "strip leaked names at the render+group layer AND add a guard so new ones can't leak."
+
+### 78.1 The sanitizer — `stripLeakedAuthor` (`report-utils.js`, pure + tested)
+A single shared helper that strips ONLY author-attribution SCAFFOLDING, never bare Title-Case words (the hard part: the app's own skill names ARE Title Case — "Painted Style Pictures", "The Helpful Professional", "Free Indirect Style" — so a naive "strip capitalised pairs" would destroy real cards). A person-name = 2+ capitalised words with no internal apostrophe (so "Don't" is never a name). Patterns, all end-anchored:
+- **AUTHOR_TAIL_STYLE** — `<sep> <Full Name> (style|voice|prose|technique|writing)` — the observed leak shape. Requires a separator + a 2-word name + a signal word, so "Personal, Conversational Style" (one word) and "Free Indirect Style" (no separator) survive.
+- **AUTHOR_PAREN** — a PARENTHESISED connective: "(like George Orwell)", "(after Dickens)". Parens are the disambiguating boundary, so everyday words are safe here.
+- **AUTHOR_LATIN** — "à la X" / "cf. X" (not ordinary English title words → safe without parens).
+- **AUTHOR_ESQUE** — trailing "Hemingway-esque" / "Dickensian-style".
+- Never returns empty (a title that was ONLY a tail keeps its original).
+
+### 78.2 The four layers
+- **Group** (`reportTechniqueKey`): the grouping key is author-stripped, so a clean "Analogy" report and a leaked "Analogy / Maxine Eggenberger style" report fold into ONE card instead of two.
+- **Render** (`StyleLab.jsx` AchievementCard): the title + the expanded "Skills Deployed" skill name are stripped at display — so the EXISTING leaked card shows clean with **no data migration**. The designed "— learned from <sourceAuthor>" line is deliberately left intact (that's the student's own chosen source, not a title leak).
+- **Save / root cause** (`learning-sync.js` `saveMasterclassReport`): `technique` + every `skills[].skillName` are sanitized before storing — the chokepoint for EVERY save path (auto-sync, training, manual ★, visible-report fallback), so new leaks never persist. The skill-deployment log sanitizes at its source too.
+- **Prompt / deepest** (`lyra-brain.js`): the LYRA_LEARNING_DATA schema now says NAME THE SKILL, NEVER THE WRITER — a writer's name goes in `source_author` and nowhere else; "Analogy / Maxine Eggenberger style" is given as the explicit wrong example.
+
+### 78.3 Adversarial verification (workflow — 4 agents, 86 inputs)
+Ran a verification workflow: three adversary agents generated 86 candidate inputs (false-positive look-alikes, realistic leaks, i18n/accented/CJK/edge), and an Opus integration reviewer ran the function against the diff. Every candidate was then adjudicated against the REAL shipped function in node. Result: **zero false positives** — no legitimate skill title is ever stripped. The 20 "misses" are all the SAFE direction (didn't strip a speculative shape), never over-stripping.
+
+The reviewer caught one **genuine HIGH-severity false positive** in the first cut: the connective branch allowed a bare separator before everyday words, so a plausible AI-generated "Before / After Snapshots" became "Before". Fixed by requiring those everyday connectives to be parenthesised (AUTHOR_PAREN) while keeping the unambiguous "à la"/"cf." free-standing — locked in with explicit tests ("Before / After Snapshots", "Notes, After Reading", "Compare / Contrast Techniques" all survive). Two defence-in-depth findings also fixed: `buildDelta` now strips legacy titles before they reach the growth-report LLM, and the skill-deployment store sanitizes at the source.
+
+**Deliberate, documented precision tradeoff (honest):** bare connectives outside parens ("X / inspired by Toni Morrison"), single-surname tails ("… Brontë style"), and leading-possessive forms ("Hemingway's Writing Style") are NOT auto-stripped — they are indistinguishable from legit slash-pair/Title-Case skill names, and the only OBSERVED leak is the "/ Name style" shape. Destroying a real student's card title is worse than missing a rare unsignalled leak, which the save-layer + prompt guard catch at the source going forward.
+
+### 78.4 Verified
+**410 tests** (+4: strip cases, false-positive guards incl. the HIGH-finding lock-ins, the leaked↔clean card merge); full suite green. Live in the browser bundle: "Analogy / Maxine Eggenberger style" → "Analogy", "(like George Orwell)" → stripped, "Before / After Snapshots" / "Free Indirect Style" / "Notes, After Reading" untouched, leaked+clean titles share one grouping key; no console errors. The §72 flagged item is closed.
+
