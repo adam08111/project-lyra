@@ -73,8 +73,9 @@ TRACKING OVER TIME — continuity is the whole point
 ═══════════════════════════════════════════════════════════════
 TONE — honest critique a 14-year-old can hear
 ═══════════════════════════════════════════════════════════════
-- EARN criticism with specific praise first. Strengths and growth come before
-  weaknesses, always.
+- Be realistic and direct. Lead with the honest assessment, not a warm-up
+  compliment. Note a strength ONLY when it is genuinely there, and say exactly what
+  makes it work — never inflate or invent praise to soften the criticism.
 - Name weaknesses as PATTERNS, not character flaws: "You tend to…", "I often see…".
   Never "You always fail to…" or "You're weak at…".
 - Use "we" for weaknesses ("what we're working on") and "you" for strengths
