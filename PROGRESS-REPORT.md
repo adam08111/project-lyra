@@ -2612,3 +2612,19 @@ So implicit caching DOES discount the brain — but only **~55% of the prefix**,
 ### 87.5 Verified + flagged
 **414 tests** (+4: the helper unit test — computes cached/hit%, never throws on null/{}/missing-field). `vite build` clean; both proxies `node --check`; the app mounts with no console errors; all proxy calls returned HTTP 200 with unchanged client bytes. **Flagged, NOT changed (out of scope):** the pre-existing `[DEBUG translate response]` log in both proxies prints translated CONTENT (not counts) for lite-tier calls — it predates this task, but given the minors-privacy rule it's worth removing in a later cleanup.
 
+---
+
+## 88. UPDATE — 28 June 2026 — Two zero-risk deletions: translate-content log + the exercise-generator's wasted brain
+
+Two small, independent pure-removals from the token-saving work — two commits.
+
+### 88.1 Privacy — strip the `[DEBUG translate response]` content log (`server/proxy.js`)
+The dev proxy printed the translated TEXT of lite/translate calls to stdout — student-pasted passages and quoted sentences (minors' content), the exact opposite of the §87 counts-only helper. Removed it from BOTH branches, plus the orphaned `isLiteTranslate` / `debugAccum` machinery that existed only to feed it (clean deletion, no dead code left). Token COUNTS (`[tokens]`) and all error logging stay; the remaining `[Request]` line logs `msg_len` (length), never the text.
+- **Good news the audit surfaced:** `api/gemini.js` (the Vercel PROD function) has NO `console.*` at all — so the brief's worry about student content sitting in retained Vercel function logs never actually applied; only the local dev terminal ever saw it. The leak was dev-only.
+
+### 88.2 Waste — drop `LYRA_BRAIN` from `buildTrainingExercisesPrompt` (`prompts.js`)
+The Reporter-Voice exercise generator prepended the full ~15K-token `LYRA_BRAIN`, yet its route `training_exercise` is already `{ lite, brain:false }` and the builder re-defines Reporter/Columnist Voice itself — pure dead weight on every exercise generate + "add a sentence". Removed. The `LYRA_BRAIN` import stays (9 other builders use it); `buildTrainingChatPrompt` (genuinely `brain:true`) is untouched.
+
+### 88.3 Verified
+**414 tests** (updated the one test that asserted the exercises prompt "includes LYRA_BRAIN" → now asserts the generator's own instructions + that the brain is gone). `vite build` clean. Live against the restarted dev proxy: a translate call logged only `[tokens] prompt=31 … total=57` with **no `[DEBUG translate response]`** (the Chinese text never hit stdout); the exercises call dropped from ~15K to **system_len=1332 (~319 prompt tokens)** and still generated a correct flat Reporter-Voice sentence. App behaves identically; client bytes unchanged.
+
