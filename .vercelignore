@@ -1,0 +1,8 @@
+# Not needed in the Vercel deploy (the proxy runs as api/gemini.js there;
+# server/proxy.js is for local dev only). Keeps the upload lean.
+server/
+tests/
+PROGRESS-REPORT.md
+IMPROVEMENTS-REPORT.md
+LYRA-PROJECT-BRIEF.md
+.claude/
