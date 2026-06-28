@@ -2538,3 +2538,14 @@ Reported: in the Grammar Log, pressing "Teach me this" loads an AI lesson; press
 ### 83.3 Verified
 `vite build` clean; **410 tests pass**. Served bundle confirms the shipped logic: delete-on-hide gone, `hidden` toggle present, success-only caching, error marking. (Did not seed the preview's localStorage to click through — per the standing no-seed rule — so verified by shipped-logic inspection + the state machine: fetch-once → hide keeps content → show re-renders from cache with no AI call.)
 
+---
+
+## 84. STATUS — 28 June 2026 — Session wrap: pushed to GitHub, deploy-ready, Vercel pending
+
+A status checkpoint (no code change — recorded so the report reflects where things actually stand).
+
+- **Pushed:** §78–§83 are committed and pushed to `origin/claude/jovial-kilby-124f12` (branch in sync with origin). Latest commit `e0b8bf2`.
+- **App health:** Gemini-only (single `GEMINI_API_KEY`); 410 tests green; `vite build` clean; app mounts with no console errors.
+- **Deploy:** scaffolding ready and verified (`api/gemini.js`, `middleware.js` password gate, `vercel.json`, `DEPLOY.md`). **Vercel is NOT connected yet** — pending the user's Vercel import (set production branch to `claude/jovial-kilby-124f12`; add env vars `GEMINI_API_KEY` + `GATE_PASS`, optional `GATE_USER`).
+- **Branch reality:** all work since §15 lives on `claude/*` branches in `.claude/worktrees/`; the `master` main checkout remains frozen at §15 (this branch has NOT been merged to `master`/`main`). To see the latest in the main `lyra-dev` folder, the branch would need to be merged — deferred to the user's decision.
+
