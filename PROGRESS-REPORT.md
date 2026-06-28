@@ -2549,3 +2549,33 @@ A status checkpoint (no code change — recorded so the report reflects where th
 - **Deploy:** scaffolding ready and verified (`api/gemini.js`, `middleware.js` password gate, `vercel.json`, `DEPLOY.md`). **Vercel is NOT connected yet** — pending the user's Vercel import (set production branch to `claude/jovial-kilby-124f12`; add env vars `GEMINI_API_KEY` + `GATE_PASS`, optional `GATE_USER`).
 - **Branch reality:** all work since §15 lives on `claude/*` branches in `.claude/worktrees/`; the `master` main checkout remains frozen at §15 (this branch has NOT been merged to `master`/`main`). To see the latest in the main `lyra-dev` folder, the branch would need to be merged — deferred to the user's decision.
 
+---
+
+## 85. UPDATE — 28 June 2026 — Merged into `main`: it now contains everything (§16–§84)
+
+Git plumbing only, NO code change. Goal: end the freeze and make `main` the single source of truth so future work branches off it and Vercel can deploy it.
+
+### 85.1 Step-0 divergence map (corrected the task's premise)
+The brief assumed `master`/`main` were both frozen at §15. They are NOT the same branch:
+- `master` (the `lyra-dev` main checkout) = `c86bb3f` → **§15** (17 May).
+- `main` = `origin/main` = `6c06406` → **§63** (22 Jun) — the real trunk recent work descends from.
+- work branch `claude/jovial-kilby-124f12` = `9c4338b` → **§84**.
+
+Divergence (all targets had **0** commits the branch lacked → every one a strict ancestor → clean fast-forward, **CASE A**, no merge commit, no conflicts):
+- branch ahead of `main`/`origin/main` by **46**; ahead of `master` by **211**; ahead of `origin/master` by **228**.
+- Work branch clean (only the untracked worktree `.claude/`); **410 tests green** before the merge.
+
+### 85.2 The merge (fast-forward `main`)
+`main` was not checked out in any worktree, so its ref updated with zero working-tree risk: `git branch -f main <branch>` then `git push origin main` (a normal non-force FF push). Pre-flight `merge-base --is-ancestor` confirmed FF-safety for both local and origin first.
+- **main before:** `6c06406` (§63) · **main after:** `9c4338b` (§84). Local `main` == `origin/main` == branch tip. `git rev-list main..branch` = 0.
+- Tests on the merged `main`: **410** (main now points at the exact commit the branch was tested at — same sha, same tree).
+
+### 85.3 NOT done — `master` / the `lyra-dev` folder (needs a decision)
+`master` was deliberately left untouched: the `lyra-dev` checkout has **untracked files** — `CONSULTANT-REPORT.md` (looks like unsaved work), `src/vite.config.js`, `src/.claude/` — and overwriting/merging there is riskier than a not-checked-out ref. So `master` is still at §15 and the `lyra-dev` folder still shows §15. To un-freeze that folder the user picks: (a) point `lyra-dev` at `main` (`git checkout main` there), or (b) FF `master` to §84 too — after dealing with those untracked files. Flagged, not guessed.
+
+### 85.4 Branch hygiene (REPORT ONLY — nothing deleted)
+**20** `claude/*` branches are now fully merged into `main` (plus `master`, `unified-app`, `worktree-*`). These are deletion CANDIDATES; per standing policy branch deletion is the user's decision and is not performed here. The active branch can stay `claude/jovial-kilby-124f12`, or future work can branch fresh off the now-current `main`.
+
+### 85.5 What this unblocks
+`main` now contains §16–§84. Vercel can deploy `main` directly (no need to point production at a feature branch) — not touched here, per the Vercel hold. Future work branches off the current `main`. Once Vercel is connected, "push to main = deploy" becomes literally true.
+
