@@ -132,14 +132,17 @@ export default function GrammarLog({
                   <button onClick={() => fetchMiniLesson(entry)} style={{ marginTop: 10, width: "100%", padding: "9px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.border}`, background: miniLesson[entry.id]?.content ? COLORS.bg3 : COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 12, cursor: "pointer", color: COLORS.heading, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" }}>
                     {miniLesson[entry.id]?.loading ? (
                       <><div style={{ animation: "featherWrite 1.8s ease-in-out infinite", display: "inline-block" }}><FeatherIcon size={14} /></div> Loading...</>
-                    ) : miniLesson[entry.id]?.content ? (
-                      "Hide lesson"
+                    ) : (miniLesson[entry.id]?.content && !miniLesson[entry.id]?.error) ? (
+                      // §83: a successfully-fetched lesson is cached — collapsing only
+                      // hides it, re-opening shows it instantly (no AI refetch). Label
+                      // reflects the toggle. (An error falls through to retry below.)
+                      miniLesson[entry.id]?.hidden ? "Show lesson" : "Hide lesson"
                     ) : (
                       <><FeatherIcon size={14} /> Teach me this</>
                     )}
                   </button>
 
-                  {miniLesson[entry.id]?.content && !miniLesson[entry.id]?.loading && (
+                  {miniLesson[entry.id]?.content && !miniLesson[entry.id]?.hidden && !miniLesson[entry.id]?.loading && (
                     <MiniLessonCard
                       content={miniLesson[entry.id].content}
                       rule={entry.rule}

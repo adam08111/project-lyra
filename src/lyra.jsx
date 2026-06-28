@@ -429,10 +429,14 @@ export default function Lyra() {
   // === AI FEATURES ===
 
   const fetchMiniLesson = useCallback(async (entry) => {
-    if (miniLesson[entry.id]?.content) {
-      setMiniLesson(prev => { const n = { ...prev }; delete n[entry.id]; return n; });
+    // Already fetched successfully → just toggle visibility (collapse/expand). Keep
+    // the cached content so re-opening NEVER refetches the AI lesson (no reflash).
+    // Fetch once. (An errored attempt is NOT cached — clicking again retries.)
+    if (miniLesson[entry.id]?.content && !miniLesson[entry.id]?.error) {
+      setMiniLesson(prev => ({ ...prev, [entry.id]: { ...prev[entry.id], hidden: !prev[entry.id].hidden } }));
       return;
     }
+    if (miniLesson[entry.id]?.loading) return; // guard double-tap while loading
     setMiniLesson(prev => ({ ...prev, [entry.id]: { loading: true } }));
     try {
       const lessonRoute = getRouteConfig("grammar_lesson");
@@ -463,7 +467,7 @@ Rules:
       );
       setMiniLesson(prev => ({ ...prev, [entry.id]: { loading: false, content: result } }));
     } catch (e) {
-      setMiniLesson(prev => ({ ...prev, [entry.id]: { loading: false, content: "Couldn't load lesson. Try again!" } }));
+      setMiniLesson(prev => ({ ...prev, [entry.id]: { loading: false, content: "Couldn't load lesson. Try again!", error: true } }));
     }
   }, [miniLesson, trackCall]);
 
