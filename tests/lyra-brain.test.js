@@ -104,7 +104,7 @@ describe("add-a-new-sentence: Lyra invites, generator avoids repeats", () => {
     // The invitation lives in the ONGOING-turn branch (a conversation exists),
     // not the opening turn — pass a prior student message.
     const p = buildTrainingChatPrompt({ technique: "T", description: "d" }, "She wore a red dress.", [{ role: "student", text: "my rewrite" }]);
-    expect(p).toContain("WHEN THE REWRITE LANDS");
+    expect(p).toContain("WHEN THE REWRITE GENUINELY LANDS"); // §79: "a real win, not a participation prize"
     expect(p).toContain("fresh practice sentence");
     expect(p).toContain("same skill, new sentence");
   });

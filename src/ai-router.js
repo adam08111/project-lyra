@@ -51,6 +51,16 @@ const ROUTE_CONFIG = {
     brain: true, // flag: prepend LYRA_BRAIN
   },
 
+  // Photo OCR — read text off a photographed source / exam question (Gemini
+  // vision). Pro: a live test OCR'd full English + Traditional Chinese + digits
+  // accurately where Flash dropped characters; accuracy matters for a student's
+  // pasted source/exam text. No thinking needed; brain:false (plain extraction).
+  ocr: {
+    model: MODELS.pro,
+    thinkingBudget: 0,
+    brain: false,
+  },
+
   // Socratic coaching chat (the main teaching interaction)
   chat_coaching: {
     model: MODELS.pro,

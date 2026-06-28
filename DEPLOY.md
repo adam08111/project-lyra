@@ -6,20 +6,18 @@ to one Vercel URL on the same origin, so the app's `fetch("/api/gemini")` works 
 production exactly like it does in dev.
 
 ## Architecture (what actually deploys)
-Lyra is a **Vite** SPA (entry `src/main.jsx`) — there is no Next.js app. It needs
-**two** same-origin serverless proxies:
-- **Text AI → Gemini.** Everything coaching/analysis/training/proofread goes through
-  `src/api.js` `callAI` → `/api/gemini` (`api/gemini.js`, reads `GEMINI_API_KEY`).
-- **Photo OCR → Claude.** The camera/gallery buttons (read a photo of source text or
-  an exam question) call `api.anthropic.com`; `src/api-patch.js` rewrites that to the
-  same-origin `/api/anthropic` (`api/anthropic.js`, reads `ANTHROPIC_API_KEY`).
+Lyra is a **Vite** SPA (entry `src/main.jsx`) — there is no Next.js app. It is now
+**Gemini-only**: ONE same-origin serverless proxy carries everything.
+- **All AI → Gemini.** Coaching, X-Ray analysis, training, proofread, AND photo OCR
+  go through `src/api.js` → `/api/gemini` (`api/gemini.js`, reads `GEMINI_API_KEY`).
+  Photo OCR uses Gemini vision (`gemini-3-flash-preview`) via the same endpoint with
+  an image part — no Anthropic/Claude dependency anymore.
 
 ## What's already wired up (in this branch)
-- `api/gemini.js` — text-AI proxy (reads `GEMINI_API_KEY`).
-- `api/anthropic.js` — photo-OCR proxy (reads `ANTHROPIC_API_KEY`).
-- `middleware.js` — a Basic-Auth password gate over the whole site **and** both APIs.
+- `api/gemini.js` — the single AI proxy, text + vision (reads `GEMINI_API_KEY`).
+- `middleware.js` — a Basic-Auth password gate over the whole site **and** the API.
 - `vercel.json` — Vite framework preset.
-- `.env` stays gitignored; keys live ONLY in Vercel's env vars, never in git.
+- `.env` stays gitignored; the key lives ONLY in Vercel's env vars, never in git.
 
 ## One-time deploy (GitHub path — recommended, auto-redeploys on every push)
 1. Push this branch to GitHub (the remote is `adam08111/project-lyra`):
@@ -35,27 +33,12 @@ Lyra is a **Vite** SPA (entry `src/main.jsx`) — there is no Next.js app. It ne
 4. Add **Environment Variables** (Settings → Environment Variables), all environments:
    | Name | Required? | Value |
    |------|-----------|-------|
-   | `GEMINI_API_KEY` | **Yes** — all text AI | your Gemini key (copy from your local `.env`; never into git) |
+   | `GEMINI_API_KEY` | **Yes** — powers everything (text + photo OCR) | your Gemini key (copy from your local `.env`; never into git) |
    | `GATE_PASS` | recommended | the shared review password, e.g. `lyra-review-2026` |
    | `GATE_USER` | optional | the username colleagues type (defaults to `lyra`) |
-   | `ANTHROPIC_API_KEY` | only for photo OCR | your Anthropic key (see the OCR note below) |
 5. **Deploy.** You'll get a URL like `https://project-lyra.vercel.app`.
 
-## Photo OCR needs Anthropic credit (read this)
-The "Take photo / Gallery" buttons read text from a photo using **Claude vision**
-(`claude-sonnet-4-6`), the only non-Gemini call in the app. I verified the proxy
-works, but a live test returned:
-> *"Your credit balance is too low to access the Anthropic API."*
-So photo OCR will fail until you either:
-- **(a)** add credit to your Anthropic account (console.anthropic.com → Plans &
-  Billing) and set `ANTHROPIC_API_KEY` in Vercel — then OCR works as-is; **or**
-- **(b)** have me migrate OCR to **Gemini vision** so the whole app runs on your
-  one already-working Gemini key (no Anthropic account/credit needed). Recommended
-  if you don't want to top up Anthropic — ask and I'll do it.
-
-Everything else (paste text → X-Ray, coaching, training, proofread) runs on Gemini
-and is unaffected. If you skip OCR for now, leave `ANTHROPIC_API_KEY` unset; the
-photo buttons just show "couldn't read that photo," nothing else breaks.
+Just one key — Anthropic is no longer used (photo OCR runs on Gemini vision).
 
 ## Share with colleagues
 Send them: the URL + the username (`lyra`) + the `GATE_PASS` password. The browser

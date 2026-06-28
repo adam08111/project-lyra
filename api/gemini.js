@@ -68,14 +68,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { system, message, maxTokens = 1000, thinkingBudget, useSearch } = parsed;
+  const { system, message, maxTokens = 1000, thinkingBudget, useSearch, image } = parsed;
   const MODEL = parsed.model && ALLOWED_MODELS.has(parsed.model) ? parsed.model : DEFAULT_MODEL;
 
   const genConfig = { maxOutputTokens: maxTokens };
   if (thinkingBudget && !useSearch) genConfig.thinkingConfig = { thinkingBudget };
+  // Optional image (photo OCR): a Gemini vision inline_data part before the text.
+  const userParts = [];
+  if (image && image.data) userParts.push({ inline_data: { mime_type: image.mediaType || "image/jpeg", data: image.data } });
+  userParts.push({ text: message || "" });
   const geminiReq = {
     system_instruction: { parts: [{ text: system || "" }] },
-    contents: [{ role: "user", parts: [{ text: message || "" }] }],
+    contents: [{ role: "user", parts: userParts }],
     generationConfig: genConfig,
   };
   if (useSearch) geminiReq.tools = [{ google_search: {} }];

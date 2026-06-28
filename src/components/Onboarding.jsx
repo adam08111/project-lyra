@@ -3,7 +3,7 @@ import { COLORS, FONTS_LINK, writingTypes, wordCounts, placeholders, writingPurp
 import { keyframes, sharedStyles as s } from "../styles.js";
 import { SVGIcons, FeatherIcon } from "./Icons.jsx";
 import Sidebar from "./Sidebar.jsx";
-import { callAI } from "../api.js";
+import { callAI, extractTextFromImage } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
 import { parseTechniques } from "../utils.js";
 
@@ -241,23 +241,12 @@ Format as 4 numbered sections.`;
       setUploadedImage(reader.result);
       setScanning(true);
       try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 1000,
-            messages: [{
-              role: "user",
-              content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-                { type: "text", text: "Extract the writing task, essay question, or assignment prompt from this image. Return ONLY the text of the task/question — no commentary, no explanation. If there are multiple questions, extract all of them." }
-              ]
-            }]
-          }),
+        const extracted = await extractTextFromImage({
+          base64,
+          mediaType,
+          prompt: "Extract the writing task, essay question, or assignment prompt from this image. Return ONLY the text of the task/question — no commentary, no explanation. If there are multiple questions, extract all of them.",
+          model: getRouteConfig("ocr").model,
         });
-        const data = await res.json();
-        const extracted = data.content?.map(b => b.text || "").filter(Boolean).join("\n") || "";
         if (extracted) setTopic(prev => prev ? prev + "\n\n" + extracted : extracted);
       } catch (err) { /* silent */ }
       setScanning(false);

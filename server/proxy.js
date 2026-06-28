@@ -130,10 +130,10 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      const { system, message, maxTokens = 1000, thinkingBudget, useSearch } = parsed;
+      const { system, message, maxTokens = 1000, thinkingBudget, useSearch, image } = parsed;
       // Accept model from request body, validate against whitelist
       const MODEL = (parsed.model && ALLOWED_MODELS.has(parsed.model)) ? parsed.model : DEFAULT_MODEL;
-      console.log(`[Request] model=${MODEL} maxTokens=${maxTokens}${thinkingBudget ? ` thinkBudget=${thinkingBudget}` : ""}${useSearch ? " +search" : ""} system_len=${(system || "").length} msg_len=${(message || "").length}`);
+      console.log(`[Request] model=${MODEL} maxTokens=${maxTokens}${thinkingBudget ? ` thinkBudget=${thinkingBudget}` : ""}${useSearch ? " +search" : ""}${image ? " +image" : ""} system_len=${(system || "").length} msg_len=${(message || "").length}`);
 
       // Build Gemini request body
       const genConfig = { maxOutputTokens: maxTokens };
@@ -141,9 +141,13 @@ const server = http.createServer((req, res) => {
         // Disable thinking for search requests — thinking causes model to skip Google Search
         genConfig.thinkingConfig = { thinkingBudget };
       }
+      // Optional image (photo OCR): a Gemini vision inline_data part before the text.
+      const userParts = [];
+      if (image && image.data) userParts.push({ inline_data: { mime_type: image.mediaType || "image/jpeg", data: image.data } });
+      userParts.push({ text: message || "" });
       const geminiReq = {
         system_instruction: { parts: [{ text: system || "" }] },
-        contents: [{ role: "user", parts: [{ text: message || "" }] }],
+        contents: [{ role: "user", parts: userParts }],
         generationConfig: genConfig,
       };
       if (useSearch) {

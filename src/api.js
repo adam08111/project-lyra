@@ -1,3 +1,27 @@
+// Photo OCR via Gemini vision. Sends a base64 image + an extraction prompt to the
+// same /api/gemini proxy (which builds an inline_data part), and returns the
+// extracted text. Replaces the old direct Claude call — the app is now Gemini-only.
+export async function extractTextFromImage({ base64, mediaType, prompt, model, maxTokens = 2000 }) {
+  const res = await fetch("/api/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system: "",
+      message: prompt,
+      image: { data: base64, mediaType: mediaType || "image/jpeg" },
+      maxTokens,
+      stream: false,
+      ...(model ? { model } : {}),
+    }),
+  });
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "Unknown error");
+    throw new Error(`OCR request failed (${res.status}): ${errorText}`);
+  }
+  const data = await res.json();
+  return data.text || "";
+}
+
 export async function callAI(systemPrompt, userMessage, useSearch = false, maxTokens = 1000, thinkingBudget, onChunk, signal, model) {
   const body = { system: systemPrompt, message: userMessage, maxTokens };
   if (thinkingBudget) body.thinkingBudget = thinkingBudget;
