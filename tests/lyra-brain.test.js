@@ -47,9 +47,11 @@ describe("LYRA_BRAIN is prepended to coaching prompts", () => {
     expect(result).toContain("4-STEP COACHING PROTOCOL");
   });
 
-  it("buildTrainingExercisesPrompt includes LYRA_BRAIN", () => {
+  it("buildTrainingExercisesPrompt is a lite exercise generator — no LYRA_BRAIN (§88)", () => {
     const result = buildTrainingExercisesPrompt([{ technique: "Test", description: "d" }]);
-    expect(result).toContain("4-STEP COACHING PROTOCOL");
+    expect(result).toContain("writing exercise generator"); // its own instructions
+    expect(result).toContain("Reporter Voice");
+    expect(result).not.toContain("4-STEP COACHING PROTOCOL"); // route is brain:false — brain dropped
   });
 
   it("buildTrainingEvalPrompt includes LYRA_BRAIN", () => {

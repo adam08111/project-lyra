@@ -567,7 +567,9 @@ export function buildTrainingExercisesPrompt(techniques, avoid) {
     ? `\n\nALREADY PRACTISED — do NOT reuse or paraphrase these, pick a clearly different everyday topic:\n${avoidList.map((s) => `- "${s}"`).join("\n")}`
     : "";
 
-  return LYRA_BRAIN + `\n\nYou are a writing exercise generator for English learners. You will create ONE plain sentence for each writing technique listed below. Each sentence is written in "Reporter Voice" — flat, factual, informational, and boring. The student's job is to rewrite it in "Columnist Voice" using the technique.
+  // training_exercise is lite/brain:false; this builder defines Reporter/Columnist
+  // Voice itself below, so LYRA_BRAIN added nothing but ~15K wasted input tokens/call.
+  return `You are a writing exercise generator for English learners. You will create ONE plain sentence for each writing technique listed below. Each sentence is written in "Reporter Voice" — flat, factual, informational, and boring. The student's job is to rewrite it in "Columnist Voice" using the technique.
 
 Each sentence must be:
 
