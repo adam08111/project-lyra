@@ -198,10 +198,6 @@ const server = http.createServer((req, res) => {
             let buffer = "";
             let lastUsage = null; // Step-0: usageMetadata rides the FINAL SSE chunk; capture, log once after the loop
             const utf8Decoder = new StringDecoder("utf8");
-            // DEBUG: accumulate raw model text for translate-tier responses so we can
-            // inspect what the LITE model actually returned (pair structure, missing labels).
-            const isLiteTranslate = MODEL === "gemini-3.1-flash-lite" || MODEL === "gemini-3.1-flash-lite-preview";
-            let debugAccum = "";
             proxyRes.on("data", (chunk) => {
               // Use StringDecoder so multi-byte UTF-8 chars (Chinese, em-dashes, emoji)
               // aren't corrupted when split across chunk boundaries
@@ -217,10 +213,7 @@ const server = http.createServer((req, res) => {
                     const data = JSON.parse(jsonStr);
                     const parts = data.candidates?.[0]?.content?.parts || [];
                     for (const part of parts) {
-                      if (part.text) {
-                        if (isLiteTranslate) debugAccum += part.text;
-                        res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
-                      }
+                      if (part.text) res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
                     }
                     // Step-0: capture usage from whichever chunk carries it (the final
                     // SSE chunk) — logged ONCE after the stream ends, via the shared helper.
@@ -236,9 +229,6 @@ const server = http.createServer((req, res) => {
               // Flush any remaining bytes from the decoder
               const tail = utf8Decoder.end();
               if (tail) buffer += tail;
-              if (isLiteTranslate) {
-                console.log("[DEBUG translate response]", JSON.stringify(debugAccum.slice(0, 2000)));
-              }
               logTokenUsage(lastUsage, { model: MODEL, stream: true });
               res.write("data: [DONE]\n\n");
               res.end();
@@ -300,9 +290,6 @@ const server = http.createServer((req, res) => {
               try {
                 const geminiData = JSON.parse(responseBody);
                 const text = geminiData.candidates?.[0]?.content?.parts?.map(p => p.text || "").filter(Boolean).join("\n") || "";
-                if (MODEL === "gemini-3.1-flash-lite" || MODEL === "gemini-3.1-flash-lite-preview") {
-                  console.log("[DEBUG translate response]", JSON.stringify(text.slice(0, 2000)));
-                }
                 logTokenUsage(geminiData.usageMetadata, { model: MODEL, stream: false });
                 const result = { text };
                 // Include grounding search results if available
