@@ -2471,3 +2471,32 @@ Vercel Edge Middleware enforces HTTP Basic Auth over the WHOLE origin — the st
 ### 80.4 Verified
 Production `vite build` clean (dist 189 kB gzip). Both deploy files pass `node --check`. The function was exercised against the REAL Gemini API (mock req/res, real key, run from PowerShell which has network): non-streaming → `status=200 text="PONG"`; streaming SSE → `status=200 streamed="PONG"` — both modes round-trip, authenticate, and parse correctly. The remaining step (the Vercel import + setting `GEMINI_API_KEY`/`GATE_PASS`) needs the user's own Vercel login; scaffolding committed and ready.
 
+---
+
+## 81. UPDATE — 28 June 2026 — Deploy shape resolved: it's TWO proxies (Gemini + Claude OCR), §80 was half
+
+*(Numbering: the task brief labelled this §68; the log is past it — lands as §81.)*
+
+A second, more rigorous deploy-prep pass (Step 0 = "resolve the deployment shape FIRST"). It surfaced a real gap in §80: the app is NOT Gemini-only.
+
+### 81.1 The actual architecture (Step 0)
+- **Vite, not Next.js.** Entry is `src/main.jsx`; `package.json` has no `next` dep; there is no `next.config`, no `app/api/route`, no `lyra-app/`. The Next.js mention in old history is dead — the deployable is the Vite SPA. So the proxy must be Vercel **serverless functions** under `api/`, not Next.js API routes.
+- **Two providers, two endpoints.** `src/api.js` `callAI` → `/api/gemini` carries ALL text AI (coaching, X-Ray style_analysis, training, proofread). BUT `SourceSetup.jsx` (×2: source-text photo + exam-question photo) and `Onboarding.jsx` (×1: task photo) make DIRECT `fetch("https://api.anthropic.com/v1/messages")` calls with `claude-sonnet-4-6` for **photo OCR (Claude vision)**; `src/api-patch.js` patches `window.fetch` to rewrite those to the same-origin `/api/anthropic`. §80 only built `/api/gemini` — so on the §80 deploy every photo-OCR button would have hit a non-existent `/api/anthropic` and broken.
+
+### 81.2 Fix — the missing Claude proxy (`api/anthropic.js`)
+A second serverless function: reads `ANTHROPIC_API_KEY` from env, takes the auth-stripped body `api-patch.js` forwards, adds `x-api-key` + `anthropic-version: 2023-06-01`, posts to `api.anthropic.com/v1/messages`, returns Anthropic's JSON verbatim (the client reads `data.content`). Robust body read (pre-parsed object / string / raw stream), `maxDuration: 60`, 55s upstream timeout. (`server/proxy.js` and `vite.config.js` do NOT handle `/api/anthropic`, so photo OCR is currently broken in LOCAL dev too — pre-existing; the deploy is the first place it's wired. Flagged to the user; wiring dev is a separate small task.)
+
+### 81.3 The blocker that live testing caught — Anthropic credit is depleted
+Verified the new function against the REAL Anthropic API (mock req/res, real key, from PowerShell). The proxy is correct — it authenticated (a bad key → 401, not this) and forwarded — but Anthropic replied **400: "Your credit balance is too low to access the Anthropic API."** So OCR will not work until the user EITHER tops up Anthropic credit (then it works as-is) OR migrates OCR to **Gemini vision** (one already-working key, no Anthropic dependency — recommended; offered, not done — it's a feature change + the user's call). Text paste / X-Ray / coaching are all Gemini and unaffected.
+
+### 81.4 Security + env vars (Steps 1 + 3)
+- Key is server-side only: both functions read `process.env`; the browser calls same-origin `/api/*` and never sees a key; `api-patch.js` strips client auth headers. Repo grep for `AIza…` / `sk-ant-…` / `VITE_` found only `.env.example` + `README` PLACEHOLDERS — no real key committed, no `VITE_`-exposed secret. `.env` is gitignored (`git check-ignore` confirms); only `.env.example` is tracked (now documents all four vars).
+- **Env vars for the Vercel dashboard:** `GEMINI_API_KEY` (required — all text AI), `GATE_PASS` (+ optional `GATE_USER`) for the password gate, `ANTHROPIC_API_KEY` (only for photo OCR; needs account credit per 81.3).
+
+### 81.5 localStorage + HTTPS (Steps 4 + 5)
+- **Reviewer isolation (Step 4):** Lyra persists everything in `localStorage`, so each colleague on the public URL gets their OWN empty app — they can't see each other's or your work. Correct & fine for "try the app" feedback (true multi-tenant = the later Supabase migration, out of scope). Cold-start on a fresh origin is already proven: the Claude_Preview instance runs on empty storage and `main.jsx`'s `autoRestoreFromBackup` → `purgeInauthenticGrowthV1` → `migrateTruncatedTitlesV1` all run and the onboarding renders cleanly.
+- **HTTPS (Step 5):** the Vercel domain is a SECURE CONTEXT, so the camera capture + clipboard that fail on the http LAN-IP work there (clipboard already has the §53 `execCommand` fallback). Caveat: the photo *button* will work but its OCR backend is credit-blocked until 81.3 is resolved.
+
+### 81.6 Verified
+`node --check` on `api/anthropic.js` ✓. Live: `api/gemini.js` round-trips both modes (non-stream + SSE, `text="PONG"`); `api/anthropic.js` round-trips correctly and the only failure is the upstream credit message (proxy proven). `vite build` clean. No key committed. Deploy is complete pending the user's Vercel login + the OCR credit decision.
+
