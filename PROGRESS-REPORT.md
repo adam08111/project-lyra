@@ -2579,3 +2579,9 @@ Divergence (all targets had **0** commits the branch lacked → every one a stri
 ### 85.5 What this unblocks
 `main` now contains §16–§84. Vercel can deploy `main` directly (no need to point production at a feature branch) — not touched here, per the Vercel hold. Future work branches off the current `main`. Once Vercel is connected, "push to main = deploy" becomes literally true.
 
+---
+
+## 86. UPDATE — 28 June 2026 — `lyra-dev` folder switched to `main` (the §15 freeze is fully over)
+
+Closes §85.3's open item — the user chose "switch lyra-dev to main". Ran `git checkout main` in the `lyra-dev` main checkout, guarded: confirmed 0 modified/staged tracked files first, and used a plain checkout (no `-f` — git would refuse rather than clobber). Result: `lyra-dev` is on `main` at `397436b` (§85), in sync with `origin/main`; the folder now shows the latest §82–§85 code + report. The untracked files were preserved untouched — `CONSULTANT-REPORT.md` (a 2 Apr 2026 local consultant report, never committed), plus a stray `src/vite.config.js` and `src/.claude/`. `master` (§15) still exists as a ref but is no longer checked out in any worktree. The repo is now on one trunk; nothing was deleted.
+
