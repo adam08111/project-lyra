@@ -17,6 +17,7 @@
 
 import https from "https";
 import { StringDecoder } from "string_decoder";
+import { logTokenUsage } from "../src/token-metrics.js"; // Step-0 diagnostic (counts only)
 
 export const config = { maxDuration: 60 }; // Hobby plan ceiling
 
@@ -113,6 +114,7 @@ export default async function handler(req, res) {
         return;
       }
       let buffer = "";
+      let lastUsage = null; // Step-0: usageMetadata rides the FINAL SSE chunk; capture, log once after the loop
       const utf8Decoder = new StringDecoder("utf8");
       proxyRes.on("data", (chunk) => {
         buffer += utf8Decoder.write(chunk); // never split a multi-byte UTF-8 char
@@ -128,12 +130,14 @@ export default async function handler(req, res) {
             for (const part of parts) {
               if (part.text) res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
             }
+            if (data.usageMetadata) lastUsage = data.usageMetadata; // Step-0: capture for one post-loop log
           } catch (e) { /* skip unparseable chunk */ }
         }
       });
       proxyRes.on("end", () => {
         const tail = utf8Decoder.end();
         if (tail) buffer += tail;
+        logTokenUsage(lastUsage, { model: MODEL, stream: true });
         res.write("data: [DONE]\n\n");
         res.end();
       });
@@ -173,6 +177,7 @@ export default async function handler(req, res) {
       }
       try {
         const geminiData = JSON.parse(responseBody);
+        logTokenUsage(geminiData.usageMetadata, { model: MODEL, stream: false });
         const text = geminiData.candidates?.[0]?.content?.parts?.map((p) => p.text || "").filter(Boolean).join("\n") || "";
         const result = { text };
         const grounding = geminiData.candidates?.[0]?.groundingMetadata;

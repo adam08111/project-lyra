@@ -7,6 +7,7 @@ import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { StringDecoder } from "string_decoder";
+import { logTokenUsage } from "../src/token-metrics.js"; // Step-0 diagnostic (counts only)
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -195,6 +196,7 @@ const server = http.createServer((req, res) => {
             }
 
             let buffer = "";
+            let lastUsage = null; // Step-0: usageMetadata rides the FINAL SSE chunk; capture, log once after the loop
             const utf8Decoder = new StringDecoder("utf8");
             // DEBUG: accumulate raw model text for translate-tier responses so we can
             // inspect what the LITE model actually returned (pair structure, missing labels).
@@ -220,11 +222,9 @@ const server = http.createServer((req, res) => {
                         res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
                       }
                     }
-                    // Log token usage from final chunk
-                    const usage = data.usageMetadata;
-                    if (usage && usage.totalTokenCount) {
-                      console.log(`[Tokens] prompt=${usage.promptTokenCount || 0} response=${usage.candidatesTokenCount || 0} thinking=${usage.thoughtsTokenCount || 0} total=${usage.totalTokenCount || 0}`);
-                    }
+                    // Step-0: capture usage from whichever chunk carries it (the final
+                    // SSE chunk) — logged ONCE after the stream ends, via the shared helper.
+                    if (data.usageMetadata) lastUsage = data.usageMetadata;
                   } catch (e) {
                     // skip unparseable chunks
                   }
@@ -239,6 +239,7 @@ const server = http.createServer((req, res) => {
               if (isLiteTranslate) {
                 console.log("[DEBUG translate response]", JSON.stringify(debugAccum.slice(0, 2000)));
               }
+              logTokenUsage(lastUsage, { model: MODEL, stream: true });
               res.write("data: [DONE]\n\n");
               res.end();
             });
@@ -302,8 +303,7 @@ const server = http.createServer((req, res) => {
                 if (MODEL === "gemini-3.1-flash-lite" || MODEL === "gemini-3.1-flash-lite-preview") {
                   console.log("[DEBUG translate response]", JSON.stringify(text.slice(0, 2000)));
                 }
-                const usage = geminiData.usageMetadata;
-                if (usage) console.log(`[Tokens] prompt=${usage.promptTokenCount || 0} response=${usage.candidatesTokenCount || 0} thinking=${usage.thoughtsTokenCount || 0} total=${usage.totalTokenCount || 0}`);
+                logTokenUsage(geminiData.usageMetadata, { model: MODEL, stream: false });
                 const result = { text };
                 // Include grounding search results if available
                 const grounding = geminiData.candidates?.[0]?.groundingMetadata;
