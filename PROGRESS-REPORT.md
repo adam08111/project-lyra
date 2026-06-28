@@ -2500,3 +2500,25 @@ Verified the new function against the REAL Anthropic API (mock req/res, real key
 ### 81.6 Verified
 `node --check` on `api/anthropic.js` ✓. Live: `api/gemini.js` round-trips both modes (non-stream + SSE, `text="PONG"`); `api/anthropic.js` round-trips correctly and the only failure is the upstream credit message (proxy proven). `vite build` clean. No key committed. Deploy is complete pending the user's Vercel login + the OCR credit decision.
 
+---
+
+## 82. UPDATE — 28 June 2026 — OCR migrated to Gemini vision: the app is now ONE provider, ONE key
+
+Following §81's finding (photo OCR ran on Claude, and the user's Anthropic account is out of credit), the user chose to drop Anthropic entirely and run OCR on Gemini. Now the whole app needs only the one Gemini key.
+
+### 82.1 Model choice, backed by a live test (not a guess)
+The user pushed back ("gemini-3-flash-preview? sure?"), so I tested it instead of asserting: generated a text image (English + Traditional Chinese + digits) and ran OCR through both candidates. **Flash** (`gemini-flash-latest`) dropped digits ("繁體中文 **123**"); **Pro** (`gemini-3-flash-preview`) was perfect ("繁體中文 **12345**"). OCR accuracy directly affects a student's pasted source/exam text (and HK students work in 繁中), so the migration uses **Pro** — the test flipped my earlier lean toward Flash.
+
+### 82.2 The migration
+- **`ai-router.js`:** new `ocr` route → `gemini-3-flash-preview`, `thinkingBudget: 0`, `brain: false`.
+- **`api.js`:** new `extractTextFromImage({ base64, mediaType, prompt, model })` — POSTs to the SAME `/api/gemini` with an `image` field, returns the extracted text.
+- **Both proxies** (`api/gemini.js` for deploy, `server/proxy.js` for dev): accept an optional `image: { data, mediaType }` and prepend a Gemini-vision `inline_data` part to the user turn. (Wiring the dev proxy also fixes the pre-existing local-OCR gap from §81.2.)
+- **The 3 OCR call sites** (`SourceSetup` source-photo + exam-photo, `Onboarding` task-photo): the direct `claude-sonnet-4-6` `fetch` calls replaced with `extractTextFromImage(..., model: getRouteConfig("ocr").model)`.
+- **Removed entirely:** `api/anthropic.js`, `src/api-patch.js`, and its `import` in `main.jsx`. Repo grep confirms no `anthropic`/`claude` API references remain (only two descriptive code comments). One provider, one key — `ANTHROPIC_API_KEY` is no longer needed (DEPLOY.md + `.env.example` updated).
+
+### 82.3 Honest catch — a §79 test regression that had shipped red
+The migration's test run surfaced 1 failure in `lyra-brain.test.js`: it asserts `buildTrainingChatPrompt` contains "WHEN THE REWRITE LANDS", but §79 intentionally reworded that to "WHEN THE REWRITE **GENUINELY** LANDS" ("a real win, not a participation prize"). So §79 actually committed with this test failing and the "410 passed" reported then was wrong — a verification miss on my part. Fixed by updating the assertion to the intentional §79 wording (the test's purpose, the win-invite block, is unchanged).
+
+### 82.4 Verified
+`vite build` clean; `node --check` on both proxies; **410 tests pass** (genuinely — re-run after the fix). Live OCR end-to-end through BOTH the prod function (`api/gemini.js`) and the running dev proxy (`server/proxy.js`) on the real Pro model: status 200, full accurate extraction "The weekend felt like a prison. 繁體中文 12345" on both. App reloads and mounts cleanly, `extractTextFromImage` in the bundle, `api-patch` gone, no console errors. The app is now Gemini-only.
+
