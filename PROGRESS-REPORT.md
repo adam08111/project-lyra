@@ -2585,3 +2585,30 @@ Divergence (all targets had **0** commits the branch lacked → every one a stri
 
 Closes §85.3's open item — the user chose "switch lyra-dev to main". Ran `git checkout main` in the `lyra-dev` main checkout, guarded: confirmed 0 modified/staged tracked files first, and used a plain checkout (no `-f` — git would refuse rather than clobber). Result: `lyra-dev` is on `main` at `397436b` (§85), in sync with `origin/main`; the folder now shows the latest §82–§85 code + report. The untracked files were preserved untouched — `CONSULTANT-REPORT.md` (a 2 Apr 2026 local consultant report, never committed), plus a stray `src/vite.config.js` and `src/.claude/`. `master` (§15) still exists as a ref but is no longer checked out in any worktree. The repo is now on one trunk; nothing was deleted.
 
+---
+
+## 87. UPDATE — 28 June 2026 — Token + cache-hit logging (diagnostic) — implicit caching IS active
+
+Step 0 of the token-saving mission: instrument the proxies to measure whether Gemini's implicit caching already discounts the ~15K-token `LYRA_BRAIN` prefix that rides every Pro call. The docs disagreed (dev-API says implicit caching is on for Gemini 3; Vertex says 2.5-only). The only ground truth is `usageMetadata.cachedContentTokenCount` from our own calls. DIAGNOSTIC ONLY — no client-facing change.
+
+### 87.1 The shared helper (`src/token-metrics.js`)
+ONE `logTokenUsage(usage, { model, task, stream })` imported by BOTH proxies (single source of truth, so dev/prod can't drift on what they log). Counts only — NEVER prompt/response text (student data, minors). Fully try/catch'd: it can never throw or block a response (#7). Lives in `src/` (not `server/`) so Vercel bundles it for `api/gemini.js`; `server/` is `.vercelignore`'d. Optional `TOKEN_DEBUG=1` dumps the raw `usageMetadata` (integers, safe) to confirm field names.
+
+### 87.2 Field names CONFIRMED (not assumed)
+Ran once with `TOKEN_DEBUG=1` against the live API. Raw dump confirms the 2026 field names: `promptTokenCount`, `cachedContentTokenCount` (+ `cacheTokensDetails`), `candidatesTokenCount`, `totalTokenCount`, and `thoughtsTokenCount` (seen as `think=44–46` on the wired path). The helper's assumed names are all correct — no fix needed.
+
+### 87.3 Wiring (both proxies, BOTH paths)
+`server/proxy.js` (dev) and `api/gemini.js` (prod), mirrored per the §82 both-proxies-together discipline. Non-stream: `logTokenUsage(geminiData.usageMetadata, …)` after the upstream parse. Stream: `usageMetadata` rides the FINAL SSE chunk, so a `lastUsage` is captured per-chunk and logged ONCE after the read loop — instrumenting only the non-stream branch would have shown nothing for normal coaching turns. The old noisy per-chunk `[Tokens]` log was replaced by the single post-loop helper call. `task` is `?` (the route name isn't in scope at the proxy; no plumbing added, per spec).
+
+### 87.4 THE FINDING — implicit caching is real for `gemini-3-flash-preview`
+Consecutive Pro calls with the SAME `LYRA_BRAIN` prefix (verified twice — a direct-API script and the live dev proxy, both branches):
+```
+call 1: prompt=14926 cached=0    (0% hit)
+call 2: prompt=14926 cached=0–8173 (warm-up varies)
+call 3: prompt=14926 cached=8178 (55% hit)   stream call: cached=8178 (55% hit)
+```
+So implicit caching DOES discount the brain — but only **~55% of the prefix**, and it's **best-effort**: cold on the first call(s), warm after a couple. Per the spec's decision tree this is the "cached > 0 → tuning mode, explicit caching OPTIONAL" branch — with the nuance that explicit context caching would capture the FULL prefix (not 55%) and be reliable (not warm-up-dependent), so it's a worthwhile-but-not-mandatory next step. The numbers for that decision now exist.
+
+### 87.5 Verified + flagged
+**414 tests** (+4: the helper unit test — computes cached/hit%, never throws on null/{}/missing-field). `vite build` clean; both proxies `node --check`; the app mounts with no console errors; all proxy calls returned HTTP 200 with unchanged client bytes. **Flagged, NOT changed (out of scope):** the pre-existing `[DEBUG translate response]` log in both proxies prints translated CONTENT (not counts) for lite-tier calls — it predates this task, but given the minors-privacy rule it's worth removing in a later cleanup.
+
