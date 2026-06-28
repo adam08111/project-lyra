@@ -2453,3 +2453,21 @@ The gush wasn't a model quirk; the prompts ordered it. Across three brains: `lyr
 ### 79.3 Verified live (real Pro model, edited prompts, end-to-end through the proxy)
 Re-ran the EXACT failing shape — a forced "solitary confinement cell" metaphor + misused "blunder" — through `buildTrainingChatPrompt` → `gemini-3-flash-preview`. Before: "your creative instinct is incredible … stunning … highly sophisticated". After: *"your … solitary confinement cell is a strong image, but it feels disconnected … 'blunder' is quite formal and a bit 'stiff' — it doesn't carry the same emotional weight … your sentence feels like two separate ideas glued together with 'and,' which keeps it sounding flat."* It now critiques the very things it used to inflate, leads with the problem, no ritual compliment. Counter-check (didn't overcorrect into harshness): a genuinely strong rewrite got specific EARNED acknowledgment ("the 'grey corridor' is a solid start — it gives the reader a visual") then honest critique — praise is now earned and measured, not automatic. **410 tests** still green (prompt-only change; welcome's "hollow praise" assertion intact); no console errors.
 
+---
+
+## 80. UPDATE — 28 June 2026 — Publish for colleague review: Vercel deploy + password gate
+
+The app only worked on the user's home Wi-Fi (vite dev server on the LAN). To let colleagues review it from anywhere, it needs a public, always-on host — frontend + the key-hiding proxy on ONE origin (the client uses a relative `fetch("/api/gemini")`). Chosen (with the user): **Vercel** + a **shared-password gate**.
+
+### 80.1 The proxy as a serverless function (`api/gemini.js`)
+Vercel serves `/api/*` from the `api/` dir on the SAME origin as the static build, so the relative fetch Just Works in production. `api/gemini.js` is the deploy-twin of `server/proxy.js` (kept for local dev): same Gemini request building, same SSE-streaming + buffered-JSON modes (the app's `callAI` uses both — streaming only when an `onChunk` is passed), same StringDecoder/Buffer.concat UTF-8 handling. Differences forced by serverless: key from `process.env.GEMINI_API_KEY` only (no `.env` on the host); SINGLE upstream attempt with a 55s timeout under the 60s Hobby function cap (`export const config = { maxDuration: 60 }`) — the proxy's 3×180s retry budget can't fit; in-memory rate limiting dropped (per-invocation = useless; abuse is handled by the gate). `/api/rate-limit-status` was NOT ported — grep confirms the app never calls it.
+
+### 80.2 Shared-password gate (`middleware.js`)
+Vercel Edge Middleware enforces HTTP Basic Auth over the WHOLE origin — the static app AND `/api/gemini` — so a leaked link can't burn the Gemini quota and a direct API hit is also blocked. Password via env var `GATE_PASS` (+ optional `GATE_USER`, default "lyra"); the gate is OFF when `GATE_PASS` is unset, so it flips on/off via env var with no code change. The browser prompts once and caches the credentials for the origin (including the app's fetches).
+
+### 80.3 Config + docs
+`vercel.json` (Vite framework preset), `package.json` `build` script, `.vercelignore` (drops `server/`, `tests/`, the report MDs from the upload), and `DEPLOY.md` (GitHub-import + CLI paths, the three env vars, the gate on/off, and the 60s-cap caveat with the Render/Railway fallback for long thinking-heavy calls). `.env` stays gitignored — the key lives only in Vercel env vars, never in git (verified via `git check-ignore`).
+
+### 80.4 Verified
+Production `vite build` clean (dist 189 kB gzip). Both deploy files pass `node --check`. The function was exercised against the REAL Gemini API (mock req/res, real key, run from PowerShell which has network): non-streaming → `status=200 text="PONG"`; streaming SSE → `status=200 streamed="PONG"` — both modes round-trip, authenticate, and parse correctly. The remaining step (the Vercel import + setting `GEMINI_API_KEY`/`GATE_PASS`) needs the user's own Vercel login; scaffolding committed and ready.
+
