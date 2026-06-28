@@ -2522,3 +2522,19 @@ The migration's test run surfaced 1 failure in `lyra-brain.test.js`: it asserts 
 ### 82.4 Verified
 `vite build` clean; `node --check` on both proxies; **410 tests pass** (genuinely — re-run after the fix). Live OCR end-to-end through BOTH the prod function (`api/gemini.js`) and the running dev proxy (`server/proxy.js`) on the real Pro model: status 200, full accurate extraction "The weekend felt like a prison. 繁體中文 12345" on both. App reloads and mounts cleanly, `extractTextFromImage` in the bundle, `api-patch` gone, no console errors. The app is now Gemini-only.
 
+---
+
+## 83. UPDATE — 28 June 2026 — Grammar-Log "Teach me this" caches the lesson (no refetch on re-open)
+
+Reported: in the Grammar Log, pressing "Teach me this" loads an AI lesson; pressing "Hide lesson" then "Teach me this" again **refetches new content every time** — a reflash. It should fetch once and just re-show on re-open.
+
+### 83.1 Root cause
+`fetchMiniLesson` (`lyra.jsx`) toggled by DELETING the cached lesson on hide: `if (content) { delete miniLesson[entry.id]; return; }`. So "Hide lesson" discarded the content, and the next "Teach me this" found nothing cached → a fresh `callAI("grammar_lesson")` → new content + loading flash.
+
+### 83.2 Fix
+- `lyra.jsx` `fetchMiniLesson`: when the lesson is already fetched successfully, toggle a `hidden` flag instead of deleting — the content stays cached, so re-opening NEVER calls the AI again. Added a loading guard (ignore taps mid-fetch). An ERRORED attempt is marked `error: true` and is NOT treated as cached, so "Teach me this" still retries (preserves the old retry-after-error path — no regression).
+- `GrammarLog.jsx`: the lesson card renders on `content && !hidden && !loading`; the button reads "Teach me this" (first time / after an error) → "Hide lesson" (open) → "Show lesson" (collapsed, cached). A successful lesson is cached for the whole session (the `miniLesson` map lives in `lyra.jsx`, so it survives closing/reopening the log too).
+
+### 83.3 Verified
+`vite build` clean; **410 tests pass**. Served bundle confirms the shipped logic: delete-on-hide gone, `hidden` toggle present, success-only caching, error marking. (Did not seed the preview's localStorage to click through — per the standing no-seed rule — so verified by shipped-logic inspection + the state machine: fetch-once → hide keeps content → show re-renders from cache with no AI call.)
+
