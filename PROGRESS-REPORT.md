@@ -2630,13 +2630,13 @@ The Reporter-Voice exercise generator prepended the full ~15K-token `LYRA_BRAIN`
 
 ---
 
-## 89. UPDATE — 1 July 2026 — File-upload (paperclip) button in the chat box
+## 89. UPDATE — 1 July 2026 — File-upload ("+") button in the chat box, right side above send
 
-Asked for a file-upload button in the Lyra chat, "like Claude does". Added a paperclip button to the left of the chat input (`ChatTab.jsx`) + a new `PaperclipIcon` (matches the existing CameraIcon/GalleryIcon line-art).
+Asked for a file-upload button in the Lyra chat, "like Claude does". A "+" button now sits in a right-hand column ABOVE the send (→) button (`ChatTab.jsx`), with a new `PlusIcon` (matches the existing CameraIcon/GalleryIcon line-art). (First cut was a paperclip on the LEFT; revised per the user's annotation to a "+" on the right, above enter — the paperclip icon was removed.)
 
 **What it does:** tapping it opens an image picker (`accept="image/*"`); the photo is OCR'd by the existing §82 Gemini-vision path (`prepareImageForOCR` HEIC→JPEG+downscale → `extractTextFromImage` on the `getRouteConfig("ocr")` Pro model) and the extracted text is dropped into the chat box for the student to review and send. It APPENDS to whatever's already typed (never clobbers), focuses the box, shows a `featherWrite` spinner while reading, and a small inline error if the photo can't be read.
 
 **Why OCR-to-text, not attach-image-to-the-model:** Lyra's chat coach is text-based, so turning the photo into editable text (a) reuses proven infra, (b) lets the student fix OCR slips before sending, and (c) synergizes with §76 (a substantial pasted draft auto-loads into "My Writing") and the proofread — the photo'd essay becomes the same text both Lyras work on. Cheaper too (one vision call, then normal text coaching) than carrying an image on every turn.
 
-**Verified:** `vite build` clean; **414 tests** still green; the running dev preview serves the new ChatTab (paperclip button, `handleChatPhoto`, the §82 OCR helpers all present in the bundle). Did NOT drive the full 5-screen flow to the live chat for a screenshot — it would fire a billable greeting call + create headless state for a low-risk visual addition; on-device tap is the cheap real-environment check.
+**Verified:** `vite build` clean (twice — initial + after the +/reposition revision); **414 tests** still green; no `Paperclip` references remain; the running dev preview HMR-serves the new ChatTab (`PlusIcon`, `handleChatPhoto`, the §82 OCR helpers all present). Layout is deterministic CSS (textarea `flex:1` left; a right `flex-direction:column` with `+` above send), and the user is viewing the live preview directly — so I did NOT drive the full 5-screen headless flow for a screenshot (it would fire a billable greeting call + create state for a low-risk visual change).
 
