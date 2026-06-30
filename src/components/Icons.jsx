@@ -32,6 +32,12 @@ export const GalleryIcon = ({ size = 13, color = COLORS.muted }) => (
   </svg>
 );
 
+export const PaperclipIcon = ({ size = 16, color = COLORS.muted }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M21.44 11.05l-9.19 9.19a5 5 0 01-7.07-7.07l9.19-9.19a3.5 3.5 0 014.95 4.95l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+  </svg>
+);
+
 // §53 — chat message action-row icons (Copy · Translate · Reload). Same line-art
 // stroke idiom as the camera/gallery chips above; default to COLORS.muted.
 export const CopyIcon = ({ size = 15, color = COLORS.muted }) => (

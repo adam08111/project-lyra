@@ -3,8 +3,11 @@ import { COLORS, QUICK_ACTION_MESSAGES } from "../constants.js";
 import { formatSources } from "../utils.js";
 import { cleanMessageText, canReloadMessage, getMessageTranslation, copyToClipboard, parseChatGrammarFixes } from "../chat-actions.js";
 import { sharedStyles as s } from "../styles.js";
-import { FeatherIcon, CopyIcon, TranslateIcon, ReloadIcon } from "./Icons.jsx";
+import { FeatherIcon, CopyIcon, TranslateIcon, ReloadIcon, PaperclipIcon } from "./Icons.jsx";
 import TypewriterBubble from "./TypewriterBubble.jsx";
+import { extractTextFromImage } from "../api.js";
+import { getRouteConfig } from "../ai-router.js";
+import { prepareImageForOCR } from "../image-utils.js";
 
 // §70 — one-tap "save the critique's grammar fixes to the Grammar Log" button.
 // Parses the visible message (memoised) and renders only when it carries real
@@ -63,6 +66,38 @@ export default function ChatTab({
   const chatEndRef = useRef(null);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState("");
+
+  // File upload in chat: OCR a photo of the student's writing (Gemini vision,
+  // §82) straight into the chat box for them to review and send. Appends to
+  // whatever's already typed, never clobbers it.
+  const handleChatPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file after a failure
+    if (!file) return;
+    setScanning(true);
+    setScanError("");
+    try {
+      const { dataUrl, mediaType } = await prepareImageForOCR(file); // HEIC→JPEG + downscale
+      const extracted = await extractTextFromImage({
+        base64: dataUrl.split(",")[1],
+        mediaType,
+        prompt: "Extract ALL the text from this image. Return ONLY the extracted text — no commentary, no explanation. Preserve paragraphs and line breaks.",
+        model: getRouteConfig("ocr").model,
+      });
+      if (extracted && extracted.trim()) {
+        setChatInput(prev => (prev ? prev + "\n\n" : "") + extracted.trim());
+        requestAnimationFrame(() => chatInputRef.current?.focus());
+      } else {
+        setScanError("Couldn't read any text in that photo — try a clearer shot or a screenshot.");
+      }
+    } catch (err) {
+      setScanError("Couldn't read that photo — try a screenshot instead.");
+    }
+    setScanning(false);
+  };
   const scrollRafRef = useRef(0);
   // §41: only USER scrolls may collapse the header. The auto-scroll effect
   // below (the streamed greeting messages[0] growing + the on-reply anchor
@@ -371,8 +406,24 @@ export default function ChatTab({
         ))}
       </div>
 
+      {scanError && (
+        <div style={{ padding: "0 16px 6px", fontSize: 11, color: COLORS.red || "#c44", background: COLORS.card, flexShrink: 0 }}>{scanError}</div>
+      )}
+
       {/* Chat input */}
       <div style={{ padding: "10px 16px 14px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.card, display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0 }}>
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleChatPhoto} style={{ display: "none" }} />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={scanning || chatLoading}
+          title="Upload a photo of your writing — Lyra reads the text into the chat"
+          aria-label="Upload a photo of your writing"
+          style={{ ...s.btn, padding: "10px 12px", borderRadius: 20, fontSize: 13, background: COLORS.card, borderColor: COLORS.border, color: COLORS.muted, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 44, flexShrink: 0, opacity: (scanning || chatLoading) ? 0.5 : 1, cursor: (scanning || chatLoading) ? "default" : "pointer" }}
+        >
+          {scanning
+            ? <div style={{ animation: "featherWrite 1.8s ease-in-out infinite", display: "inline-flex" }}><FeatherIcon size={15} color={COLORS.muted} /></div>
+            : <PaperclipIcon size={16} color={COLORS.muted} />}
+        </button>
         <textarea
           ref={chatInputRef}
           rows={1}
