@@ -2628,3 +2628,15 @@ The Reporter-Voice exercise generator prepended the full ~15K-token `LYRA_BRAIN`
 ### 88.3 Verified
 **414 tests** (updated the one test that asserted the exercises prompt "includes LYRA_BRAIN" → now asserts the generator's own instructions + that the brain is gone). `vite build` clean. Live against the restarted dev proxy: a translate call logged only `[tokens] prompt=31 … total=57` with **no `[DEBUG translate response]`** (the Chinese text never hit stdout); the exercises call dropped from ~15K to **system_len=1332 (~319 prompt tokens)** and still generated a correct flat Reporter-Voice sentence. App behaves identically; client bytes unchanged.
 
+---
+
+## 89. UPDATE — 1 July 2026 — File-upload (paperclip) button in the chat box
+
+Asked for a file-upload button in the Lyra chat, "like Claude does". Added a paperclip button to the left of the chat input (`ChatTab.jsx`) + a new `PaperclipIcon` (matches the existing CameraIcon/GalleryIcon line-art).
+
+**What it does:** tapping it opens an image picker (`accept="image/*"`); the photo is OCR'd by the existing §82 Gemini-vision path (`prepareImageForOCR` HEIC→JPEG+downscale → `extractTextFromImage` on the `getRouteConfig("ocr")` Pro model) and the extracted text is dropped into the chat box for the student to review and send. It APPENDS to whatever's already typed (never clobbers), focuses the box, shows a `featherWrite` spinner while reading, and a small inline error if the photo can't be read.
+
+**Why OCR-to-text, not attach-image-to-the-model:** Lyra's chat coach is text-based, so turning the photo into editable text (a) reuses proven infra, (b) lets the student fix OCR slips before sending, and (c) synergizes with §76 (a substantial pasted draft auto-loads into "My Writing") and the proofread — the photo'd essay becomes the same text both Lyras work on. Cheaper too (one vision call, then normal text coaching) than carrying an image on every turn.
+
+**Verified:** `vite build` clean; **414 tests** still green; the running dev preview serves the new ChatTab (paperclip button, `handleChatPhoto`, the §82 OCR helpers all present in the bundle). Did NOT drive the full 5-screen flow to the live chat for a screenshot — it would fire a billable greeting call + create headless state for a low-risk visual addition; on-device tap is the cheap real-environment check.
+
