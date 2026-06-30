@@ -3,7 +3,7 @@ import { COLORS, QUICK_ACTION_MESSAGES } from "../constants.js";
 import { formatSources } from "../utils.js";
 import { cleanMessageText, canReloadMessage, getMessageTranslation, copyToClipboard, parseChatGrammarFixes } from "../chat-actions.js";
 import { sharedStyles as s } from "../styles.js";
-import { FeatherIcon, CopyIcon, TranslateIcon, ReloadIcon, PaperclipIcon } from "./Icons.jsx";
+import { FeatherIcon, CopyIcon, TranslateIcon, ReloadIcon, PlusIcon } from "./Icons.jsx";
 import TypewriterBubble from "./TypewriterBubble.jsx";
 import { extractTextFromImage } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
@@ -413,17 +413,6 @@ export default function ChatTab({
       {/* Chat input */}
       <div style={{ padding: "10px 16px 14px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.card, display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0 }}>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleChatPhoto} style={{ display: "none" }} />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={scanning || chatLoading}
-          title="Upload a photo of your writing — Lyra reads the text into the chat"
-          aria-label="Upload a photo of your writing"
-          style={{ ...s.btn, padding: "10px 12px", borderRadius: 20, fontSize: 13, background: COLORS.card, borderColor: COLORS.border, color: COLORS.muted, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 44, flexShrink: 0, opacity: (scanning || chatLoading) ? 0.5 : 1, cursor: (scanning || chatLoading) ? "default" : "pointer" }}
-        >
-          {scanning
-            ? <div style={{ animation: "featherWrite 1.8s ease-in-out infinite", display: "inline-flex" }}><FeatherIcon size={15} color={COLORS.muted} /></div>
-            : <PaperclipIcon size={16} color={COLORS.muted} />}
-        </button>
         <textarea
           ref={chatInputRef}
           rows={1}
@@ -433,13 +422,27 @@ export default function ChatTab({
           placeholder={chatLoading || typingMsg ? "Lyra is thinking..." : "Ask Lyra anything..."}
           style={{ flex: 1, padding: "10px 16px", borderRadius: 20, border: `1.5px solid ${COLORS.border}`, background: COLORS.bg2, fontFamily: "'Courier Prime', monospace", fontSize: 14, color: COLORS.text, resize: "none", overflow: "hidden", lineHeight: 1.5, minHeight: 40, maxHeight: 120 }}
         />
-        {(chatLoading || typingMsg) ? (
-          <button onClick={stopChat} style={{ ...s.btn, padding: "10px 18px", borderRadius: 20, fontSize: 13, background: COLORS.card, borderColor: COLORS.border, color: COLORS.muted, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 44 }}>
-            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: COLORS.muted }} />
+        {/* right column: "+" upload on top, send/stop below */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch", flexShrink: 0 }}>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={scanning || chatLoading}
+            title="Upload a photo of your writing — Lyra reads the text into the chat"
+            aria-label="Upload a photo of your writing"
+            style={{ ...s.btn, padding: "6px 0", borderRadius: 16, fontSize: 13, background: COLORS.card, borderColor: COLORS.border, color: COLORS.muted, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 44, opacity: (scanning || chatLoading) ? 0.5 : 1, cursor: (scanning || chatLoading) ? "default" : "pointer" }}
+          >
+            {scanning
+              ? <div style={{ animation: "featherWrite 1.8s ease-in-out infinite", display: "inline-flex" }}><FeatherIcon size={15} color={COLORS.muted} /></div>
+              : <PlusIcon size={18} color={COLORS.muted} />}
           </button>
-        ) : (
-          <button onClick={() => { sendChat(chatInput); setChatInput(""); }} disabled={!chatInput.trim()} style={{ ...s.btn, padding: "10px 18px", borderRadius: 20, fontSize: 13, ...(!chatInput.trim() ? s.btnDisabled : {}) }}>→</button>
-        )}
+          {(chatLoading || typingMsg) ? (
+            <button onClick={stopChat} style={{ ...s.btn, padding: "10px 18px", borderRadius: 20, fontSize: 13, background: COLORS.card, borderColor: COLORS.border, color: COLORS.muted, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 44 }}>
+              <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: COLORS.muted }} />
+            </button>
+          ) : (
+            <button onClick={() => { sendChat(chatInput); setChatInput(""); }} disabled={!chatInput.trim()} style={{ ...s.btn, padding: "10px 18px", borderRadius: 20, fontSize: 13, ...(!chatInput.trim() ? s.btnDisabled : {}) }}>→</button>
+          )}
+        </div>
       </div>
     </div>
   );
