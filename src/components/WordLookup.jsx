@@ -43,9 +43,15 @@ function speakWord(text, lang) {
     const u = new SpeechSynthesisUtterance(String(text));
     u.lang = lang;
     u.rate = 0.9;
-    const voices = synth.getVoices() || [];
-    const v = voices.find(x => x.lang === lang)
-      || voices.find(x => (x.lang || "").replace("_", "-").toLowerCase().startsWith(lang.slice(0, 2)));
+    // DETERMINISTIC voice pick (the "sometimes man / sometimes woman" bug was the
+    // browser's default voice varying with getVoices() load timing): prefer an
+    // EXACT accent match (en-GB vs en-US → genuinely different), else same-language,
+    // and always sort by name so the same accent yields the same voice every time.
+    const norm = (l) => (l || "").replace("_", "-").toLowerCase();
+    const voices = (synth.getVoices() || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const exact = voices.find(v => norm(v.lang) === norm(lang));
+    const sameLang = voices.find(v => norm(v.lang).startsWith(lang.slice(0, 2).toLowerCase()));
+    const v = exact || sameLang;
     if (v) u.voice = v;
     synth.speak(u);
   } catch (e) { /* silent — TTS unavailable on this device */ }
@@ -260,12 +266,18 @@ export default function WordLookup({ trackCall }) {
     } catch (e) { /* silent */ }
   };
 
-  // Play the recorded pronunciation when we have it (genuinely distinct US/UK);
-  // otherwise fall back to browser TTS in the right accent (device-dependent).
-  const playPron = (url, lang) => {
+  // Play the recorded pronunciation (genuinely distinct US/UK). If the fetch hasn't
+  // landed yet when the button is tapped, fetch on-demand FIRST (cached) — otherwise
+  // a quick tap raced the async fetch and fell back to TTS, whose voice varied by
+  // load timing (the "sometimes man, sometimes woman, no US/UK difference" bug).
+  const playPron = async (accent) => {
     const word = state.entry?.word || popup?.word;
+    const lang = accent === "uk" ? "en-GB" : "en-US";
+    let p = pron;
+    if (!p) { try { p = await fetchPronunciation(word); if (p) setPron(p); } catch (e) { /* offline */ } }
+    const url = p && (accent === "uk" ? p.audioUk : p.audioUs);
     if (url) {
-      try { new Audio(url).play().catch(() => speakWord(word, lang)); return; } catch (e) { /* fall through */ }
+      try { await new Audio(url).play(); return; } catch (e) { /* fall through to TTS */ }
     }
     speakWord(word, lang);
   };
@@ -391,12 +403,12 @@ export default function WordLookup({ trackCall }) {
                     the IPA is shown when the lookup provided it. */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
                   {[
-                    { lab: "UK", lang: "en-GB", ipa: (pron?.ipaUk || state.entry.ipa_uk || ""), audio: pron?.audioUk },
-                    { lab: "US", lang: "en-US", ipa: (pron?.ipaUs || state.entry.ipa_us || ""), audio: pron?.audioUs },
+                    { lab: "UK", accent: "uk", ipa: (pron?.ipaUk || state.entry.ipa_uk || "") },
+                    { lab: "US", accent: "us", ipa: (pron?.ipaUs || state.entry.ipa_us || "") },
                   ].map(p => (
                     <button
                       key={p.lab}
-                      onClick={() => playPron(p.audio, p.lang)}
+                      onClick={() => playPron(p.accent)}
                       title={`Play the ${p.lab} pronunciation`}
                       aria-label={`Play the ${p.lab} pronunciation of ${popup.word}`}
                       style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 11, padding: "3px 9px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: "pointer", touchAction: "manipulation" }}
