@@ -686,6 +686,26 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
   // by default; it's long) and the skills list (open by default; the main content).
   const [showArticle, setShowArticle] = useState(false);
   const [showSkills, setShowSkills] = useState(true);
+  // §91.1: translate the source article to Traditional Chinese — same pattern as the
+  // X-Ray "Original text" translate (translateWithGuard + the lite translate route).
+  const [translatingArticle, setTranslatingArticle] = useState(false);
+  const [articleZh, setArticleZh] = useState(null);
+  const [showArticleZh, setShowArticleZh] = useState(false);
+  const handleTranslateArticle = async () => {
+    if (!skill.sourceText || translatingArticle) return;
+    if (showArticleZh) { setShowArticleZh(false); return; } // toggle off
+    if (articleZh) { setShowArticleZh(true); return; }       // cached — just show
+    setTranslatingArticle(true);
+    try {
+      const result = await translateWithGuard(skill.sourceText, getRouteConfig("translate"), trackCall);
+      setArticleZh(result);
+      setShowArticleZh(true);
+    } catch (e) {
+      setArticleZh("翻譯失敗，請再試一次。");
+      setShowArticleZh(true);
+    }
+    setTranslatingArticle(false);
+  };
   const toggleSelect = (i) => setSelected(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   const cancelSelect = () => { setSelectMode(null); setSelected(new Set()); };
   // §91: force the skills list open when entering select mode, so the cards the
@@ -767,9 +787,39 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
             <span style={{ color: COLORS.muted, fontSize: 12, fontWeight: 400 }}>{showArticle ? "▾ hide" : "▸ read"}</span>
           </button>
           {showArticle && (
-            <div style={{ marginTop: 8, padding: "12px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.bg2, maxHeight: 320, overflowY: "auto", fontFamily: mono, fontSize: 12, color: COLORS.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-              {skill.sourceText}
-            </div>
+            <>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <button
+                  onClick={handleTranslateArticle}
+                  disabled={translatingArticle}
+                  style={{ fontSize: 10, fontFamily: mono, padding: "4px 10px", borderRadius: 8, border: `1.5px solid ${COLORS.border}`, background: translatingArticle ? COLORS.bg2 : COLORS.card, color: COLORS.heading, cursor: translatingArticle ? "default" : "pointer", fontWeight: 600 }}
+                >
+                  {translatingArticle ? "翻譯中..." : showArticleZh ? "隱藏翻譯" : "翻譯成中文"}
+                </button>
+              </div>
+              <div style={{ marginTop: 8, padding: "12px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.bg2, maxHeight: 320, overflowY: "auto", fontFamily: mono, fontSize: 12, color: COLORS.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                {skill.sourceText}
+                {showArticleZh && articleZh && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}`, whiteSpace: "normal" }}>
+                    {articleZh
+                      .split(/\n\s*\n/)
+                      .map(pair => pair.trim())
+                      .filter(Boolean)
+                      .map((pair, i) => {
+                        const en = (pair.match(/^EN:\s*(.+?)(?:\n|$)/s) || [])[1]?.trim() || "";
+                        const zh = (pair.match(/ZH:\s*(.+)$/s) || [])[1]?.trim() || "";
+                        if (!en && !zh) return null;
+                        return (
+                          <div key={i} style={{ marginBottom: 10, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
+                            {en && <div style={{ fontSize: 11, color: COLORS.text, lineHeight: 1.6, fontStyle: "italic" }}>{en}</div>}
+                            {zh && <div style={{ fontSize: 13, color: COLORS.heading, lineHeight: 1.7, marginTop: 3 }}>{zh}</div>}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}
