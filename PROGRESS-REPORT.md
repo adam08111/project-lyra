@@ -2668,3 +2668,6 @@ Asked, for the Writers tab writer detail: show the writer's article(s) in a coll
 
 **Verified:** `vite build` clean; **414 tests** green; live in the preview (HMR).
 
+### 91.1 — translate button on the article (user: "translation button missed")
+The new article section lacked the app-wide 翻譯成中文 toggle that every X-Ray section / saved concept has. Added it, mirroring the X-Ray "Original text" translate EXACTLY: a `翻譯成中文 / 隱藏翻譯 / 翻譯中...` button (shown when the article is expanded) → `translateWithGuard(skill.sourceText, getRouteConfig("translate"), trackCall)` (lite translate route) → the EN:/ZH: sentence pairs render below the passage using the SAME parser/layout as XRayView (so the Traditional-Chinese output is consistent). Cached after the first translate (toggle re-shows without re-calling); error → "翻譯失敗，請再試一次。". `vite build` clean; **414 tests** green.
+
