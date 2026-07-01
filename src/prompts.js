@@ -991,11 +991,14 @@ Rules:
 - Plain everyday English — a definition a 14-year-old reads in one breath. No jargon.
 - All *_zh fields: Traditional Chinese (繁體中文) ONLY — never Simplified. STANDARD WRITTEN Chinese (書面語) — natural Hong Kong/Taiwan written style. NEVER Cantonese colloquial/spoken forms: no 係/嘅/唔/嚟/嗰/咁/啲/喺/畀. Write 是 not 係, 的 not 嘅.
 - "example_en" is ONE new simple sentence using the word in the SAME sense, on an everyday school-life topic.
-- HARD CAP: about 60 words across all English fields combined.
+- "ipa_us" / "ipa_uk": the IPA phonetic pronunciation — General American (US) and British RP (UK). Just the symbols wrapped in slashes, e.g. "/haʊs/". If the two accents are identical, give the same value for both. Omit ONLY if you genuinely don't know.
+- HARD CAP: about 60 words across all English fields combined (IPA doesn't count).
 
 Return ONLY valid JSON — no markdown fences, no preamble:
 {
   "word": "the word, lowercase",
+  "ipa_us": "US IPA in slashes, e.g. /haʊs/",
+  "ipa_uk": "UK IPA in slashes, e.g. /haʊs/",
   "pos_en": "part of speech in plain words, e.g. verb",
   "pos_zh": "詞性, e.g. 動詞",
   "zh": "the Chinese equivalent of the word AS USED HERE, e.g. 嘲諷",

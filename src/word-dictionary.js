@@ -15,7 +15,8 @@ import { buildWordLookupPrompt } from "./prompts.js";
 export const DICTIONARY_KEY = "lyra-word-dictionary";
 export const DICTIONARY_MAX_ENTRIES = 300;
 // Bump when the lookup prompt changes in a way that invalidates cached entries.
-export const DICTIONARY_VERSION = 1;
+// v2: added ipa_us / ipa_uk pronunciation — older entries lack them, so re-fetch.
+export const DICTIONARY_VERSION = 2;
 
 // Cache key: the word alone (lowercase, stripped) — the same word looked up
 // anywhere is instant. The first lookup's sentence picks the sense; acceptable

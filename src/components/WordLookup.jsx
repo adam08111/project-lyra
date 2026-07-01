@@ -31,6 +31,26 @@ export function cardPosition(anchor, vw, vh, cardW) {
   return { top, left, width: w };
 }
 
+// Speak a word in a chosen accent via the browser's Speech Synthesis (no API, no
+// key, works on the HTTPS deploy AND on http LAN-IP phone testing — speechSynthesis
+// isn't gated to secure contexts). lang "en-GB" / "en-US" selects the accent; we
+// also try to pin a matching voice when the browser has enumerated them.
+function speakWord(text, lang) {
+  try {
+    const synth = window.speechSynthesis;
+    if (!synth || !text) return;
+    synth.cancel(); // stop any in-progress utterance
+    const u = new SpeechSynthesisUtterance(String(text));
+    u.lang = lang;
+    u.rate = 0.9;
+    const voices = synth.getVoices() || [];
+    const v = voices.find(x => x.lang === lang)
+      || voices.find(x => (x.lang || "").replace("_", "-").toLowerCase().startsWith(lang.slice(0, 2)));
+    if (v) u.voice = v;
+    synth.speak(u);
+  } catch (e) { /* silent — TTS unavailable on this device */ }
+}
+
 export default function WordLookup({ trackCall }) {
   const [bubble, setBubble] = useState(null); // { word, sentence, x, y }
   const [popup, setPopup] = useState(null);   // { word, sentence, x, y }
@@ -316,6 +336,23 @@ export default function WordLookup({ trackCall }) {
             )}
             {state.status === "loaded" && state.entry && (
               <>
+                {/* Pronunciation — UK + US accent. Tap 🔊 to hear it (browser TTS);
+                    the IPA is shown when the lookup provided it. */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                  {[{ lab: "UK", lang: "en-GB", ipa: state.entry.ipa_uk }, { lab: "US", lang: "en-US", ipa: state.entry.ipa_us }].map(p => (
+                    <button
+                      key={p.lab}
+                      onClick={() => speakWord(state.entry.word || popup.word, p.lang)}
+                      title={`Play the ${p.lab} pronunciation`}
+                      aria-label={`Play the ${p.lab} pronunciation of ${popup.word}`}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 11, padding: "3px 9px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: "pointer", touchAction: "manipulation" }}
+                    >
+                      <span style={{ fontWeight: 700, color: COLORS.blue }}>{p.lab}</span>
+                      {p.ipa && <span style={{ color: COLORS.muted }}>{/^\/.*\/$/.test(p.ipa.trim()) ? p.ipa.trim() : `/${p.ipa.replace(/^\/|\/$/g, "").trim()}/`}</span>}
+                      <span aria-hidden="true">🔊</span>
+                    </button>
+                  ))}
+                </div>
                 {state.entry.zh && <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.blue, marginBottom: 4 }}>{state.entry.zh}</div>}
                 {state.entry.meaning_en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{state.entry.meaning_en}</div>}
                 {state.entry.meaning_zh && <div style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.7, marginTop: 2 }}>{state.entry.meaning_zh}</div>}
