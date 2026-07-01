@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { COLORS } from "../constants.js";
 import { mono } from "./XRayView.jsx";
 import { isLookableWord, lookupWord, buildConceptFromWord, normWord } from "../word-dictionary.js";
+import { synthesizeSpeech } from "../api.js";
+import { getRouteConfig } from "../ai-router.js";
 
 /**
  * Tap-to-define dictionary. One document-level selection listener covers the
@@ -88,6 +90,50 @@ async function fetchPronunciation(word) {
   return result;
 }
 
+// Browsers can't play raw PCM — wrap Gemini's s16le PCM (base64) in a minimal WAV
+// container so a plain <audio>/Audio() can play it. Pure; exported for tests.
+export function pcm16ToWavBlob(base64Pcm, sampleRate = 24000, channels = 1) {
+  const pcm = Uint8Array.from(atob(base64Pcm), (c) => c.charCodeAt(0));
+  const blockAlign = channels * 2, byteRate = sampleRate * blockAlign;
+  const buf = new ArrayBuffer(44 + pcm.length), view = new DataView(buf);
+  const wr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  wr(0, "RIFF"); view.setUint32(4, 36 + pcm.length, true); wr(8, "WAVE");
+  wr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, channels, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true); view.setUint16(34, 16, true);
+  wr(36, "data"); view.setUint32(40, pcm.length, true);
+  new Uint8Array(buf, 44).set(pcm);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+// Native Gemini TTS is the PRIMARY 🔊 source (server-side synth → not hostage to the
+// phone's installed voices). Cache the playable blob URL per word|accent for the
+// SESSION (in memory only — PCM blobs blow localStorage's 5MB cap, decision §94);
+// each uncached word+accent is a full LLM call, so synthesize it once. One in-flight
+// promise per key so a double-tap doesn't double-bill. Capped + oldest-revoked.
+const ttsUrlCache = new Map();
+const ttsInflight = new Map();
+const TTS_CACHE_MAX = 100;
+function getTtsAudioUrl(word, accent) {
+  const key = `${normWord(word)}|${accent}`;
+  if (ttsUrlCache.has(key)) return Promise.resolve(ttsUrlCache.get(key));
+  if (ttsInflight.has(key)) return ttsInflight.get(key);
+  const p = (async () => {
+    const { audioBase64, sampleRate } = await synthesizeSpeech({ word, accent, model: getRouteConfig("tts").model });
+    const url = URL.createObjectURL(pcm16ToWavBlob(audioBase64, sampleRate));
+    if (ttsUrlCache.size >= TTS_CACHE_MAX) {
+      const oldest = ttsUrlCache.keys().next().value;
+      try { URL.revokeObjectURL(ttsUrlCache.get(oldest)); } catch (e) { /* silent */ }
+      ttsUrlCache.delete(oldest);
+    }
+    ttsUrlCache.set(key, url);
+    return url;
+  })();
+  ttsInflight.set(key, p);
+  p.then(() => ttsInflight.delete(key), () => ttsInflight.delete(key));
+  return p;
+}
+
 export default function WordLookup({ trackCall }) {
   const [bubble, setBubble] = useState(null); // { word, sentence, x, y }
   const [popup, setPopup] = useState(null);   // { word, sentence, x, y }
@@ -95,7 +141,8 @@ export default function WordLookup({ trackCall }) {
   const [attempt, setAttempt] = useState(0);
   const [saved, setSaved] = useState(false);
   const [pron, setPron] = useState(null); // real recorded US/UK audio + IPA (Dictionary API)
-  const audioRef = useRef({ uk: null, us: null }); // preloaded <audio> so a tap plays inside the gesture
+  const [synthing, setSynthing] = useState(null); // "uk"|"us"|null — Gemini TTS in flight for this accent
+  const audioRef = useRef({ uk: null, us: null }); // preloaded <audio> fallback so a tap plays inside the gesture
   const debounceRef = useRef(null);
   const popupOpenRef = useRef(false);
   popupOpenRef.current = !!popup;
@@ -301,13 +348,9 @@ export default function WordLookup({ trackCall }) {
     } catch (e) { /* silent */ }
   };
 
-  // Play the accent's pronunciation, staying INSIDE the tap's user-gesture (NO await
-  // — see the preload note). Prefer the real recording (genuinely US vs UK); the
-  // preloaded <audio> plays instantly. On a miss (~half of words have no UK
-  // recording) or a play failure, speak it with an accent-pinned TTS voice.
-  const playPron = (accent) => {
-    const word = state.entry?.word || popup?.word;
-    const lang = accent === "uk" ? "en-GB" : "en-US";
+  // Fallback when Gemini TTS is unavailable (never-stuck, #7): the §93 preloaded
+  // dictionaryapi recording, then the browser TTS. Stays inside the gesture.
+  const playRecordingOrTts = (accent, word, lang) => {
     const el = accent === "uk" ? audioRef.current.uk : audioRef.current.us;
     if (el) {
       try {
@@ -318,6 +361,38 @@ export default function WordLookup({ trackCall }) {
       } catch (e) { /* fall through to TTS */ }
     }
     speakWord(word, lang);
+  };
+
+  // Play the accent's pronunciation. PRIMARY: native Gemini TTS (server-side synth →
+  // genuinely accented, not hostage to the phone's installed voices). Cached audio
+  // plays instantly IN the gesture; an uncached word is synthesized (spinner) then
+  // played — the await breaks the iOS gesture only on the FIRST tap of a word, after
+  // which it's cached and instant (the §92.2 lesson: cache, don't preload-race).
+  // Layered fallback keeps 🔊 never-stuck: Gemini fails → recording → browser TTS.
+  const playPron = async (accent) => {
+    const word = state.entry?.word || popup?.word;
+    const lang = accent === "uk" ? "en-GB" : "en-US";
+    if (!word) return;
+    const playUrl = (url) => {
+      try {
+        const a = new Audio(url);
+        const r = a.play();
+        if (r && typeof r.catch === "function") r.catch(() => playRecordingOrTts(accent, word, lang));
+      } catch (e) { playRecordingOrTts(accent, word, lang); }
+    };
+    // Cached Gemini audio → play immediately, inside the gesture.
+    const key = `${normWord(word)}|${accent}`;
+    if (ttsUrlCache.has(key)) { playUrl(ttsUrlCache.get(key)); return; }
+    // Uncached → synthesize (spinner), then play; on any error, fall back.
+    setSynthing(accent);
+    try {
+      const url = await getTtsAudioUrl(word, accent);
+      playUrl(url);
+    } catch (e) {
+      playRecordingOrTts(accent, word, lang);
+    } finally {
+      setSynthing(s => (s === accent ? null : s));
+    }
   };
 
   // Use the visual viewport so coords match what's actually rendered on mobile.
@@ -437,8 +512,9 @@ export default function WordLookup({ trackCall }) {
             )}
             {state.status === "loaded" && state.entry && (
               <>
-                {/* Pronunciation — UK + US accent. Tap 🔊 to hear it (browser TTS);
-                    the IPA is shown when the lookup provided it. */}
+                {/* Pronunciation — UK + US accent. Tap 🔊 to hear it (native Gemini TTS,
+                    server-synthesized; ⏳ while it synthesizes the first time). The IPA
+                    is shown when the lookup provided it. */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
                   {[
                     { lab: "UK", accent: "uk", ipa: (pron?.ipaUk || state.entry.ipa_uk || "") },
@@ -447,13 +523,14 @@ export default function WordLookup({ trackCall }) {
                     <button
                       key={p.lab}
                       onClick={() => playPron(p.accent)}
+                      disabled={synthing === p.accent}
                       title={`Play the ${p.lab} pronunciation`}
                       aria-label={`Play the ${p.lab} pronunciation of ${popup.word}`}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 11, padding: "3px 9px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: "pointer", touchAction: "manipulation" }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 11, padding: "3px 9px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: synthing === p.accent ? "default" : "pointer", opacity: synthing === p.accent ? 0.7 : 1, touchAction: "manipulation" }}
                     >
                       <span style={{ fontWeight: 700, color: COLORS.blue }}>{p.lab}</span>
                       {p.ipa && <span style={{ color: COLORS.muted }}>{/^[/[]/.test(p.ipa.trim()) ? p.ipa.trim() : `/${p.ipa.trim()}/`}</span>}
-                      <span aria-hidden="true">🔊</span>
+                      <span aria-hidden="true">{synthing === p.accent ? "⏳" : "🔊"}</span>
                     </button>
                   ))}
                 </div>
