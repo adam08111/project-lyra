@@ -51,12 +51,44 @@ function speakWord(text, lang) {
   } catch (e) { /* silent — TTS unavailable on this device */ }
 }
 
+// Real recorded US/UK pronunciations (+ per-accent IPA) from the free Dictionary
+// API (no key). Device TTS often has only one English voice, so US and UK sounded
+// identical — recorded audio makes them genuinely differ. Cached per word; on any
+// miss/offline the caller falls back to TTS + the AI's IPA.
+const pronCache = new Map();
+async function fetchPronunciation(word) {
+  const w = (word || "").toLowerCase().trim();
+  if (!w) return null;
+  if (pronCache.has(w)) return pronCache.get(w);
+  let result = null;
+  try {
+    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`);
+    if (res.ok) {
+      const data = await res.json();
+      const ph = (Array.isArray(data) ? data : []).flatMap(e => e.phonetics || []);
+      // audio urls look like word-us.mp3 / word-1-uk.mp3 — match the accent suffix.
+      const byAccent = (sfx) => ph.find(p => p.audio && new RegExp(`-${sfx}\\.mp3$`, "i").test(p.audio));
+      const us = byAccent("us"), uk = byAccent("uk");
+      const anyIpa = (ph.find(p => p.text && p.text.trim()) || {}).text || "";
+      result = {
+        audioUs: us?.audio || "",
+        audioUk: uk?.audio || "",
+        ipaUs: (us?.text || anyIpa || "").trim(),
+        ipaUk: (uk?.text || anyIpa || "").trim(),
+      };
+    }
+  } catch (e) { /* offline / not found — caller falls back to TTS + AI IPA */ }
+  pronCache.set(w, result);
+  return result;
+}
+
 export default function WordLookup({ trackCall }) {
   const [bubble, setBubble] = useState(null); // { word, sentence, x, y }
   const [popup, setPopup] = useState(null);   // { word, sentence, x, y }
   const [state, setState] = useState({ status: "idle", entry: null });
   const [attempt, setAttempt] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [pron, setPron] = useState(null); // real recorded US/UK audio + IPA (Dictionary API)
   const debounceRef = useRef(null);
   const popupOpenRef = useRef(false);
   popupOpenRef.current = !!popup;
@@ -167,6 +199,15 @@ export default function WordLookup({ trackCall }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [popup, attempt]);
 
+  // Fetch real recorded US/UK pronunciations for the open word (best-effort).
+  useEffect(() => {
+    if (!popup) { setPron(null); return; }
+    let alive = true;
+    setPron(null);
+    fetchPronunciation(popup.word).then(p => { if (alive) setPron(p); });
+    return () => { alive = false; };
+  }, [popup]);
+
   // First touch on the bubble claims the gesture: openingRef suppresses the
   // selection-collapse / scroll teardown so the button survives until the tap
   // opens it. A backstop timer clears openingRef if the gesture is dropped
@@ -217,6 +258,16 @@ export default function WordLookup({ trackCall }) {
       // Let StyleLab refresh its "Saved (N)" badge (WordLookup lives outside it).
       try { window.dispatchEvent(new Event("lyra-concepts-changed")); } catch (e) { /* silent */ }
     } catch (e) { /* silent */ }
+  };
+
+  // Play the recorded pronunciation when we have it (genuinely distinct US/UK);
+  // otherwise fall back to browser TTS in the right accent (device-dependent).
+  const playPron = (url, lang) => {
+    const word = state.entry?.word || popup?.word;
+    if (url) {
+      try { new Audio(url).play().catch(() => speakWord(word, lang)); return; } catch (e) { /* fall through */ }
+    }
+    speakWord(word, lang);
   };
 
   // Use the visual viewport so coords match what's actually rendered on mobile.
@@ -339,16 +390,19 @@ export default function WordLookup({ trackCall }) {
                 {/* Pronunciation — UK + US accent. Tap 🔊 to hear it (browser TTS);
                     the IPA is shown when the lookup provided it. */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                  {[{ lab: "UK", lang: "en-GB", ipa: state.entry.ipa_uk }, { lab: "US", lang: "en-US", ipa: state.entry.ipa_us }].map(p => (
+                  {[
+                    { lab: "UK", lang: "en-GB", ipa: (pron?.ipaUk || state.entry.ipa_uk || ""), audio: pron?.audioUk },
+                    { lab: "US", lang: "en-US", ipa: (pron?.ipaUs || state.entry.ipa_us || ""), audio: pron?.audioUs },
+                  ].map(p => (
                     <button
                       key={p.lab}
-                      onClick={() => speakWord(state.entry.word || popup.word, p.lang)}
+                      onClick={() => playPron(p.audio, p.lang)}
                       title={`Play the ${p.lab} pronunciation`}
                       aria-label={`Play the ${p.lab} pronunciation of ${popup.word}`}
                       style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 11, padding: "3px 9px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: "pointer", touchAction: "manipulation" }}
                     >
                       <span style={{ fontWeight: 700, color: COLORS.blue }}>{p.lab}</span>
-                      {p.ipa && <span style={{ color: COLORS.muted }}>{/^\/.*\/$/.test(p.ipa.trim()) ? p.ipa.trim() : `/${p.ipa.replace(/^\/|\/$/g, "").trim()}/`}</span>}
+                      {p.ipa && <span style={{ color: COLORS.muted }}>{/^[/[]/.test(p.ipa.trim()) ? p.ipa.trim() : `/${p.ipa.trim()}/`}</span>}
                       <span aria-hidden="true">🔊</span>
                     </button>
                   ))}
