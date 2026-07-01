@@ -2652,3 +2652,19 @@ Reported: in "Analyse Style", the passage you paste disappears and isn't saved w
 
 **Verified:** `vite build` clean; **414 tests** green; the fix is the same proven persist pattern used across the app; live in the preview (HMR) — paste → leave → return restores the text.
 
+---
+
+## 91. UPDATE — 1 July 2026 — Writers detail: collapsible source-article + collapsible skills list
+
+Asked, for the Writers tab writer detail: show the writer's article(s) in a collapsible section, and make the skills list collapsible too.
+
+**Data reality (important):** a writer stores exactly ONE source passage (`skill.sourceText`, deduped by `authorName`); "Analyse more of this writer" re-analyses that SAME passage for missing sections — it does not add new articles. So "all articles" = the one stored passage. True multi-article-per-writer would be a bigger data-model change (store each analysed passage) — flagged to the user, not built.
+
+**Built (`StyleLab.jsx`, `SavedSkillDetail`):**
+- **"The writer's article"** — a collapsible section (collapsed by default; it's long) rendering `skill.sourceText` in a scrollable pre-wrapped box. Hidden for legacy skills with no/whitespace source (`skill.sourceText?.trim()` gate).
+- **"Skills (N)"** — a collapsible header wrapping the `CollapsibleTechnique` cards (open by default). Two local states `showArticle`/`showSkills`; reset per-writer (the detail remounts). CollapsibleTechnique props + the Remove/Practice/rename/"Analyse more" wiring unchanged.
+
+**Adversarial review (3-lens workflow) + fixes:** regression lens verified nothing else changed (props, empty-state, IIFE render all identical). The correctness lens flagged the collapse↔select-mode interaction; the confirmed finding was the disabled Skills toggle lacking an explanation. Fixes applied: entering Practice/Remove now force-opens the skills (predictable state, no collapsed-list-with-orphaned-buttons after Cancel); the disabled toggle carries a `title`/`aria-label` ("Skills stay open while you're choosing techniques"); the article gate trims whitespace. (The workflow first failed on MY orchestration bug — an unguarded null from a dead subagent before `.flatMap`; fixed with `.filter(Boolean)` and resumed from cache.)
+
+**Verified:** `vite build` clean; **414 tests** green; live in the preview (HMR).
+
