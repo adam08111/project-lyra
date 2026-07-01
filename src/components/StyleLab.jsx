@@ -682,10 +682,17 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
   const [selectMode, setSelectMode] = useState(null);
   const selecting = selectMode !== null;
   const [selected, setSelected] = useState(() => new Set());
+  // §91: collapsible sections in the writer detail — the source article (collapsed
+  // by default; it's long) and the skills list (open by default; the main content).
+  const [showArticle, setShowArticle] = useState(false);
+  const [showSkills, setShowSkills] = useState(true);
   const toggleSelect = (i) => setSelected(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   const cancelSelect = () => { setSelectMode(null); setSelected(new Set()); };
-  const beginPractice = () => { setSelected(new Set()); setSelectMode("practice"); };
-  const beginRemove = () => { setSelected(new Set()); setSelectMode("remove"); };
+  // §91: force the skills list open when entering select mode, so the cards the
+  // student is ticking are actually visible and the state stays predictable after
+  // Cancel (no collapsed list with orphaned action buttons).
+  const beginPractice = () => { setSelected(new Set()); setShowSkills(true); setSelectMode("practice"); };
+  const beginRemove = () => { setSelected(new Set()); setShowSkills(true); setSelectMode("remove"); };
   const practiseSelected = () => {
     const idxs = [...selected].sort((a, b) => a - b);
     if (!idxs.length || !onPractice) return;
@@ -748,27 +755,60 @@ function SavedSkillDetail({ skill, onBack, onApply, onPractice, onPracticeTechni
         </div>
       )}
 
+      {/* §91: the writer's source article — collapsible, collapsed by default (it's long) */}
+      {skill.sourceText?.trim() && (
+        <div style={{ marginBottom: 12 }}>
+          <button
+            onClick={() => setShowArticle(v => !v)}
+            aria-expanded={showArticle}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.card, cursor: "pointer", fontFamily: mono, fontSize: 13, fontWeight: 700, color: COLORS.heading }}
+          >
+            <span>The writer's article</span>
+            <span style={{ color: COLORS.muted, fontSize: 12, fontWeight: 400 }}>{showArticle ? "▾ hide" : "▸ read"}</span>
+          </button>
+          {showArticle && (
+            <div style={{ marginTop: 8, padding: "12px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.bg2, maxHeight: 320, overflowY: "auto", fontFamily: mono, fontSize: 12, color: COLORS.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+              {skill.sourceText}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* §91: the skills list — collapsible (forced open while selecting, so Practice/Remove still works) */}
       {sections.length > 0 ? (
-        (() => {
-          // In-progress TrainingSession threads for this skill — the Practice
-          // button on a technique with a live thread reads "Continue · N".
-          const trainingChats = loadTrainingChats();
-          return sections.map((s, i) => (
-          <CollapsibleTechnique
-            key={i}
-            section={s}
-            index={i + 1}
-            trackCall={trackCall}
-            selected={selected.has(i)}
-            selectColor={selectMode === "remove" ? COLORS.red : COLORS.green}
-            onToggleSelect={selecting ? () => toggleSelect(i) : null}
-            onRemove={!selecting && onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
-            onRename={!selecting && onRenameTechnique ? (newTitle) => onRenameTechnique(i, newTitle, hasFullSections) : null}
-            onPractice={!selecting && onPracticeTechnique ? () => onPracticeTechnique(i) : null}
-            threadTurns={countThreadTurns(trainingChats, skill.id, i)}
-          />
-          ));
-        })()
+        <>
+          <button
+            onClick={() => setShowSkills(v => !v)}
+            disabled={selecting}
+            title={selecting ? "Skills stay open while you're choosing techniques" : (showSkills ? "Hide the skills list" : "Show the skills list")}
+            aria-label={selecting ? "Skills list (open while selecting)" : "Toggle the skills list"}
+            aria-expanded={showSkills || selecting}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.card, cursor: selecting ? "default" : "pointer", fontFamily: mono, fontSize: 13, fontWeight: 700, color: COLORS.heading, marginBottom: 8, opacity: selecting ? 0.6 : 1 }}
+          >
+            <span>Skills ({sections.length})</span>
+            <span style={{ color: COLORS.muted, fontSize: 12, fontWeight: 400 }}>{(showSkills || selecting) ? "▾ hide" : "▸ show"}</span>
+          </button>
+          {(showSkills || selecting) && (() => {
+            // In-progress TrainingSession threads for this skill — the Practice
+            // button on a technique with a live thread reads "Continue · N".
+            const trainingChats = loadTrainingChats();
+            return sections.map((s, i) => (
+              <CollapsibleTechnique
+                key={i}
+                section={s}
+                index={i + 1}
+                trackCall={trackCall}
+                selected={selected.has(i)}
+                selectColor={selectMode === "remove" ? COLORS.red : COLORS.green}
+                onToggleSelect={selecting ? () => toggleSelect(i) : null}
+                onRemove={!selecting && onRemoveTechnique ? () => onRemoveTechnique(i, hasFullSections) : null}
+                onRename={!selecting && onRenameTechnique ? (newTitle) => onRenameTechnique(i, newTitle, hasFullSections) : null}
+                onPractice={!selecting && onPracticeTechnique ? () => onPracticeTechnique(i) : null}
+                threadTurns={countThreadTurns(trainingChats, skill.id, i)}
+              />
+            ));
+          })()}
+        </>
       ) : (
         <div style={{ fontSize: 12, color: COLORS.muted, fontStyle: "italic", padding: "20px 0", fontFamily: mono }}>
           No detail content saved for this skill.
