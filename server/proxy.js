@@ -145,7 +145,7 @@ const server = http.createServer((req, res) => {
       // speechConfig), always a non-streaming generateContent. Returns raw PCM
       // (base64, s16le, 24kHz mono) + its sample rate; the client wraps it in WAV.
       if (parsed.tts && typeof parsed.tts.text === "string") {
-        const word = parsed.tts.text;
+        const word = String(parsed.tts.text).slice(0, 100); // single word — clamp, don't trust the client
         const accent = parsed.tts.accent === "uk" ? "uk" : "us";
         const ttsModel = (parsed.model && TTS_MODELS.has(parsed.model)) ? parsed.model : DEFAULT_TTS_MODEL;
         const lang = accent === "uk" ? "en-GB" : "en-US";
@@ -158,18 +158,23 @@ const server = http.createServer((req, res) => {
         }));
         const ttsPath = `/v1beta/models/${ttsModel}:generateContent?key=${GEMINI_KEY}`;
         console.log(`[Request] TTS model=${ttsModel} accent=${accent} word_len=${word.length}`);
+        const sendErr = (code, msg) => { if (!res.headersSent) { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: msg })); } };
         const callTts = (attempt) => {
+          // One-shot per attempt: proxyReq.destroy() on timeout ALSO fires 'error', so
+          // without this guard the timeout and error handlers both retry → two upstream
+          // calls (double-bill) + a double res write. settle() lets exactly one path win.
+          let settled = false;
           const opts = { hostname: "generativelanguage.googleapis.com", path: ttsPath, method: "POST", headers: { "Content-Type": "application/json", "Content-Length": ttsBody.length } };
           const proxyReq = https.request(opts, (proxyRes) => {
             const chunks = [];
             proxyRes.on("data", c => chunks.push(c));
             proxyRes.on("end", () => {
+              if (settled) return; settled = true;
               const respBody = Buffer.concat(chunks).toString("utf8");
               if (proxyRes.statusCode >= 400) {
                 console.error(`[Gemini TTS ${proxyRes.statusCode}]`, respBody.slice(0, 300));
                 if (attempt < 2) { callTts(attempt + 1); return; }
-                res.writeHead(proxyRes.statusCode, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: respBody.slice(0, 500) }));
+                sendErr(proxyRes.statusCode, respBody.slice(0, 500));
                 return;
               }
               try {
@@ -178,18 +183,17 @@ const server = http.createServer((req, res) => {
                 const part = (data.candidates?.[0]?.content?.parts || []).find(p => p.inlineData && p.inlineData.data);
                 const audioBase64 = part?.inlineData?.data || "";
                 const rate = /rate=(\d+)/i.exec(part?.inlineData?.mimeType || "");
-                if (!audioBase64) { res.writeHead(502, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "TTS returned no audio" })); return; }
+                if (!audioBase64) { sendErr(502, "TTS returned no audio"); return; }
                 res.writeHead(200, { "Content-Type": "application/json" });
                 res.end(JSON.stringify({ audioBase64, sampleRate: rate ? parseInt(rate[1], 10) : 24000 }));
               } catch (e) {
                 console.error("[Gemini TTS parse error]", e.message);
-                res.writeHead(500, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Failed to parse TTS response" }));
+                sendErr(500, "Failed to parse TTS response");
               }
             });
           });
-          proxyReq.setTimeout(60000, () => { proxyReq.destroy(); if (attempt < 2) { callTts(attempt + 1); } else if (!res.headersSent) { res.writeHead(504, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "TTS timed out" })); } });
-          proxyReq.on("error", (e) => { if (attempt < 2) { callTts(attempt + 1); } else { if (!res.headersSent) res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: e.message })); } });
+          proxyReq.setTimeout(60000, () => { proxyReq.destroy(); if (settled) return; settled = true; if (attempt < 2) { callTts(attempt + 1); } else { sendErr(504, "TTS timed out"); } });
+          proxyReq.on("error", (e) => { if (settled) return; settled = true; if (attempt < 2) { callTts(attempt + 1); } else { sendErr(500, e.message); } });
           proxyReq.write(ttsBody);
           proxyReq.end();
         };

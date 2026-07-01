@@ -262,6 +262,18 @@ export default function WordLookup({ trackCall }) {
     return () => { alive = false; };
   }, [popup]);
 
+  // WARM the Gemini TTS cache for BOTH accents the instant the card opens — the synth's
+  // ~2-3s then runs WHILE the student reads the definition, so the 🔊 tap is instant
+  // instead of waiting after the tap (the "wait so long" complaint). Fire-and-forget:
+  // cached + in-flight-guarded, so a tap mid-synth just awaits the same promise (never
+  // double-bills), and errors are swallowed here (the tap's fallback chain handles a
+  // real failure). Runs in parallel with the definition lookup, off popup.word.
+  useEffect(() => {
+    if (!popup?.word) return;
+    getTtsAudioUrl(popup.word, "uk").catch(() => {});
+    getTtsAudioUrl(popup.word, "us").catch(() => {});
+  }, [popup]);
+
   // Prime the speech voices on mount. getVoices() is [] until the engine fires
   // "voiceschanged" (async) — speaking before then pins NO voice, so the browser
   // uses its single default (ignoring u.lang for accent) → US and UK sound the
@@ -320,7 +332,7 @@ export default function WordLookup({ trackCall }) {
     openingRef.current = false;
     try { window.getSelection().removeAllRanges(); } catch (err) { /* silent */ }
   };
-  const close = () => { clearTimeout(openTimerRef.current); clearTimeout(dismissTimerRef.current); openingRef.current = false; setPopup(null); setState({ status: "idle", entry: null }); setSaved(false); };
+  const close = () => { clearTimeout(openTimerRef.current); clearTimeout(dismissTimerRef.current); openingRef.current = false; setPopup(null); setState({ status: "idle", entry: null }); setSaved(false); setSynthing(null); };
 
   // Trap-proofing: Escape closes the card (desktop). The backdrop tap (below)
   // is the mobile exit; the viewport-fit card keeps the × reachable as a third.
@@ -383,15 +395,17 @@ export default function WordLookup({ trackCall }) {
     // Cached Gemini audio → play immediately, inside the gesture.
     const key = `${normWord(word)}|${accent}`;
     if (ttsUrlCache.has(key)) { playUrl(ttsUrlCache.get(key)); return; }
-    // Uncached → synthesize (spinner), then play; on any error, fall back.
-    setSynthing(accent);
+    // Uncached → synthesize (spinner), then play; on any error, fall back. The spinner
+    // flag is keyed to word|accent (not just accent) so a stale word's synth resolving
+    // can't clear a different open word's spinner (review: cross-word spinner race).
+    setSynthing(key);
     try {
       const url = await getTtsAudioUrl(word, accent);
       playUrl(url);
     } catch (e) {
       playRecordingOrTts(accent, word, lang);
     } finally {
-      setSynthing(s => (s === accent ? null : s));
+      setSynthing(s => (s === key ? null : s));
     }
   };
 
@@ -519,20 +533,25 @@ export default function WordLookup({ trackCall }) {
                   {[
                     { lab: "UK", accent: "uk", ipa: (pron?.ipaUk || state.entry.ipa_uk || "") },
                     { lab: "US", accent: "us", ipa: (pron?.ipaUs || state.entry.ipa_us || "") },
-                  ].map(p => (
+                  ].map(p => {
+                    // Spinner is keyed to word|accent (matches playPron), so it can't be
+                    // cleared by a different word's synth resolving.
+                    const busy = synthing === `${normWord(state.entry?.word || popup.word)}|${p.accent}`;
+                    return (
                     <button
                       key={p.lab}
                       onClick={() => playPron(p.accent)}
-                      disabled={synthing === p.accent}
+                      disabled={busy}
                       title={`Play the ${p.lab} pronunciation`}
                       aria-label={`Play the ${p.lab} pronunciation of ${popup.word}`}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 11, padding: "3px 9px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: synthing === p.accent ? "default" : "pointer", opacity: synthing === p.accent ? 0.7 : 1, touchAction: "manipulation" }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: mono, fontSize: 11, padding: "3px 9px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.heading, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1, touchAction: "manipulation" }}
                     >
                       <span style={{ fontWeight: 700, color: COLORS.blue }}>{p.lab}</span>
                       {p.ipa && <span style={{ color: COLORS.muted }}>{/^[/[]/.test(p.ipa.trim()) ? p.ipa.trim() : `/${p.ipa.trim()}/`}</span>}
-                      <span aria-hidden="true">{synthing === p.accent ? "⏳" : "🔊"}</span>
+                      <span aria-hidden="true">{busy ? "⏳" : "🔊"}</span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
                 {state.entry.zh && <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.blue, marginBottom: 4 }}>{state.entry.zh}</div>}
                 {state.entry.meaning_en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{state.entry.meaning_en}</div>}

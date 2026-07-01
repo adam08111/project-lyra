@@ -27,22 +27,33 @@ export async function extractTextFromImage({ base64, mediaType, prompt, model, m
 // branch builds the AUDIO generateContent request and returns raw PCM. Returns the
 // base64 PCM (s16le) + its sample rate; the caller wraps it in a WAV container to play.
 export async function synthesizeSpeech({ word, accent, model }) {
-  const res = await fetch("/api/gemini", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      tts: { text: word, accent },
-      stream: false,
-      ...(model ? { model } : {}),
-    }),
-  });
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => "Unknown error");
-    throw new Error(`TTS request failed (${res.status}): ${errorText}`);
+  // Client-side hard timeout: if the proxy stalls (black-holes with no response), a
+  // signal-less fetch never settles and the caller's spinner sticks forever (#7). Abort
+  // just above the proxy's own 60s upstream cap so a stall surfaces as an error → the
+  // caller falls back to the recording / browser TTS instead of an eternal ⏳.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 65000);
+  try {
+    const res = await fetch("/api/gemini", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tts: { text: word, accent },
+        stream: false,
+        ...(model ? { model } : {}),
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "Unknown error");
+      throw new Error(`TTS request failed (${res.status}): ${errorText}`);
+    }
+    const data = await res.json();
+    if (!data.audioBase64) throw new Error("TTS returned no audio");
+    return { audioBase64: data.audioBase64, sampleRate: data.sampleRate || 24000 };
+  } finally {
+    clearTimeout(timer);
   }
-  const data = await res.json();
-  if (!data.audioBase64) throw new Error("TTS returned no audio");
-  return { audioBase64: data.audioBase64, sampleRate: data.sampleRate || 24000 };
 }
 
 export async function callAI(systemPrompt, userMessage, useSearch = false, maxTokens = 1000, thinkingBudget, onChunk, signal, model) {

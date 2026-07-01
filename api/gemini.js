@@ -81,7 +81,7 @@ export default async function handler(req, res) {
   // Separate request shape (responseModalities:AUDIO + speechConfig), non-streaming
   // generateContent. Returns raw PCM (base64, s16le, 24kHz mono) + its sample rate.
   if (parsed.tts && typeof parsed.tts.text === "string") {
-    const word = parsed.tts.text;
+    const word = String(parsed.tts.text).slice(0, 100); // single word — clamp, don't trust the client
     const accent = parsed.tts.accent === "uk" ? "uk" : "us";
     const ttsModel = parsed.model && TTS_MODELS.has(parsed.model) ? parsed.model : DEFAULT_TTS_MODEL;
     const lang = accent === "uk" ? "en-GB" : "en-US";
@@ -104,8 +104,9 @@ export default async function handler(req, res) {
       proxyRes.on("end", () => {
         const respBody = Buffer.concat(chunks).toString("utf8");
         if (proxyRes.statusCode >= 400) {
-          if (!res.headersSent) res.status(proxyRes.statusCode).setHeader("Content-Type", "application/json");
-          res.end(respBody);
+          // Wrap + truncate the upstream error (parity with server/proxy.js) — don't echo
+          // the raw Google error body straight to the client.
+          if (!res.headersSent) res.status(proxyRes.statusCode).json({ error: respBody.slice(0, 500) });
           return;
         }
         try {
