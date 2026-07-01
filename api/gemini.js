@@ -28,6 +28,14 @@ const ALLOWED_MODELS = new Set([
   "gemini-3.1-flash-lite-preview",
   "gemini-3-flash-preview",
 ]);
+// Native TTS models (audio out) — SEPARATE allowlist from the text models (the tts
+// branch builds a different request shape). Verified live: gemini-2.5-flash-tts 404s.
+const DEFAULT_TTS_MODEL = "gemini-2.5-flash-preview-tts";
+const TTS_MODELS = new Set(["gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"]);
+// The accent lever is this instruction (load-bearing); languageCode is belt-and-suspenders.
+const ttsInstruction = (word, accent) => accent === "uk"
+  ? `Say this single English word, and nothing else, clearly and naturally in a British Received Pronunciation accent: "${word}"`
+  : `Say this single English word, and nothing else, clearly and naturally in a General American accent: "${word}"`;
 const UPSTREAM_TIMEOUT_MS = 55000; // leave headroom under the 60s function cap
 
 export default async function handler(req, res) {
@@ -66,6 +74,57 @@ export default async function handler(req, res) {
   }
   if (!parsed || typeof parsed !== "object") {
     res.status(400).json({ error: "Invalid JSON body" });
+    return;
+  }
+
+  // === TTS branch: native Gemini speech synthesis (audio out) ===
+  // Separate request shape (responseModalities:AUDIO + speechConfig), non-streaming
+  // generateContent. Returns raw PCM (base64, s16le, 24kHz mono) + its sample rate.
+  if (parsed.tts && typeof parsed.tts.text === "string") {
+    const word = parsed.tts.text;
+    const accent = parsed.tts.accent === "uk" ? "uk" : "us";
+    const ttsModel = parsed.model && TTS_MODELS.has(parsed.model) ? parsed.model : DEFAULT_TTS_MODEL;
+    const lang = accent === "uk" ? "en-GB" : "en-US";
+    const ttsBody = Buffer.from(JSON.stringify({
+      contents: [{ parts: [{ text: ttsInstruction(word, accent) }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: { languageCode: lang, voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } },
+      },
+    }));
+    const opts = {
+      hostname: "generativelanguage.googleapis.com",
+      path: `/v1beta/models/${ttsModel}:generateContent?key=${GEMINI_KEY}`,
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": ttsBody.length },
+    };
+    const proxyReq = https.request(opts, (proxyRes) => {
+      const chunks = [];
+      proxyRes.on("data", (c) => chunks.push(c));
+      proxyRes.on("end", () => {
+        const respBody = Buffer.concat(chunks).toString("utf8");
+        if (proxyRes.statusCode >= 400) {
+          if (!res.headersSent) res.status(proxyRes.statusCode).setHeader("Content-Type", "application/json");
+          res.end(respBody);
+          return;
+        }
+        try {
+          const data = JSON.parse(respBody);
+          logTokenUsage(data.usageMetadata, { model: ttsModel, task: "tts", stream: false });
+          const part = (data.candidates?.[0]?.content?.parts || []).find((p) => p.inlineData && p.inlineData.data);
+          const audioBase64 = part?.inlineData?.data || "";
+          const rate = /rate=(\d+)/i.exec(part?.inlineData?.mimeType || "");
+          if (!audioBase64) { res.status(502).json({ error: "TTS returned no audio" }); return; }
+          res.status(200).json({ audioBase64, sampleRate: rate ? parseInt(rate[1], 10) : 24000 });
+        } catch (e) {
+          res.status(500).json({ error: "Failed to parse TTS response" });
+        }
+      });
+    });
+    proxyReq.setTimeout(UPSTREAM_TIMEOUT_MS, () => { proxyReq.destroy(); if (!res.headersSent) res.status(504).json({ error: "TTS timed out" }); });
+    proxyReq.on("error", (e) => { if (!res.headersSent) res.status(500).json({ error: e.message }); });
+    proxyReq.write(ttsBody);
+    proxyReq.end();
     return;
   }
 
