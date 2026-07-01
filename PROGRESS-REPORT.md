@@ -2671,3 +2671,16 @@ Asked, for the Writers tab writer detail: show the writer's article(s) in a coll
 ### 91.1 — translate button on the article (user: "translation button missed")
 The new article section lacked the app-wide 翻譯成中文 toggle that every X-Ray section / saved concept has. Added it, mirroring the X-Ray "Original text" translate EXACTLY: a `翻譯成中文 / 隱藏翻譯 / 翻譯中...` button (shown when the article is expanded) → `translateWithGuard(skill.sourceText, getRouteConfig("translate"), trackCall)` (lite translate route) → the EN:/ZH: sentence pairs render below the passage using the SAME parser/layout as XRayView (so the Traditional-Chinese output is consistent). Cached after the first translate (toggle re-shows without re-calling); error → "翻譯失敗，請再試一次。". `vite build` clean; **414 tests** green.
 
+---
+
+## 92. UPDATE — 1 July 2026 — Word-lookup dictionary: US + UK pronunciation (IPA + audio)
+
+Asked: the tap-to-define dictionary should provide pronunciation with US and UK accents.
+
+**Two parts:**
+- **IPA text** — `buildWordLookupPrompt` (`prompts.js`) now asks for `ipa_us` / `ipa_uk` (General American + British RP, slash-wrapped, same value when identical, omit only if unknown). `DICTIONARY_VERSION` bumped 1→2 so the ~cached entries re-fetch with IPA. `parseWordJSON` still only requires meaning fields, so IPA is optional (a miss just hides the text, audio still works).
+- **Audio** — `WordLookup.jsx` gets a `speakWord(text, lang)` helper using the browser **Web Speech API** (`speechSynthesis`) with `lang` "en-GB" / "en-US" to pick the accent (+ a matching voice when enumerated). No new dependency, no API key; `speechSynthesis` is NOT secure-context-gated, so it works on the HTTPS deploy AND on http LAN-IP phone testing.
+- **UI** — a row under the word: `UK /ipa/ 🔊` and `US /ipa/ 🔊`; tapping a chip speaks the word in that accent. Matches the card's existing emoji chrome (📖/★/☆).
+
+**Verified:** `vite build` clean; **414 tests** green; a live lookup of "house" returned `ipa_us:"/haʊs/"`, `ipa_uk:"/haʊs/"` (IPA populates end-to-end). The 🔊 audio is browser TTS — can't be exercised headlessly (needs a device + a click/user-gesture), so tap on-device to hear the US/UK voice.
+
