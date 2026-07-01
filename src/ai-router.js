@@ -224,6 +224,23 @@ const ROUTE_CONFIG = {
     thinkingBudget: 0,
     brain: false,
   },
+
+  // ═══════════════════════════════════════
+  // TTS — native Gemini speech (audio out)
+  // ═══════════════════════════════════════
+
+  // Word-lookup pronunciation. PRIMARY 🔊 source: server-side synthesis on the SAME
+  // key kills the device-voice problem (a phone with one installed English voice
+  // made US/UK identical). Accent is prompt-directed (the prebuilt voices are NOT
+  // accent-locked) — same voice for both accents, the instruction differentiates.
+  // Model id VERIFIED live (it churns): "gemini-2.5-flash-tts" 404s; the working id
+  // is "gemini-2.5-flash-preview-tts" ("gemini-3.1-flash-tts-preview" is higher
+  // quality at ~2× price). brain:false — audio-only, no pedagogy.
+  tts: {
+    model: "gemini-2.5-flash-preview-tts",
+    thinkingBudget: 0,
+    brain: false,
+  },
 };
 
 /**

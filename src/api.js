@@ -22,6 +22,29 @@ export async function extractTextFromImage({ base64, mediaType, prompt, model, m
   return data.text || "";
 }
 
+// Word-lookup pronunciation via native Gemini TTS. Goes through the SAME /api/gemini
+// proxy (key stays server-side, exactly like extractTextFromImage) — the proxy's tts
+// branch builds the AUDIO generateContent request and returns raw PCM. Returns the
+// base64 PCM (s16le) + its sample rate; the caller wraps it in a WAV container to play.
+export async function synthesizeSpeech({ word, accent, model }) {
+  const res = await fetch("/api/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tts: { text: word, accent },
+      stream: false,
+      ...(model ? { model } : {}),
+    }),
+  });
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "Unknown error");
+    throw new Error(`TTS request failed (${res.status}): ${errorText}`);
+  }
+  const data = await res.json();
+  if (!data.audioBase64) throw new Error("TTS returned no audio");
+  return { audioBase64: data.audioBase64, sampleRate: data.sampleRate || 24000 };
+}
+
 export async function callAI(systemPrompt, userMessage, useSearch = false, maxTokens = 1000, thinkingBudget, onChunk, signal, model) {
   const body = { system: systemPrompt, message: userMessage, maxTokens };
   if (thinkingBudget) body.thinkingBudget = thinkingBudget;
