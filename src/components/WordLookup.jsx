@@ -95,6 +95,7 @@ export default function WordLookup({ trackCall }) {
   const [attempt, setAttempt] = useState(0);
   const [saved, setSaved] = useState(false);
   const [pron, setPron] = useState(null); // real recorded US/UK audio + IPA (Dictionary API)
+  const audioRef = useRef({ uk: null, us: null }); // preloaded <audio> so a tap plays inside the gesture
   const debounceRef = useRef(null);
   const popupOpenRef = useRef(false);
   popupOpenRef.current = !!popup;
@@ -214,6 +215,40 @@ export default function WordLookup({ trackCall }) {
     return () => { alive = false; };
   }, [popup]);
 
+  // Prime the speech voices on mount. getVoices() is [] until the engine fires
+  // "voiceschanged" (async) — speaking before then pins NO voice, so the browser
+  // uses its single default (ignoring u.lang for accent) → US and UK sound the
+  // same and the voice varies with load timing ("sometimes man, sometimes woman").
+  // Touching getVoices() early kicks off the load so it's populated by the first tap.
+  useEffect(() => {
+    const synth = typeof window !== "undefined" && window.speechSynthesis;
+    if (!synth) return;
+    const prime = () => { try { synth.getVoices(); } catch (e) { /* silent */ } };
+    prime();
+    synth.addEventListener?.("voiceschanged", prime);
+    return () => synth.removeEventListener?.("voiceschanged", prime);
+  }, []);
+
+  // Preload the recordings into <audio> elements as soon as they're known, so a tap
+  // PLAYS them synchronously inside the user-gesture. iOS blocks Audio.play() that
+  // runs AFTER an await (§92.2's on-demand fetch tripped exactly that — the real
+  // recording was dropped and the flaky TTS surfaced, even for words that HAD a US
+  // recording). Buffered here → instant, gesture-safe on tap.
+  useEffect(() => {
+    const mk = (url) => {
+      if (!url || typeof Audio === "undefined") return null;
+      const a = new Audio(url); a.preload = "auto";
+      try { a.load(); } catch (e) { /* silent */ }
+      return a;
+    };
+    audioRef.current = { uk: mk(pron?.audioUk), us: mk(pron?.audioUs) };
+    return () => {
+      const { uk, us } = audioRef.current;
+      [uk, us].forEach(a => { if (a) { try { a.pause(); } catch (e) { /* silent */ } } });
+      audioRef.current = { uk: null, us: null };
+    };
+  }, [pron]);
+
   // First touch on the bubble claims the gesture: openingRef suppresses the
   // selection-collapse / scroll teardown so the button survives until the tap
   // opens it. A backstop timer clears openingRef if the gesture is dropped
@@ -266,18 +301,21 @@ export default function WordLookup({ trackCall }) {
     } catch (e) { /* silent */ }
   };
 
-  // Play the recorded pronunciation (genuinely distinct US/UK). If the fetch hasn't
-  // landed yet when the button is tapped, fetch on-demand FIRST (cached) — otherwise
-  // a quick tap raced the async fetch and fell back to TTS, whose voice varied by
-  // load timing (the "sometimes man, sometimes woman, no US/UK difference" bug).
-  const playPron = async (accent) => {
+  // Play the accent's pronunciation, staying INSIDE the tap's user-gesture (NO await
+  // — see the preload note). Prefer the real recording (genuinely US vs UK); the
+  // preloaded <audio> plays instantly. On a miss (~half of words have no UK
+  // recording) or a play failure, speak it with an accent-pinned TTS voice.
+  const playPron = (accent) => {
     const word = state.entry?.word || popup?.word;
     const lang = accent === "uk" ? "en-GB" : "en-US";
-    let p = pron;
-    if (!p) { try { p = await fetchPronunciation(word); if (p) setPron(p); } catch (e) { /* offline */ } }
-    const url = p && (accent === "uk" ? p.audioUk : p.audioUs);
-    if (url) {
-      try { await new Audio(url).play(); return; } catch (e) { /* fall through to TTS */ }
+    const el = accent === "uk" ? audioRef.current.uk : audioRef.current.us;
+    if (el) {
+      try {
+        el.currentTime = 0;
+        const r = el.play();
+        if (r && typeof r.catch === "function") r.catch(() => speakWord(word, lang));
+        return;
+      } catch (e) { /* fall through to TTS */ }
     }
     speakWord(word, lang);
   };
