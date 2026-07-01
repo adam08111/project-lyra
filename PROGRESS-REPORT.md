@@ -2702,3 +2702,22 @@ Two root-cause fixes in `WordLookup.jsx` (no API/model change — this hardens t
 
 Verified END-TO-END in the live preview (drove select → 📖 → card → tap, intercepting `Audio.play`/`speechSynthesis.speak`): **water** → UK tap played `water-uk.mp3`, US tap played `water-us.mp3` (distinct recordings, no TTS fired); **because** (US-only) → US played `because-us.mp3`, UK fell back to TTS with `lang:"en-GB"` and a correctly-pinned British voice (`Microsoft George - English (United Kingdom)`). `vite build` clean; **414 tests** green.
 
+---
+
+## 94. UPDATE — 1 July 2026 — Word-lookup pronunciation: native Gemini TTS (server-synth US/UK) as PRIMARY
+
+A spike with a decision gate. §92/§93 rode the browser-TTS / dictionaryapi treadmill: `speechSynthesis` is hostage to the phone's installed voices (one English voice → US/UK identical) and dictionaryapi has long-tail gaps (half of common words have no UK recording). New approach: synthesize server-side via **native Gemini TTS on the same `GEMINI_API_KEY`** — kills the device-voice problem outright. The open risk (why it's a spike): Gemini's accent is *prompt-directed*, not accent-locked like Cloud TTS's named `en-GB`/`en-US` voices, and a lone word is the hardest case.
+
+**Built (4 commits, mirroring the §82 OCR pattern):**
+- `ai-router.js`: a `tts` route (single source of the model id). **Model id verified live before trusting it** — `gemini-2.5-flash-tts` **404s** (not GA); the working id is **`gemini-2.5-flash-preview-tts`** (`gemini-3.1-flash-tts-preview` also works, higher quality, ~2× price).
+- `api.js`: `synthesizeSpeech({word,accent})` → POST `/api/gemini` `{tts:{…}}`, mirroring `extractTextFromImage` (key stays server-side).
+- **Both proxies** (`server/proxy.js` dev + `api/gemini.js` prod): a `tts` branch building an AUDIO `generateContent` request (`responseModalities:["AUDIO"]` + `speechConfig`, **same voice "Kore" for both accents** — the accent is the prompt instruction + `languageCode`). Returns `{audioBase64, sampleRate}`; a SEPARATE `TTS_MODELS` allowlist keeps text and audio models apart; usage logged via the §87 `[tokens]` helper (`task=tts`).
+- `WordLookup.jsx`: `pcm16ToWavBlob()` (pure, exported, unit-tested — browsers can't play raw PCM) wraps the s16le PCM in WAV; `playPron` is Gemini-first with an in-memory per-`word|accent` session cache (blob URLs, capped+revoked — decision: NOT localStorage, PCM is too big), a `⏳` spinner + single in-flight guard while synthesizing, and a layered fallback (Gemini → §93 recording → browser TTS) so 🔊 is never stuck.
+
+**Eval — objective half (what I can verify headlessly):**
+- **Synthesis is reliable.** Across the divergent set (schedule, tomato, water, vitamin, herb, aluminium, mobile, privacy, garage, ballet, either, route + house/cat controls), ~26/28 calls succeeded first-try; the 2 failures were transient upstream **502s**, covered by the fallback chain. Latency ~1.6–7s (mostly 2–3s) → the spinner is load-bearing; cached replays are instant (verified: re-tap = 0 refetch).
+- **The accent instruction is accepted** (no errors, no text-token-instead-of-audio). Every completed UK-vs-US pair returned *different* audio; `sampleRate` 24000, PCM s16le, plays as a WAV blob (verified live: "schedule" plays a `blob(gemini)` for both accents, not the fallback).
+- **HONEST caveat:** byte-difference is **not** proof of accent-*correctness* — even the "should sound the same" controls (house, cat) differ, because Gemini TTS is non-deterministic per call. So distinctness-of-bytes only proves the audio renders and the instruction runs; whether **UK actually sounds British and US American** cannot be judged headlessly.
+
+**DECISION GATE — PENDING the user's ears.** The reliability/plumbing bar is met and it's live in the preview as PRIMARY. The remaining gate question ("audibly distinct AND correct on single words") requires listening — tap UK then US on the divergent set (esp. **schedule, herb, vitamin, aluminium, either, route, tomato, ballet, garage**, where UK/US genuinely diverge). If reliably distinct+correct → keep Gemini TTS (optional follow-up: drop the dictionaryapi/browser-TTS fallback). If wrong-accent or inconsistent on lone words → the fallback plan is **Cloud TTS named `en-GB`/`en-US` voices** (a separate brief: same proxy plumbing, different upstream + a second credential), NOT more prompt-fiddling. `vite build` clean; **417 tests** green (+3 `pcm16ToWavBlob`).
+
