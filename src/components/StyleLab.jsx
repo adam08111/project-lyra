@@ -1306,7 +1306,16 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen
     if (initialTab) setActiveTab(initialTab);
     setTabHistory([]);
   }, [showStyleLab, initialTab]);
-  const [referenceText, setReferenceText] = useState("");
+  // §90: persist the pasted passage so it survives leaving Style Lab / switching
+  // screens. StyleLab is mounted per-screen (3 sites in lyra.jsx), so a plain
+  // useState reset lost the paste on every exit. localStorage-backed like the rest
+  // of the app; cleared by "New analysis" (resetAll sets it "" → persisted empty).
+  const [referenceText, setReferenceText] = useState(() => {
+    try { return localStorage.getItem("lyra-stylelab-reference") || ""; } catch (e) { return ""; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("lyra-stylelab-reference", referenceText); } catch (e) { /* silent */ }
+  }, [referenceText]);
   const [styleProfile, setStyleProfile] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [authorName, setAuthorName] = useState("");
