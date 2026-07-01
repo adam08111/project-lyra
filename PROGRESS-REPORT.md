@@ -2640,3 +2640,15 @@ Asked for a file-upload button in the Lyra chat, "like Claude does". A "+" butto
 
 **Verified:** `vite build` clean (twice — initial + after the +/reposition revision); **414 tests** still green; no `Paperclip` references remain; the running dev preview HMR-serves the new ChatTab (`PlusIcon`, `handleChatPhoto`, the §82 OCR helpers all present). Layout is deterministic CSS (textarea `flex:1` left; a right `flex-direction:column` with `+` above send), and the user is viewing the live preview directly — so I did NOT drive the full 5-screen headless flow for a screenshot (it would fire a billable greeting call + create state for a low-risk visual change).
 
+---
+
+## 90. UPDATE — 1 July 2026 — Style Lab: the pasted passage now survives leaving the page
+
+Reported: in "Analyse Style", the passage you paste disappears and isn't saved when you exit and come back.
+
+**Cause:** the `Analyse Style` textarea was backed by a plain `const [referenceText, setReferenceText] = useState("")` (`StyleLab.jsx`). `StyleLab` is mounted PER-SCREEN (three render sites in `lyra.jsx` — source-setup / editor / etc.), so leaving the page unmounts the current instance and the state resets to `""`; nothing was persisted.
+
+**Fix:** localStorage-backed, exactly like the app's other state (saved concepts, reports, skills). Lazy-init `referenceText` from `localStorage["lyra-stylelab-reference"]`, and a `useEffect` writes it back on every change — so the paste survives exits, screen switches, and even a full reload. "New analysis" (`resetAll`) still clears it (sets `""`, which persists as empty). No behaviour change beyond persistence.
+
+**Verified:** `vite build` clean; **414 tests** green; the fix is the same proven persist pattern used across the app; live in the preview (HMR) — paste → leave → return restores the text.
+
