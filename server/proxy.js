@@ -239,6 +239,18 @@ const server = http.createServer((req, res) => {
         });
 
         const callStream = (attempt) => {
+          // One-shot per attempt: proxyReq.destroy() on timeout ALSO fires 'error', so without
+          // this guard the timeout and error handlers BOTH retry → two concurrent upstream calls
+          // (double-bill) + racing terminal writes to res. settled lets exactly one path win.
+          // (Same pattern as the §94.1 TTS branch above.)
+          let settled = false;
+          // Headers are already sent (writeHead(200, SSE) before callStream), so every terminal
+          // write here is SSE: an optional error line, then [DONE], then end — exactly once.
+          const endStream = (errMsg) => {
+            if (errMsg != null) res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
+            res.write("data: [DONE]\n\n");
+            res.end();
+          };
           const opts = {
             hostname: "generativelanguage.googleapis.com",
             path: streamPath,
@@ -251,15 +263,14 @@ const server = http.createServer((req, res) => {
               const errChunks = [];
               proxyRes.on("data", c => errChunks.push(c));
               proxyRes.on("end", () => {
+                if (settled) return; settled = true;
                 const errBody = Buffer.concat(errChunks).toString("utf8");
                 console.error(`[Gemini ${proxyRes.statusCode}]`, errBody.slice(0, 500));
                 if (attempt < 2) {
                   console.log(`[Retry] attempt ${attempt + 1}...`);
                   callStream(attempt + 1);
                 } else {
-                  res.write(`data: ${JSON.stringify({ error: errBody })}\n\n`);
-                  res.write("data: [DONE]\n\n");
-                  res.end();
+                  endStream(errBody);
                 }
               });
               return;
@@ -296,35 +307,33 @@ const server = http.createServer((req, res) => {
             });
 
             proxyRes.on("end", () => {
+              if (settled) return; settled = true;
               // Flush any remaining bytes from the decoder
               const tail = utf8Decoder.end();
               if (tail) buffer += tail;
               logTokenUsage(lastUsage, { model: MODEL, stream: true });
-              res.write("data: [DONE]\n\n");
-              res.end();
+              endStream(null);
             });
           });
 
           proxyReq.setTimeout(180000, () => {
             proxyReq.destroy();
+            if (settled) return; settled = true;
             if (attempt < 2) {
               console.log(`[Timeout] attempt ${attempt}, retrying...`);
               callStream(attempt + 1);
             } else {
-              res.write(`data: ${JSON.stringify({ error: "Request timed out after retries" })}\n\n`);
-              res.write("data: [DONE]\n\n");
-              res.end();
+              endStream("Request timed out after retries");
             }
           });
 
           proxyReq.on("error", (e) => {
+            if (settled) return; settled = true;
             if (attempt < 2) {
               console.log(`[Error] ${e.message}, retrying...`);
               callStream(attempt + 1);
             } else {
-              res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
-              res.write("data: [DONE]\n\n");
-              res.end();
+              endStream(e.message);
             }
           });
 
@@ -338,6 +347,11 @@ const server = http.createServer((req, res) => {
         // === Non-streaming mode (fallback) ===
         const path = `/v1beta/models/${MODEL}:generateContent?key=${GEMINI_KEY}`;
         const callOnce = (attempt) => {
+          // One-shot per attempt (see callStream): proxyReq.destroy() on timeout also fires
+          // 'error', so guard every terminal/retry path with settled — exactly one wins, no
+          // double retry (two upstream calls) and no double res write.
+          let settled = false;
+          const sendErr = (code, body) => { if (!res.headersSent) { res.writeHead(code, { "Content-Type": "application/json" }); res.end(body); } };
           const opts = {
             hostname: "generativelanguage.googleapis.com",
             path,
@@ -350,11 +364,12 @@ const server = http.createServer((req, res) => {
             const respChunks = [];
             proxyRes.on("data", (chunk) => respChunks.push(chunk));
             proxyRes.on("end", () => {
+              if (settled) return; settled = true;
               const responseBody = Buffer.concat(respChunks).toString("utf8");
               if (proxyRes.statusCode >= 400) {
                 console.error(`[Gemini ${proxyRes.statusCode}]`, responseBody.slice(0, 500));
                 if (attempt < 2) { console.log(`[Retry] attempt ${attempt + 1}...`); callOnce(attempt + 1); }
-                else { res.writeHead(proxyRes.statusCode, { "Content-Type": "application/json" }); res.end(responseBody); }
+                else { sendErr(proxyRes.statusCode, responseBody); }
                 return;
               }
               try {
@@ -374,19 +389,20 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify(result));
               } catch (e) {
                 console.error("[Gemini parse error]", e.message);
-                res.writeHead(500, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Failed to parse Gemini response" }));
+                sendErr(500, JSON.stringify({ error: "Failed to parse Gemini response" }));
               }
             });
           });
           proxyReq.setTimeout(180000, () => {
             proxyReq.destroy();
+            if (settled) return; settled = true;
             if (attempt < 2) { console.log(`[Timeout] retrying...`); callOnce(attempt + 1); }
-            else { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Request timed out after retries" })); }
+            else { sendErr(500, JSON.stringify({ error: "Request timed out after retries" })); }
           });
           proxyReq.on("error", (e) => {
+            if (settled) return; settled = true;
             if (attempt < 2) { console.log(`[Error] retrying...`); callOnce(attempt + 1); }
-            else { if (!res.headersSent) res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: e.message })); }
+            else { sendErr(500, JSON.stringify({ error: e.message })); }
           });
           proxyReq.write(postData);
           proxyReq.end();

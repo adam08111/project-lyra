@@ -98,10 +98,15 @@ export default async function handler(req, res) {
       method: "POST",
       headers: { "Content-Type": "application/json", "Content-Length": ttsBody.length },
     };
+    // One-shot guard, same as the text paths (the dev proxy's TTS branch already has it):
+    // destroy() on timeout also fires 'error', so guard every terminal path with settled —
+    // exactly one wins. headersSent stays as belt-and-suspenders. Single attempt (no retry).
+    let settled = false;
     const proxyReq = https.request(opts, (proxyRes) => {
       const chunks = [];
       proxyRes.on("data", (c) => chunks.push(c));
       proxyRes.on("end", () => {
+        if (settled) return; settled = true;
         const respBody = Buffer.concat(chunks).toString("utf8");
         if (proxyRes.statusCode >= 400) {
           // Wrap + truncate the upstream error (parity with server/proxy.js) — don't echo
@@ -122,8 +127,8 @@ export default async function handler(req, res) {
         }
       });
     });
-    proxyReq.setTimeout(UPSTREAM_TIMEOUT_MS, () => { proxyReq.destroy(); if (!res.headersSent) res.status(504).json({ error: "TTS timed out" }); });
-    proxyReq.on("error", (e) => { if (!res.headersSent) res.status(500).json({ error: e.message }); });
+    proxyReq.setTimeout(UPSTREAM_TIMEOUT_MS, () => { proxyReq.destroy(); if (settled) return; settled = true; if (!res.headersSent) res.status(504).json({ error: "TTS timed out" }); });
+    proxyReq.on("error", (e) => { if (settled) return; settled = true; if (!res.headersSent) res.status(500).json({ error: e.message }); });
     proxyReq.write(ttsBody);
     proxyReq.end();
     return;
@@ -155,6 +160,15 @@ export default async function handler(req, res) {
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
+    // One-shot guard: proxyReq.destroy() on timeout ALSO fires 'error', so without this both the
+    // timeout and error handlers would write [DONE]+end to the same res (racing terminal writes).
+    // settled lets exactly one path win. Single attempt here (no retry — 60s function cap).
+    let settled = false;
+    const endStream = (errMsg) => {
+      if (errMsg != null) res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+    };
     const opts = {
       hostname: "generativelanguage.googleapis.com",
       path: `/v1beta/models/${MODEL}:streamGenerateContent?alt=sse&key=${GEMINI_KEY}`,
@@ -166,10 +180,9 @@ export default async function handler(req, res) {
         const errChunks = [];
         proxyRes.on("data", (c) => errChunks.push(c));
         proxyRes.on("end", () => {
+          if (settled) return; settled = true;
           const errBody = Buffer.concat(errChunks).toString("utf8");
-          res.write(`data: ${JSON.stringify({ error: errBody })}\n\n`);
-          res.write("data: [DONE]\n\n");
-          res.end();
+          endStream(errBody);
         });
         return;
       }
@@ -195,23 +208,21 @@ export default async function handler(req, res) {
         }
       });
       proxyRes.on("end", () => {
+        if (settled) return; settled = true;
         const tail = utf8Decoder.end();
         if (tail) buffer += tail;
         logTokenUsage(lastUsage, { model: MODEL, stream: true });
-        res.write("data: [DONE]\n\n");
-        res.end();
+        endStream(null);
       });
     });
     proxyReq.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
       proxyReq.destroy();
-      res.write(`data: ${JSON.stringify({ error: "Request timed out" })}\n\n`);
-      res.write("data: [DONE]\n\n");
-      res.end();
+      if (settled) return; settled = true;
+      endStream("Request timed out");
     });
     proxyReq.on("error", (e) => {
-      res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
-      res.write("data: [DONE]\n\n");
-      res.end();
+      if (settled) return; settled = true;
+      endStream(e.message);
     });
     proxyReq.write(postData);
     proxyReq.end();
@@ -219,6 +230,9 @@ export default async function handler(req, res) {
   }
 
   // === Non-streaming (buffered JSON) ===
+  // One-shot guard for parity with the streaming path: destroy() on timeout also fires 'error',
+  // so guard every terminal path with settled — exactly one wins. Single attempt (60s cap).
+  let settled = false;
   const opts = {
     hostname: "generativelanguage.googleapis.com",
     path: `/v1beta/models/${MODEL}:generateContent?key=${GEMINI_KEY}`,
@@ -229,6 +243,7 @@ export default async function handler(req, res) {
     const respChunks = [];
     proxyRes.on("data", (chunk) => respChunks.push(chunk));
     proxyRes.on("end", () => {
+      if (settled) return; settled = true;
       const responseBody = Buffer.concat(respChunks).toString("utf8"); // decode once → no split UTF-8
       if (proxyRes.statusCode >= 400) {
         res.status(proxyRes.statusCode).setHeader("Content-Type", "application/json");
@@ -254,9 +269,11 @@ export default async function handler(req, res) {
   });
   proxyReq.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
     proxyReq.destroy();
+    if (settled) return; settled = true;
     if (!res.headersSent) res.status(504).json({ error: "Request timed out" });
   });
   proxyReq.on("error", (e) => {
+    if (settled) return; settled = true;
     if (!res.headersSent) res.status(500).json({ error: e.message });
   });
   proxyReq.write(postData);
