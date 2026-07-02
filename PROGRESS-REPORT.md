@@ -2745,3 +2745,23 @@ Wire output byte-unchanged: dev `callOnce` `>=400` still passes the RAW upstream
 
 **Verified:** `vite build` clean; **417 tests** green; a live dev-proxy smoke test streamed a normal chat call correctly (1 text chunk → single `[DONE]`, zero error/retry/timeout lines in the proxy log) and the non-streaming path returned correct JSON. Ran a 7-agent adversarial concurrency-review workflow (one reviewer per text call site + race-theory + surgical-discipline lenses): all four TEXT paths verified correct (fresh per-attempt `settled`, destroy-then-guard ordering safe under sync AND async `error` emission, no deadlock, happy path unchanged, wire output byte-identical); the surgical lens surfaced the prod-TTS gap above, now closed.
 
+### 94.3 — proxy error-body parity: the §94.1↔§94.2 wording, resolved (diagnose-first; CONSISTENT, comment-only)
+§94.1 said prod's error body was "wrapped+truncated **to match dev**"; §94.2 said dev `callOnce` on `>=400` "passes the RAW upstream body + status through (**not** wrapped)." Read together they look contradictory. Diagnosed by reading every terminal write in both proxies AND live-testing an upstream 400 (`maxTokens:-1`) on dev + driving the prod handler with a mock req/res. They reconcile via TWO distinct error **categories**, NOT a dev/prod split:
+
+- **Category A — upstream HTTP error** (Gemini returns 4xx/5xx WITH a body): the client should see Gemini's real error. **TEXT paths pass it RAW** — non-streaming forwards the raw body + the upstream status; streaming carries the raw body inside the SSE `data:{error}` line (no status — the 200 SSE is already committed). **TTS is the deliberate exception**: it WRAPS+TRUNCATES (`{error: body.slice(0,500)}`) so a 14-yo never sees a raw Google error blob.
+- **Category B — proxy-own failure** (timeout / socket error, no upstream response): nothing to pass through, so every path SYNTHESIZES a wrapped `{error: msg}`.
+
+So §94.1's "wrapped+truncated to match dev" was about the **TTS** branch (dev `callTts` wraps → prod `tts` was made to wrap); §94.2's "raw pass-through" was about the **text** branch (dev `callOnce`/`callStream`). Both true, different paths — and within each path prod matches dev.
+
+| Path (dev ↔ prod) | Category A (upstream 4xx/5xx) | Category B (proxy failure) |
+|---|---|---|
+| `callOnce` ↔ prod non-stream | RAW body + upstream status | `{error}` (dev 500 "…after retries" · prod 504) |
+| `callStream` ↔ prod stream | RAW body in SSE `data:{error}` line | `{error}` in SSE line |
+| `callTts` ↔ prod `tts` | WRAP+TRUNCATE `{error: body.slice(0,500)}` + status | `{error}` (504 timeout / 500 socket) |
+
+**Verdict: CONSISTENT** — no prod path wraps Category A while its dev twin passes raw; every dev↔prod counterpart matches within its mode. So **NO code-behaviour change**: added a canonical "error-body policy" note + terse `// Category A/B` labels at each error branch in both proxies, so a future "make dev/prod consistent" pass can't silently flatten A into B (or the text-raw passthrough into the TTS wrap). The §94.2 `settled` guard was untouched.
+
+Minor, intentional Category-B difference (not a bug): dev text-timeout → 500 "Request timed out after retries" (it retries 3×) vs prod → 504 "Request timed out" (single attempt, 60s cap) — both wrapped `{error}`, each correct for its proxy.
+
+**Live evidence:** dev upstream-400 → non-stream client received HTTP **400** + the raw Google `INVALID_ARGUMENT` JSON; stream received `data:{"error":"<raw 400 JSON>"}` + `[DONE]`. The prod handler (mock req/res) returned **byte-identical** output in both modes. `vite build` clean; **417 tests** green.
+

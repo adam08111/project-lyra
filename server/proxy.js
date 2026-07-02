@@ -140,6 +140,14 @@ const server = http.createServer((req, res) => {
         return;
       }
 
+      // ── Error-body policy — two categories, keep them distinct (see §94.3) ──
+      // A) Upstream Gemini returned HTTP 4xx/5xx WITH a body: the TEXT paths pass it
+      //    RAW (non-stream: + upstream status; stream: inside the SSE data:{error}
+      //    line) so the client sees Gemini's real error. TTS is the deliberate
+      //    exception — it WRAPS+TRUNCATES so a student never sees a raw Google blob.
+      // B) Proxy-OWN failure (timeout / socket, no upstream response): every path
+      //    SYNTHESIZES a wrapped {error: msg}. Don't flatten A into B (or the text
+      //    paths' raw passthrough into the TTS wrap) in a future "consistency" pass.
       // === TTS branch: native Gemini speech synthesis (audio out) ===
       // Separate request shape from the text path (responseModalities:AUDIO + a
       // speechConfig), always a non-streaming generateContent. Returns raw PCM
@@ -172,6 +180,7 @@ const server = http.createServer((req, res) => {
               if (settled) return; settled = true;
               const respBody = Buffer.concat(chunks).toString("utf8");
               if (proxyRes.statusCode >= 400) {
+                // Category A → wrap+truncate (never echo a raw Google blob to a student)
                 console.error(`[Gemini TTS ${proxyRes.statusCode}]`, respBody.slice(0, 300));
                 if (attempt < 2) { callTts(attempt + 1); return; }
                 sendErr(proxyRes.statusCode, respBody.slice(0, 500));
@@ -192,6 +201,7 @@ const server = http.createServer((req, res) => {
               }
             });
           });
+          // Category B → synthesized {error} (no upstream response to pass through)
           proxyReq.setTimeout(60000, () => { proxyReq.destroy(); if (settled) return; settled = true; if (attempt < 2) { callTts(attempt + 1); } else { sendErr(504, "TTS timed out"); } });
           proxyReq.on("error", (e) => { if (settled) return; settled = true; if (attempt < 2) { callTts(attempt + 1); } else { sendErr(500, e.message); } });
           proxyReq.write(ttsBody);
@@ -260,6 +270,7 @@ const server = http.createServer((req, res) => {
 
           const proxyReq = https.request(opts, (proxyRes) => {
             if (proxyRes.statusCode >= 400) {
+              // Category A → forward the raw upstream body inside the SSE data:{error} line
               const errChunks = [];
               proxyRes.on("data", c => errChunks.push(c));
               proxyRes.on("end", () => {
@@ -316,6 +327,7 @@ const server = http.createServer((req, res) => {
             });
           });
 
+          // Category B → synthesized {error} in the SSE line (no upstream response)
           proxyReq.setTimeout(180000, () => {
             proxyReq.destroy();
             if (settled) return; settled = true;
@@ -367,6 +379,7 @@ const server = http.createServer((req, res) => {
               if (settled) return; settled = true;
               const responseBody = Buffer.concat(respChunks).toString("utf8");
               if (proxyRes.statusCode >= 400) {
+                // Category A → forward the raw upstream body + upstream status, unwrapped
                 console.error(`[Gemini ${proxyRes.statusCode}]`, responseBody.slice(0, 500));
                 if (attempt < 2) { console.log(`[Retry] attempt ${attempt + 1}...`); callOnce(attempt + 1); }
                 else { sendErr(proxyRes.statusCode, responseBody); }
@@ -393,6 +406,7 @@ const server = http.createServer((req, res) => {
               }
             });
           });
+          // Category B → synthesized {error} (no upstream response to pass through)
           proxyReq.setTimeout(180000, () => {
             proxyReq.destroy();
             if (settled) return; settled = true;
