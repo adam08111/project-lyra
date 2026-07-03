@@ -8,6 +8,8 @@ import { FALLBACK_WELCOME, chooseWelcome, shouldSuppressWelcomeBanner } from "./
 import { parseTechniques, anonymiseSkillsForAI, restoreAuthorNames, ANTI_BIAS_BLOCK, upsertSwitchNotice, extractJsonObject, groupGrammarByRule, shouldAutoLoadDraft, buildConversationContext } from "./utils.js";
 import { extractLearningData, syncLearningData, saveMasterclassReport, maybeSaveVisibleReport } from "./learning-sync.js";
 import { getStudentContext } from "./growth-report.js";
+import { recordGrammarLogDelta } from "./data-layer.js"; // §96: grammar Layer-2 delta mirror
+import { grammarKey } from "./content-keys.js";           // §96: single-source dedup key
 import WordLookup from "./components/WordLookup.jsx";
 import { snapshotBackup } from "./backup.js";
 import { LyraAvatar } from "./components/Icons.jsx";
@@ -221,6 +223,7 @@ export default function Lyra() {
     if (!grammarLogLoaded) return;
     (async () => {
       try { await window.storage.set("grammar-log", JSON.stringify(grammarLog)); } catch (e) { /* silent */ }
+      recordGrammarLogDelta(grammarLog); // §96: mirror newly-added grammar identities (all 3 producers)
     })();
   }, [grammarLog, grammarLogLoaded]);
 
@@ -1270,12 +1273,12 @@ Rules:
               // success flash only fires when something genuinely NEW is saved — a
               // §69 re-mark re-enables the button on the new message, and re-tapping
               // it must not flash "saved!" for a no-op.
-              const seen = new Set(grammarLog.map(e => `${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
-              const fresh = newEntries.filter(e => !seen.has(`${e.phrase.toLowerCase()}|${e.correction.toLowerCase()}`));
+              const seen = new Set(grammarLog.map(grammarKey));
+              const fresh = newEntries.filter(e => !seen.has(grammarKey(e)));
               if (!fresh.length) return;
               setGrammarLog(prev => {
-                const seenP = new Set(prev.map(e => `${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
-                const reallyFresh = fresh.filter(e => !seenP.has(`${e.phrase.toLowerCase()}|${e.correction.toLowerCase()}`));
+                const seenP = new Set(prev.map(grammarKey));
+                const reallyFresh = fresh.filter(e => !seenP.has(grammarKey(e)));
                 return [...reallyFresh, ...prev];
               });
               setCheckFlash(true);

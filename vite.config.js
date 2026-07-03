@@ -24,5 +24,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // §96: tests run flag-OFF by default (the regression baseline) regardless of a local
+    // .env that sets VITE_SUPABASE_* for the dev preview. Tests that need the client
+    // opt in explicitly via vi.stubEnv; the outbox/data-layer tests mock the SDK entirely.
+    env: { VITE_SUPABASE_URL: "", VITE_SUPABASE_ANON_KEY: "" },
   },
 });

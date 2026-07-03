@@ -13,6 +13,10 @@ import { QUICK_ACTION_MESSAGES } from "./constants.js";
 // §95: dedup identities live in ONE module (they become the server-side dedup keys
 // in P0 Phase 1). normGrowthText also feeds isAuthenticGrowth below.
 import { normGrowthText, grammarKey, skillKey, growthKey, structureKey, vocabKey, reportKey } from "./content-keys.js";
+// §96: Layer-2 event mirror. Enqueue the NEWLY-added entries after each store write
+// (post local dedup). The grammar branch is NOT hooked here — the lyra.jsx save-effect
+// delta hook covers all three grammar producers (double-enqueue avoided).
+import { recordLearningEvents } from "./data-layer.js";
 
 const MARKER = /<!--LYRA_LEARNING_DATA\n?([\s\S]*?)\nLYRA_LEARNING_DATA-->/;
 
@@ -177,7 +181,10 @@ export function syncLearningData(data, ctx) {
       // §56/A2: dedup by skillName+studentApplication (reload re-sync safety).
       const seen = new Set(existing.map(skillKey));
       const fresh = newEntries.filter(s => !seen.has(skillKey(s)));
-      if (fresh.length) localStorage.setItem("lyra-skill-deployments", JSON.stringify([...fresh, ...existing]));
+      if (fresh.length) {
+        localStorage.setItem("lyra-skill-deployments", JSON.stringify([...fresh, ...existing]));
+        recordLearningEvents("skill_deployed", fresh, skillKey); // §96: mirror to Layer 2
+      }
     } catch (e) { /* silent */ }
   }
 
@@ -200,6 +207,7 @@ export function syncLearningData(data, ctx) {
       const fresh = newEntries.filter(e => !seen.has(growthKey(e)));
       if (fresh.length) {
         localStorage.setItem("lyra-growth-log", JSON.stringify([...fresh, ...existing]));
+        recordLearningEvents("growth", fresh, growthKey); // §96: mirror to Layer 2
         // Growth Report cadence: count this practice moment toward the next regen
         // (only when a genuinely new growth entry survived dedup).
         // The Report tab regenerates when this reaches REGEN_EVERY_N_PRACTICES.
@@ -229,6 +237,7 @@ export function syncLearningData(data, ctx) {
       const unique = newEntries.filter(s => !names.has(structureKey(s)));
       if (unique.length) {
         localStorage.setItem("lyra-structures", JSON.stringify([...unique, ...existing]));
+        recordLearningEvents("structure", unique, structureKey); // §96: mirror to Layer 2
       }
     } catch (e) { /* silent */ }
   }
@@ -251,6 +260,7 @@ export function syncLearningData(data, ctx) {
       const unique = newEntries.filter(v => !words.has(vocabKey(v)));
       if (unique.length) {
         localStorage.setItem("lyra-vocabulary", JSON.stringify([...unique, ...existing]));
+        recordLearningEvents("vocabulary", unique, vocabKey); // §96: mirror to Layer 2
       }
     } catch (e) { /* silent */ }
   }
@@ -442,6 +452,7 @@ export function saveMasterclassReport(report) {
       ...report,
     };
     localStorage.setItem("lyra-masterclass-reports", JSON.stringify([entry, ...existing]));
+    recordLearningEvents("report", [entry], reportKey); // §96: mirror to Layer 2 (all report callers funnel here)
     return entry;
   } catch (e) {
     return null;
