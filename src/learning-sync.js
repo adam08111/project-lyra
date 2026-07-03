@@ -10,6 +10,9 @@
 
 import { reportWords, reportSameMoment, isGrammarCritiqueText, stripLeakedAuthor } from "./report-utils.js";
 import { QUICK_ACTION_MESSAGES } from "./constants.js";
+// §95: dedup identities live in ONE module (they become the server-side dedup keys
+// in P0 Phase 1). normGrowthText also feeds isAuthenticGrowth below.
+import { normGrowthText, grammarKey, skillKey, growthKey, structureKey, vocabKey, reportKey } from "./content-keys.js";
 
 const MARKER = /<!--LYRA_LEARNING_DATA\n?([\s\S]*?)\nLYRA_LEARNING_DATA-->/;
 
@@ -19,8 +22,6 @@ const MARKER = /<!--LYRA_LEARNING_DATA\n?([\s\S]*?)\nLYRA_LEARNING_DATA-->/;
 // a sentence — not third-person meta-commentary about the student. Without
 // this, conversational "wins" (the model coupling rule fires on any insight)
 // minted fake Achievements cards and fed the Growth Report fake practices.
-
-const normGrowthText = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 
 const META_PATTERNS = [
   // §34/H3: verb-anchored — "the/this student <cognition verb>" is Lyra
@@ -152,8 +153,8 @@ export function syncLearningData(data, ctx) {
     // §56/A2: dedup by phrase+correction so a Reload (re-running sync on the
     // regenerated reply) doesn't append duplicate grammar entries.
     setGrammarLog(prev => {
-      const seen = new Set(prev.map(e => `${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
-      const fresh = newEntries.filter(e => !seen.has(`${(e.phrase || "").toLowerCase()}|${(e.correction || "").toLowerCase()}`));
+      const seen = new Set(prev.map(grammarKey));
+      const fresh = newEntries.filter(e => !seen.has(grammarKey(e)));
       return [...fresh, ...prev];
     });
   }
@@ -174,8 +175,8 @@ export function syncLearningData(data, ctx) {
         date: new Date().toISOString(),
       }));
       // §56/A2: dedup by skillName+studentApplication (reload re-sync safety).
-      const seen = new Set(existing.map(s => `${(s.skillName || "").toLowerCase()}|${(s.studentApplication || "").toLowerCase()}`));
-      const fresh = newEntries.filter(s => !seen.has(`${(s.skillName || "").toLowerCase()}|${(s.studentApplication || "").toLowerCase()}`));
+      const seen = new Set(existing.map(skillKey));
+      const fresh = newEntries.filter(s => !seen.has(skillKey(s)));
       if (fresh.length) localStorage.setItem("lyra-skill-deployments", JSON.stringify([...fresh, ...existing]));
     } catch (e) { /* silent */ }
   }
@@ -195,8 +196,8 @@ export function syncLearningData(data, ctx) {
       }));
       // §56/A2: dedup by before+after so a Reload doesn't append duplicate growth
       // entries AND doesn't double-count the practice toward the regen cadence.
-      const seen = new Set(existing.map(e => `${normGrowthText(e.before)}|${normGrowthText(e.after)}`));
-      const fresh = newEntries.filter(e => !seen.has(`${normGrowthText(e.before)}|${normGrowthText(e.after)}`));
+      const seen = new Set(existing.map(growthKey));
+      const fresh = newEntries.filter(e => !seen.has(growthKey(e)));
       if (fresh.length) {
         localStorage.setItem("lyra-growth-log", JSON.stringify([...fresh, ...existing]));
         // Growth Report cadence: count this practice moment toward the next regen
@@ -224,8 +225,8 @@ export function syncLearningData(data, ctx) {
         learnedAt: new Date().toISOString(),
       }));
       // Deduplicate by name
-      const names = new Set(existing.map(s => s.name));
-      const unique = newEntries.filter(s => !names.has(s.name));
+      const names = new Set(existing.map(structureKey));
+      const unique = newEntries.filter(s => !names.has(structureKey(s)));
       if (unique.length) {
         localStorage.setItem("lyra-structures", JSON.stringify([...unique, ...existing]));
       }
@@ -246,8 +247,8 @@ export function syncLearningData(data, ctx) {
         learnedAt: new Date().toISOString(),
       }));
       // Deduplicate by strong word
-      const words = new Set(existing.map(v => v.strong));
-      const unique = newEntries.filter(v => !words.has(v.strong));
+      const words = new Set(existing.map(vocabKey));
+      const unique = newEntries.filter(v => !words.has(vocabKey(v)));
       if (unique.length) {
         localStorage.setItem("lyra-vocabulary", JSON.stringify([...unique, ...existing]));
       }
@@ -433,8 +434,8 @@ export function saveMasterclassReport(report) {
     // Dedup: the auto-save, the visible-report fallback, and the manual
     // "Save this turn" button can all fire for the SAME turn. If this exact
     // upgraded sentence is already saved, don't add a second card.
-    const after = (report.after || "").trim();
-    if (after && existing.some(r => (r.after || "").trim() === after)) return null;
+    const after = reportKey(report);
+    if (after && existing.some(r => reportKey(r) === after)) return null;
     const entry = {
       id: "report_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
       date: new Date().toISOString(),
