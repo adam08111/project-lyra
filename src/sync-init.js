@@ -6,8 +6,10 @@
  * No learning data syncs in this phase; claim() arrives in Phase 2.
  */
 import { getSupabase, ensureStudent } from "./supabase-client.js";
+import { flush } from "./sync-outbox.js";
+import { backfillIfNeeded, LEARNING_KEYS } from "./data-layer.js";
 
-export async function initSync() {
+export async function initSync({ restoredKeys = [] } = {}) {
   try {
     if (!getSupabase()) {
       window.lyraSync = { status: () => ({ enabled: false }) };
@@ -19,6 +21,11 @@ export async function initSync() {
       status: () => ({ enabled: true, studentId }),
       code: () => localStorage.getItem("lyra-recovery-code"),
     };
+    // §96: one-time (or heal-restore-forced) backfill of local history, then drain the
+    // outbox — this session's enqueues AND any queue persisted from a prior boot. A heal
+    // of any learning key forces a re-sweep (the unique constraint absorbs the overlap).
+    backfillIfNeeded({ force: (restoredKeys || []).some((k) => LEARNING_KEYS.includes(k)) });
+    flush();
   } catch (e) {
     // Never strand boot — degrade to a disabled shim so callers still get an answer.
     try { window.lyraSync = { status: () => ({ enabled: false }) }; } catch (e2) { /* silent */ }

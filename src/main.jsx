@@ -11,7 +11,7 @@ import { initSync } from "./sync-init.js";
 // Heal any critical localStorage key that went MISSING (stray wipe / cleared
 // site data) from the last good snapshot — runs synchronously BEFORE React
 // mounts so components read the restored values, not the empty ones.
-autoRestoreFromBackup();
+const { restored } = autoRestoreFromBackup();
 
 // One-time purge of pre-gate junk growth (meta-commentary cards) — after the
 // restore so it cleans the healed state; snapshots after so the backup
@@ -31,4 +31,4 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 
 // §95: Supabase sync foundation (P0 Phase 0). Fire-and-forget AFTER mount so it never
 // delays first paint; no-op unless VITE_SUPABASE_* are set. Un-awaited by design.
-initSync();
+initSync({ restoredKeys: restored });

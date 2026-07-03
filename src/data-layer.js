@@ -9,8 +9,9 @@
  * module never defines a key; it passes the content-keys fns through.
  */
 import { tsOf } from "./report-utils.js";
-import { grammarKey } from "./content-keys.js";
+import { grammarKey, growthKey, skillKey, structureKey, vocabKey, reportKey } from "./content-keys.js";
 import { enqueue } from "./sync-outbox.js";
+import { getSupabase } from "./supabase-client.js";
 
 // The local stores the mirror + backfill sweep cover (grammar lives under the shim key
 // "grammar-log"; the rest are raw localStorage). Defined ONCE here (§3 single source).
@@ -107,4 +108,51 @@ export function recordLearningEvents(type, entries, keyFn) {
 export function saveProfileRemote(profile, lastRegenAt) {
   if (!profile) return;
   enqueue({ kind: "profile", payload: { profile, last_regen_at: lastRegenAt || null } });
+}
+
+// ── one-time (or force) backfill ──────────────────────────────────────────────
+const BACKFILL_FLAG = "lyra-sync-backfill-v1";
+
+// Each event store → (event type, content-key fn). grammar lives under the shim key.
+const STORE_MIRRORS = [
+  { key: "grammar-log", type: "grammar", keyFn: grammarKey },
+  { key: "lyra-growth-log", type: "growth", keyFn: growthKey },
+  { key: "lyra-skill-deployments", type: "skill_deployed", keyFn: skillKey },
+  { key: "lyra-structures", type: "structure", keyFn: structureKey },
+  { key: "lyra-vocabulary", type: "vocabulary", keyFn: vocabKey },
+  { key: "lyra-masterclass-reports", type: "report", keyFn: reportKey },
+];
+
+function readArr(key) {
+  try { const a = JSON.parse(localStorage.getItem(key) || "[]"); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+
+/**
+ * Sweep the full local learning history (six event stores + the profile) into the
+ * outbox so the server mirror materializes from day one; the unique constraint absorbs
+ * everything, so it is safe to re-run. Flag-gated by `lyra-sync-backfill-v1`, same
+ * idempotent pattern as purgeInauthenticGrowthV1 — runs when the flag is absent OR
+ * force is true (a heal-restore of a learning key forces a re-sweep). NO-OP (and the
+ * flag is NOT set) when sync is disabled, so it will run for real once it is enabled.
+ * @param {{ force?: boolean }} opts
+ */
+export function backfillIfNeeded({ force = false } = {}) {
+  try {
+    if (!getSupabase()) return { ran: false };                       // sync off → don't sweep or set the flag
+    if (!force && localStorage.getItem(BACKFILL_FLAG)) return { ran: false };
+    for (const { key, type, keyFn } of STORE_MIRRORS) {
+      const arr = readArr(key);
+      if (arr.length) recordLearningEvents(type, arr, keyFn);
+    }
+    try {
+      const raw = localStorage.getItem("lyra-growth-profile");
+      const profile = raw ? JSON.parse(raw) : null;
+      if (profile) saveProfileRemote(profile, profile.lastRegenAt);
+    } catch (e) { /* silent */ }
+    try { localStorage.setItem(BACKFILL_FLAG, "done"); } catch (e) { /* silent */ }
+    return { ran: true };
+  } catch (e) {
+    return { ran: false };
+  }
 }
