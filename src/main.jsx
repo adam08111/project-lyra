@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { autoRestoreFromBackup, snapshotBackup } from "./backup.js";
 import { purgeInauthenticGrowthV1 } from "./learning-sync.js";
 import { migrateTruncatedTitlesV1 } from "./titleGenerator.js";
+import { initSync } from "./sync-init.js";
 
 // Heal any critical localStorage key that went MISSING (stray wipe / cleared
 // site data) from the last good snapshot — runs synchronously BEFORE React
@@ -27,3 +28,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <Lyra />
   </ErrorBoundary>
 );
+
+// §95: Supabase sync foundation (P0 Phase 0). Fire-and-forget AFTER mount so it never
+// delays first paint; no-op unless VITE_SUPABASE_* are set. Un-awaited by design.
+initSync();
