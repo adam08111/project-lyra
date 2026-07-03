@@ -144,6 +144,19 @@ describe("sync-outbox (§96)", () => {
     expect(readOutbox()).toHaveLength(1);       // still queued the whole time
   });
 
+  it("during an active backoff, further enqueues do NOT re-arm the 3s debounce (no retry storm)", async () => {
+    h.state.upsertResult = { error: { code: "XX000" } };
+    const { enqueue } = await load();
+    enqueue(evt(1));
+    await vi.advanceTimersByTimeAsync(3000);    // debounce → fail #1 → backoff 30s
+    expect(h.state.upsertCalls).toHaveLength(1);
+    enqueue(evt(2));                             // a NEW item arrives mid-backoff
+    await vi.advanceTimersByTimeAsync(3000);     // 3s later — the backoff owns the retry, so NO flush
+    expect(h.state.upsertCalls).toHaveLength(1); // still 1 — the debounce did not fire a storm
+    await vi.advanceTimersByTimeAsync(27000);    // reach the 30s backoff → the retry finally fires
+    expect(h.state.upsertCalls).toHaveLength(2);
+  });
+
   it("is SINGLE-FLIGHT — a second flush during an in-flight one is a no-op", async () => {
     let resolveUpsert;
     h.state.upsertImpl = () => new Promise((r) => { resolveUpsert = () => r({ error: null }); });

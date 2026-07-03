@@ -58,6 +58,10 @@ export function enqueue(item) {
 }
 
 function scheduleFlush() {
+  // While a backoff is active, the backoff timer OWNS the next retry — don't let a fresh
+  // enqueue's 3s debounce undercut it into a retry storm against a failing server. On the
+  // next SUCCESS, resetBackoff() clears _backoffIdx, so the normal debounce resumes.
+  if (_backoffIdx >= 0) return;
   clearTimeout(_debounceTimer);
   _debounceTimer = setTimeout(() => { flush(); }, DEBOUNCE_MS);
 }
