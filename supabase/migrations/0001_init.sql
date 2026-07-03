@@ -76,6 +76,20 @@ create view student_rule_frequency with (security_invoker = on) as
   where type = 'grammar' and rule is not null
   group by 1, 2;
 
+-- ── Table privileges ─────────────────────────────────────────────────────────
+-- RLS decides WHICH ROWS a role sees; GRANT decides whether the role may touch the
+-- table AT ALL — they are complementary, not substitutes. Newer Supabase projects no
+-- longer auto-grant public tables to the API roles (exposure is opt-in), so WITHOUT
+-- these every Data API call would be permission-denied (42501) regardless of RLS.
+-- `authenticated` only: the client always signInAnonymously() (→ the `authenticated`
+-- role) before any table call. No delete/update on learning_events keeps it append-only
+-- at the privilege layer too. service_role is never granted client-side (D6).
+grant select, insert, update on table students        to authenticated;
+grant select, insert         on table learning_events to authenticated;
+grant select, insert, update on table growth_profiles to authenticated;
+grant select, insert, update on table blobs           to authenticated;
+grant select                 on student_rule_frequency to authenticated;
+
 -- ── Row Level Security ───────────────────────────────────────────────────────
 alter table students        enable row level security;
 alter table learning_events enable row level security;
