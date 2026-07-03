@@ -49,6 +49,33 @@ browser** (localStorage), so reviews don't collide.
 The gate is ON whenever `GATE_PASS` is set. Remove that env var (and redeploy) to
 open the site; change it to rotate the password. No code change needed.
 
+## Supabase (P0) — durable sync (optional, flag-gated)
+Lyra's learning data is local-first (localStorage stays authoritative). Supabase is a
+durable, queryable mirror. It is **entirely off** until both env vars are set — with
+them unset the app is byte-identical to the localStorage-only build. To turn it on:
+
+1. **Create a Supabase project** (https://supabase.com) — region **`ap-southeast-1`**
+   (Singapore). Lyra gets its **own** project, separate from anything else.
+2. **Enable Anonymous sign-in** — Authentication → Providers → **Anonymous** (it is
+   **off by default**). Without this, every device fails to get an `auth.uid()` and no
+   student row is ever created.
+3. **Apply the schema** — open the SQL editor and run
+   `supabase/migrations/0001_init.sql` (the in-repo single source of truth; there is no
+   CLI step). It creates the tables, RLS policies, the rule-frequency view, and the
+   `claim_student` RPC.
+4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
+   environments) — copy from the project's API settings:
+   | Name | Value |
+   |------|-------|
+   | `VITE_SUPABASE_URL` | `https://<project>.supabase.co` |
+   | `VITE_SUPABASE_ANON_KEY` | the **anon public** key (NOT `service_role`) |
+
+   The anon key is **public by design** — its authority is Row Level Security, not
+   secrecy, so it ships in the client bundle. **`service_role` must never be set here,
+   committed, or bundled.** Unset both vars to disable sync entirely.
+5. **Free tier pauses on inactivity.** A paused project makes sync silently no-op (the
+   app is unharmed — local-first). **Move the project to Pro before any school pilot.**
+
 ## CLI path (alternative)
 ```
 npm i -g vercel
