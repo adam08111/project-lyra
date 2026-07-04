@@ -2887,3 +2887,16 @@ Closes §97.1's headline. Two SQL migrations + DEPLOY.md + this entry; **ZERO `s
 
 **Verification.** No `src/` change (STOP-trigger clear). SQL applied live by Adam (0003 `create or replace`, 0004 revokes) with before/after audits as evidence above; migrations are the in-repo single source of truth. Temp `Downloads\lyra-jwt.txt` deleted after this write. Full suite still **457 green** / `vite build` clean (code untouched since §97).
 
+---
+
+## 98.1 UPDATE — 4 July 2026 — STEP 6 app-level confirmation (closes §98's open UI check)
+
+The one item §98 left open — Adam's browser confirmation that the *running app*, not just the REST/RLS probes, now owns `e9798498` — came back matching the documented expectation exactly. After `localStorage.setItem('lyra-recovery-code','ZJKY-VXVZ-FQAH-TWR7')` + reload:
+
+```
+lyraSync.status() → { "enabled": true, "studentId": "e9798498-eea2-44d2-a6c6-faf968b310a4" }
+lyraSync.code()   → "ZJKY-VXVZ-FQAH-TWR7"
+```
+
+The `lyra-sb-student-id` hint self-corrected on the post-reload `ensureStudent` (it had held today's throwaway `ffe76d14`), and `lyraSync.code()` prints the durable code again (today's `UQE2…` had overwritten it in §97.1). So the reunification is now confirmed **three independent ways**: the service-role SQL census, the app's own RLS reads (15 events + the `student_rule_frequency` CIP view), and the live `lyraSync` state. Docs-only; no code/SQL change. Runbook items 2–5 and checks 6–7 remain deferred to §99 (they wait on hydration so a profile regen is meaningful, not thin).
+
