@@ -134,10 +134,7 @@ export function syncLearningData(data, ctx) {
   const growthAll = data.growth || [];
   const authentic = growthAll.filter(g => isAuthenticGrowth(g, ctx.studentTexts || []));
   if (growthAll.length && !authentic.length) {
-    console.warn("[lyra-sync] rejected inauthentic growth:", growthAll.map(g => ({
-      before: (g.before || "").slice(0, 80),
-      after: (g.after || "").slice(0, 80),
-    })));
+    console.warn("[lyra-sync] rejected inauthentic growth", { count: growthAll.length });
   }
 
   // 1. Grammar → existing Grammar Log
@@ -361,7 +358,7 @@ export function purgeInauthenticGrowthV1({ snapshot } = {}) {
 
     localStorage.setItem("lyra-growth-purge-v1", "done");
     if (removedAfters.length) {
-      console.info(`[lyra-purge] removed ${removedLog} growth-log entr${removedLog === 1 ? "y" : "ies"} + ${removedReports} report card(s) with meta-commentary:`, removedAfters);
+      console.info(`[lyra-purge] removed ${removedLog} growth-log entr${removedLog === 1 ? "y" : "ies"} + ${removedReports} report card(s) with meta-commentary`);
       if (snapshot) snapshot();
     }
     return { ran: true, removedLog, removedReports };

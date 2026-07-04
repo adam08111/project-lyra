@@ -2804,3 +2804,16 @@ Makes §95's foundation real: every learning identity (grammar, growth, skill de
 
 **Verification.** *Env unset (regression):* full suite **457 green** (was 435; +10 sync-outbox, +7 data-layer, +5 backfill — content-keys count unchanged); `vite build` clean; no `lyra-sync-outbox` key written (enqueue no-ops off). A test-env override (`vite.config.js test.env`) forces `VITE_SUPABASE_*` empty so the suite runs flag-off regardless of the local `.env` (which now sets them for the live preview). *Env set, in-session (LIVE):* on the dev profile, backfill swept **15 real grammar entries** from months of coaching → `learning_events` (all `type=grammar`, `rule` promoted, full payload); **`student_rule_frequency` returns the aggregated moat** (Grammar fix ×8, Subject-Verb Agreement ×2, Articles ×2, Plural/Singular ×2, Noun Number ×1) — the CIP artifact. A forced re-sweep + flush left the count **stable at 15** (idempotency: ON CONFLICT DO NOTHING). Zero console errors. Profile LWW (`upsert_growth_profile`) needs 0002 applied + a regenerated profile — Adam's remaining flag-on check.
 
+---
+
+## 97. UPDATE — 4 July 2026 — §87/§88 privacy: redact the two student-content console logs §96 flagged
+
+§96's adversarial review surfaced — but, keeping the diff surgical, did NOT fix — two **pre-existing** loggers (they predate §95) that printed a 14-year-old's actual before/after writing to the browser console, violating §87/§88 (loggers emit counts/status only, never a minor's content). This is the dedicated pass §96 promised. **Log-only change; no rejection/purge LOGIC touched.**
+
+- **`learning-sync.js:137`** (`syncLearningData`, inauthentic-growth rejection) — was `growthAll.map(g => ({ before: (g.before||"").slice(0,80), after: (g.after||"").slice(0,80) }))`, i.e. the student's own sentences. Now `console.warn("[lyra-sync] rejected inauthentic growth", { count: growthAll.length })`. The first arg still contains `"rejected inauthentic growth"`, so `authentic-growth.test.js:115` (which asserts `c[0]`) stays green.
+- **`learning-sync.js:364`** (`purgeInauthenticGrowthV1`) — was appending `removedAfters` (student upgraded sentences, built from `entry.after` / `r.after || r.technique`) to the `console.info`. Dropped that array from the log; kept only the counts already in the message (`removedLog` + `removedReports`). `removedAfters` is STILL built and STILL gates the `if (removedAfters.length)` snapshot — untouched logic, no orphaned variable.
+
+Matches the §96 sync-layer loggers (`sync-outbox.js`, `data-layer.js`) — counts/status only, never content. **Diff: 2 insertions, 5 deletions, one file.**
+
+**Verification.** Full suite **457 green** (unchanged from §96); `vite build` clean. Worktree note: this checkout was missing the §95-declared `@supabase/supabase-js` dep, so `learning-sync.js` (→ `data-layer` → `sync-outbox` → `supabase-client`) couldn't import until `npm install` — a pre-existing worktree gap, not this change; the committed lockfile was untouched and `node_modules` is gitignored.
+
