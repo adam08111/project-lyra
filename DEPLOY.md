@@ -22,14 +22,13 @@ Lyra is a **Vite** SPA (entry `src/main.jsx`) — there is no Next.js app. It is
 ## One-time deploy (GitHub path — recommended, auto-redeploys on every push)
 1. Push this branch to GitHub (the remote is `adam08111/project-lyra`):
    ```
-   git push -u origin claude/jovial-kilby-124f12
+   git push -u origin main
    ```
 2. Go to https://vercel.com → **Add New… → Project** → **Import** `adam08111/project-lyra`.
 3. On the configure screen:
    - **Framework Preset:** Vite (auto-detected). Leave Build/Output at defaults.
    - **Root Directory:** leave as the repo root (`./`).
-   - **Production Branch:** pick `claude/jovial-kilby-124f12` (Settings → Git, if it
-     defaults to `main`).
+   - **Production Branch:** `main` (Vercel's default).
 4. Add **Environment Variables** (Settings → Environment Variables), all environments:
    | Name | Required? | Value |
    |------|-----------|-------|
@@ -82,6 +81,13 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
    committed, or bundled.** Unset both vars to disable sync entirely.
 5. **Free tier pauses on inactivity.** A paused project makes sync silently no-op (the
    app is unharmed — local-first). **Move the project to Pro before any school pilot.**
+
+**Production stays flag-OFF until §99 is verified.** Leave `VITE_SUPABASE_*` **unset in
+Vercel** for now — production runs the localStorage-only build (byte-identical to today).
+Only set the two vars once Phase 2 (hydration + recovery, §99) has been verified against a
+staging deploy. Note these are **build-time** vars (Vite inlines `VITE_*` at build): adding
+or changing them in Vercel has **no effect until you redeploy** — trigger a fresh
+deployment (or push) after setting them, or the running build stays flag-off.
 
 ## CLI path (alternative)
 ```
