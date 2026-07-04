@@ -1,13 +1,25 @@
 /**
- * SYNC INIT — P0 Phase 0 boot hook. Async and fire-and-forget: it is called
- * UN-AWAITED after the boot chain so it can never delay first paint, reorder boot, or
- * throw into it (#7). Flag off (env unset) → exposes a disabled status() and returns;
- * flag on → resolves the student id and exposes a console utility (precedent: backup.js).
- * No learning data syncs in this phase; claim() arrives in Phase 2.
+ * SYNC INIT — P0 boot hook. Async and fire-and-forget: called UN-AWAITED after the boot
+ * chain so it can never delay first paint, reorder boot, or throw into it (#7). Flag off
+ * (env unset) → exposes a disabled status() and returns. Flag on → resolves the student
+ * id, exposes a console utility (precedent: backup.js), HYDRATES remote history back into
+ * local (Phase 2, D7), then backfills + drains the outbox.
  */
-import { getSupabase, ensureStudent } from "./supabase-client.js";
+import { getSupabase, ensureStudent, claimStudent, STUDENT_ID_HINT } from "./supabase-client.js";
 import { flush } from "./sync-outbox.js";
 import { backfillIfNeeded, LEARNING_KEYS } from "./data-layer.js";
+import { hydrateIfNeeded, HYDRATED_FLAG } from "./hydrate.js";
+
+const IMPORT_PENDING = "lyra-sync-import-pending";
+
+/**
+ * D8: has the resolved identity changed vs the hint stored on this device? A truthy hint
+ * that differs from the freshly-resolved id means the device forked (cache-clear re-mint,
+ * or a different account). Pure + testable; v1 surfaces only — claim() is the recovery.
+ */
+export function detectIdentityChanged(hadHint, resolvedId) {
+  return !!(hadHint && resolvedId && hadHint !== resolvedId);
+}
 
 export async function initSync({ restoredKeys = [] } = {}) {
   try {
@@ -15,16 +27,44 @@ export async function initSync({ restoredKeys = [] } = {}) {
       window.lyraSync = { status: () => ({ enabled: false }) };
       return;
     }
+    // Read the prior hint BEFORE ensureStudent overwrites it (§95 self-correction).
+    let hadHint = null;
+    try { hadHint = localStorage.getItem(STUDENT_ID_HINT); } catch (e) { /* silent */ }
+
     const res = await ensureStudent();
     const studentId = res?.studentId || null;
+
+    // §99 Step 5 (D8): surface a forked identity. ids are opaque UUIDs — safe to log;
+    // student CONTENT never is. v1 does not pause sync or prompt; claim() recovers.
+    const identityChanged = detectIdentityChanged(hadHint, studentId);
+    if (identityChanged) console.warn("[sync] identity changed", { hadHint: true });
+
     window.lyraSync = {
-      status: () => ({ enabled: true, studentId }),
+      status: () => ({ enabled: true, studentId, ...(identityChanged ? { identityChanged: true } : {}) }),
       code: () => localStorage.getItem("lyra-recovery-code"),
+      // §99 Step 3 (D3 recovery): claim → re-point identity → reload → hydration fires.
+      claim: async (code) => {
+        const ok = await claimStudent(code);
+        if (ok) {
+          try { sessionStorage.removeItem(HYDRATED_FLAG); } catch (e) { /* silent */ } // re-hydrate the claimed identity
+          try { location.reload(); } catch (e) { /* silent */ }
+        }
+        return ok;
+      },
     };
-    // §96: one-time (or heal-restore-forced) backfill of local history, then drain the
-    // outbox — this session's enqueues AND any queue persisted from a prior boot. A heal
-    // of any learning key forces a re-sweep (the unique constraint absorbs the overlap).
-    backfillIfNeeded({ force: (restoredKeys || []).some((k) => LEARNING_KEYS.includes(k)) });
+
+    // §99 Step 2 (D7): hydrate BEFORE backfill — a device that pulls remote history must
+    // not then re-sweep it. hydrateIfNeeded RELOADS when it writes, so control returns
+    // here only when nothing hydrated; on the reload boot the guard skips it and the
+    // backfill flag state (respected as-is) governs the sweep.
+    await hydrateIfNeeded();
+
+    // §99 Step 4: a just-imported backup forces a re-mirror (DataExport's raw setItem
+    // bypassed the producer hooks); consume the one-shot flag. Otherwise the §96
+    // heal-restore force. The unique constraint absorbs every replay.
+    const importPending = !!localStorage.getItem(IMPORT_PENDING);
+    backfillIfNeeded({ force: importPending || (restoredKeys || []).some((k) => LEARNING_KEYS.includes(k)) });
+    if (importPending) { try { localStorage.removeItem(IMPORT_PENDING); } catch (e) { /* silent */ } }
     flush();
   } catch (e) {
     // Never strand boot — degrade to a disabled shim so callers still get an answer.
