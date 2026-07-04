@@ -59,10 +59,17 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
 2. **Enable Anonymous sign-in** — Authentication → Providers → **Anonymous** (it is
    **off by default**). Without this, every device fails to get an `auth.uid()` and no
    student row is ever created.
-3. **Apply the schema** — open the SQL editor and run
-   `supabase/migrations/0001_init.sql` (the in-repo single source of truth; there is no
-   CLI step). It creates the tables, RLS policies, the rule-frequency view, and the
-   `claim_student` RPC.
+3. **Apply the schema** — open the SQL editor and run the migrations **in order**
+   (the in-repo single source of truth; there is no CLI step):
+   1. `0001_init.sql` — tables, RLS policies, the rule-frequency view, and the
+      `claim_student` RPC.
+   2. `0002_profile_upsert.sql` — the server-side LWW `upsert_growth_profile` RPC.
+   3. `0003_claim_search_path.sql` — fixes `claim_student` (qualifies `extensions.digest`;
+      pgcrypto lives in the `extensions` schema on Supabase, so the original `search_path`
+      couldn't resolve it).
+   4. `0004_revoke_anon.sql` — revokes the anon role's residual table/function access
+      (defence-in-depth; RLS already gated it). Zero app impact.
+   Existing deployments only need **0003 then 0004**.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:
    | Name | Value |
