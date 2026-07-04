@@ -54,10 +54,13 @@ export async function initSync({ restoredKeys = [] } = {}) {
     };
 
     // §99 Step 2 (D7): hydrate BEFORE backfill — a device that pulls remote history must
-    // not then re-sweep it. hydrateIfNeeded RELOADS when it writes, so control returns
-    // here only when nothing hydrated; on the reload boot the guard skips it and the
-    // backfill flag state (respected as-is) governs the sweep.
-    await hydrateIfNeeded();
+    // not then re-sweep it. hydrateIfNeeded RELOADS when it writes, but location.reload()
+    // does NOT halt synchronous JS — so we must explicitly STOP here when it hydrated,
+    // else backfill would re-sweep the just-written stores in this same tick. The imminent
+    // reload re-runs initSync on the settled state (guard set → hydrate skips; backfill
+    // flag respected as-is → no re-sweep of what we just pulled).
+    const { hydrated } = await hydrateIfNeeded();
+    if (hydrated) return;
 
     // §99 Step 4: a just-imported backup forces a re-mirror (DataExport's raw setItem
     // bypassed the producer hooks); consume the one-shot flag. Otherwise the §96

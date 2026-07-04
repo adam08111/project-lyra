@@ -16,13 +16,13 @@ function makeStorage() {
   };
 }
 // A chainable stub: learning_events → .select().order().range() ; growth_profiles → .select().limit()
-function makeClient({ events = [], profile = null } = {}) {
+function makeClient({ events = [], profile = null, eventsError = null, profileError = null } = {}) {
   const chain = {
     select: () => chain,
     order: () => chain,
     eq: () => chain,
-    limit: () => Promise.resolve({ data: profile ? [profile] : [], error: null }),
-    range: (from, to) => Promise.resolve({ data: events.slice(from, to + 1), error: null }),
+    limit: () => Promise.resolve({ data: profile ? [profile] : [], error: profileError }),
+    range: (from, to) => Promise.resolve({ data: eventsError ? null : events.slice(from, to + 1), error: eventsError }),
   };
   return { from: () => chain };
 }
@@ -86,6 +86,47 @@ describe("materialize — pure (§99)", () => {
     const row = { profile: { level: 3, lastRegenAt: "2026-07-01T00:00:00.000Z" }, last_regen_at: "2026-07-01T00:00:00.000Z" };
     expect(materialize([], row, () => null)["lyra-growth-profile"]).toEqual({ level: 3, lastRegenAt: "2026-07-01T00:00:00.000Z" });
     expect(materialize([], row, (k) => (k === "lyra-growth-profile" ? { level: 1 } : null))["lyra-growth-profile"]).toBeUndefined();
+  });
+
+  it("profile row with null profile → no lyra-growth-profile write", async () => {
+    const { materialize } = await import("../src/hydrate.js");
+    expect(materialize([], { profile: null, last_regen_at: "x" }, () => null)["lyra-growth-profile"]).toBeUndefined();
+  });
+});
+
+describe("fetchRemote (§99)", () => {
+  it("returns null when sync is disabled", async () => {
+    h.client = null;
+    const { fetchRemote } = await import("../src/hydrate.js");
+    expect(await fetchRemote()).toBe(null);
+  });
+
+  it("pages through >500 events (multiple range calls) and accumulates all", async () => {
+    const events = Array.from({ length: 750 }, (_, i) => ev("grammar", { id: "g" + i }, "t" + i));
+    h.client = makeClient({ events });
+    const { fetchRemote } = await import("../src/hydrate.js");
+    const r = await fetchRemote();
+    expect(r.events).toHaveLength(750); // page1=500 (not <500 → continue) + page2=250 (<500 → stop)
+  });
+
+  it("returns null on an events fetch error", async () => {
+    h.client = makeClient({ eventsError: { code: "PGRST" } });
+    const { fetchRemote } = await import("../src/hydrate.js");
+    expect(await fetchRemote()).toBe(null);
+  });
+
+  it("returns null on a profile fetch error", async () => {
+    h.client = makeClient({ events: [ev("grammar", { id: "g" })], profileError: { code: "PGRST" } });
+    const { fetchRemote } = await import("../src/hydrate.js");
+    expect(await fetchRemote()).toBe(null);
+  });
+
+  it("returns { events, profile } on success", async () => {
+    h.client = makeClient({ events: [ev("grammar", { id: "g" })], profile: { profile: { level: 2 }, last_regen_at: "x" } });
+    const { fetchRemote } = await import("../src/hydrate.js");
+    const r = await fetchRemote();
+    expect(r.events).toHaveLength(1);
+    expect(r.profile).toEqual({ profile: { level: 2 }, last_regen_at: "x" });
   });
 });
 

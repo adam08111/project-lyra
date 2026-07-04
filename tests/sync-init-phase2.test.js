@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // §99 Phase 2 wiring in initSync. Mock every collaborator so we exercise the orchestration
 // (identity surfacing, import-pending consumption, claim wiring) with no network.
-const h = vi.hoisted(() => ({ backfillCalls: [], flushCalls: 0, studentId: "student-A", claimResult: true, hydrateResult: { hydrated: false } }));
+const h = vi.hoisted(() => ({ backfillCalls: [], flushCalls: 0, seq: [], studentId: "student-A", claimResult: true, hydrateResult: { hydrated: false } }));
 vi.mock("../src/supabase-client.js", () => ({
   getSupabase: () => ({}),
   ensureStudent: () => Promise.resolve({ studentId: h.studentId }),
@@ -10,11 +10,11 @@ vi.mock("../src/supabase-client.js", () => ({
   STUDENT_ID_HINT: "lyra-sb-student-id",
 }));
 vi.mock("../src/hydrate.js", () => ({
-  hydrateIfNeeded: () => Promise.resolve(h.hydrateResult),
+  hydrateIfNeeded: () => { h.seq.push("hydrate"); return Promise.resolve(h.hydrateResult); },
   HYDRATED_FLAG: "lyra-hydrated-v1",
 }));
 vi.mock("../src/data-layer.js", () => ({
-  backfillIfNeeded: (opts) => { h.backfillCalls.push(opts); return { ran: true }; },
+  backfillIfNeeded: (opts) => { h.seq.push("backfill"); h.backfillCalls.push(opts); return { ran: true }; },
   LEARNING_KEYS: ["grammar-log", "lyra-growth-log", "lyra-skill-deployments", "lyra-structures", "lyra-vocabulary", "lyra-masterclass-reports", "lyra-growth-profile"],
 }));
 vi.mock("../src/sync-outbox.js", () => ({ flush: () => { h.flushCalls++; } }));
@@ -31,7 +31,7 @@ function makeStorage() {
 
 beforeEach(() => {
   vi.resetModules();
-  h.backfillCalls = []; h.flushCalls = 0; h.studentId = "student-A"; h.claimResult = true; h.hydrateResult = { hydrated: false };
+  h.backfillCalls = []; h.flushCalls = 0; h.seq = []; h.studentId = "student-A"; h.claimResult = true; h.hydrateResult = { hydrated: false };
   globalThis.window = {};
   globalThis.localStorage = makeStorage();
   globalThis.sessionStorage = makeStorage();
@@ -92,5 +92,20 @@ describe("initSync — Phase 2 wiring (§99)", () => {
     await initSync();
     expect(await window.lyraSync.claim("bad")).toBe(false);
     expect(sessionStorage.getItem("lyra-hydrated-v1")).toBe("1");
+  });
+
+  it("hydration fired → initSync returns BEFORE backfill (a reload is imminent; no re-sweep of pulled data)", async () => {
+    h.hydrateResult = { hydrated: true };
+    const { initSync } = await import("../src/sync-init.js");
+    await initSync();
+    expect(h.backfillCalls).toHaveLength(0);  // returned early — the reload boot backfills on the settled state
+    expect(h.seq).toEqual(["hydrate"]);       // never reached backfill this tick
+  });
+
+  it("ordering: hydrate runs BEFORE backfill (Step 2 wiring), and hydrate does NOT force the backfill", async () => {
+    const { initSync } = await import("../src/sync-init.js");
+    await initSync();                          // nothing hydrated (default), nothing to restore
+    expect(h.seq).toEqual(["hydrate", "backfill"]);
+    expect(h.backfillCalls[0]).toEqual({ force: false }); // hydrate never forces; §96 flag respected as-is
   });
 });
