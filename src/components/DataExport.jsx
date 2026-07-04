@@ -36,6 +36,7 @@ export default function DataExport({ projects, grammarLog }) {
         if (data.grammarLog) {
           await window.storage.set("grammar-log", JSON.stringify(data.grammarLog));
         }
+        localStorage.setItem("lyra-sync-import-pending", "1"); // §99: initSync force-mirrors this imported history (raw write bypassed the producer hooks)
         window.location.reload();
       } catch (err) {
         alert("Invalid backup file. Please select a valid Lyra backup.");
