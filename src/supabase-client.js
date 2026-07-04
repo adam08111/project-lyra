@@ -11,7 +11,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 
-const STUDENT_ID_HINT = "lyra-sb-student-id";
+export const STUDENT_ID_HINT = "lyra-sb-student-id";
 const RECOVERY_CODE_KEY = "lyra-recovery-code";
 // No ambiguous glyphs (0/O, 1/I/L) so a student can transcribe the code by hand.
 const RECOVERY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -119,4 +119,35 @@ function cacheStudent(id) {
   _studentId = id;
   try { localStorage.setItem(STUDENT_ID_HINT, id); } catch (e) { /* silent */ }
   return { studentId: id };
+}
+
+/**
+ * D3 recovery (P0 Phase 2). Claim the student that owns `code` onto this device's auth
+ * identity. Normalizes the code (trim + uppercase — generated codes are already upper +
+ * dashes, so this only tolerates hand-typing) and calls the claim_student RPC (fixed in
+ * §98). On TRUE: drop the stale student-id hint so ensureStudent re-resolves, and persist
+ * the code locally so lyraSync.code() keeps printing it; the caller then reloads
+ * (→ ensureStudent re-points → hydration materializes the claimed history). On FALSE /
+ * error: NO state change. Counts/status-only logging (§87/§88) — never the code.
+ * @param {string} code
+ * @returns {Promise<boolean>}
+ */
+export async function claimStudent(code) {
+  try {
+    const sb = getSupabase();
+    if (!sb) return false;
+    const p_code = String(code || "").trim().toUpperCase();
+    if (!p_code) return false;
+    const { data, error } = await sb.rpc("claim_student", { p_code });
+    if (error) { logSync("claim failed", { code: error.status || error.name }); return false; }
+    if (data !== true) { logSync("claim rejected"); return false; }
+    _studentId = null;                                    // force re-resolve on next ensureStudent
+    try { localStorage.removeItem(STUDENT_ID_HINT); } catch (e) { /* silent */ }
+    try { localStorage.setItem(RECOVERY_CODE_KEY, p_code); } catch (e) { /* silent */ }
+    logSync("claim ok");
+    return true;
+  } catch (e) {
+    logSync("claim threw", { code: e?.name });
+    return false;
+  }
 }
