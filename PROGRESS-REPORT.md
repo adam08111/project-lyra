@@ -3107,3 +3107,15 @@ The follow-up §103 deferred: the ONE confirmed model-behaviour vulnerability (2
 
 **Landing record.** Three commits — the fix `a4e09db`, the red-team update `d749c04`, this log — FF-landed onto `origin/main` with no divergence (never force). The new `origin/main` sha (this log commit's hash) is stated in the close-out.
 
+---
+
+## 101.1 UPDATE — 5 July 2026 — crown test verified LIVE: the P0 cross-device recovery story is closed (recorded post-§105)
+
+§101's manual verification left the **crown test** as the one deferred check — the D3 cross-device recovery. Adam ran it live on `:3000` (env set), and it **PASSES**.
+
+**Evidence (console).** In a second browser profile: `lyraSync.claim('ZJKY-VXVZ-FQAH-TWR7')` → **`[lyra-sync] claim ok`** (the `claim_student` RPC via `supabase-client.js`, not a local fallback) → **one auto-reload** (`Navigated to http://localhost:3000/`). Post-reload the device owns `studentId: e9798498-eea2-44d2-a6c6-faf968b310a4` with the durable data materialized locally: **writings 1, Style Lab skills 1, Grammar Log 16 entries** — matching the real session and ≈ the §97 CIP grammar history. So the §101 Layer-1 blobs (the writings) AND the §95–§99 Layer-2 learning identities (the Grammar Log) hydrate back together **in a single reload** on a device that did not have them.
+
+**What this closes.** The full P0 durability/recovery headline is now proven end-to-end and live: *cache-clear / new device → enter recovery code → writings + Style Lab skills + Grammar Log all return.* This was the last outstanding P0 manual check (§95–§101).
+
+**Rigour note.** A definitive cross-device proof requires the claim profile to have started empty (before: `writings 0 / grammarLog 0`; after: the values above = the recovery delta) — which is how the test was set up. The `trainingChats` count scrolled off the console object and was not separately read here; the writings + skills + Grammar Log cover the headline. Verification-only — no code, SQL, or other doc change beyond this entry.
+
