@@ -105,3 +105,36 @@ a grounded web search can occasionally run longer and get cut off (streaming sti
 shows partial output first). If that becomes a problem, run the always-on Node
 server instead: deploy `server/proxy.js` (no per-request cap) on Render/Railway/Fly
 and point the app's `/api/gemini` at it. Ask and I'll wire that variant up.
+
+## Security (§102 / §103) — what ships and what to know
+The proxy + gate hardening from §102 and the model-behaviour red-team from §103.
+See `SECURITY.md` for the full posture; the operational notes:
+
+- **CORS origin lock (§102 F1).** `api/gemini.js` only answers same-origin POSTs (it no
+  longer sends `Access-Control-Allow-Origin: *`). It derives the allowed origin from the
+  request host by default; set the optional env var **`ALLOWED_ORIGIN`**
+  (e.g. `https://lyra.example.com`) to pin it explicitly for a custom domain. Cross-origin
+  POSTs get 403. Defence-in-depth alongside the Basic-Auth gate.
+- **Rate limit (§102 F2).** `api/gemini.js` enforces a best-effort **40 requests/minute
+  per identity** (keyed by the Supabase `student_id` the client forwards, else IP) before
+  any billed call. It is **in-memory per warm serverless instance — NOT durable** across
+  cold starts or scale-out (a floor against a runaway client, not a fortress). **Caveat:**
+  with the Supabase sync flag OFF (the current production default), every user keys by IP,
+  so a **class behind one NAT shares the 40/min budget**. For a multi-student pilot, turn
+  the sync flag ON (per-student keying) or move to a durable KV/Supabase-backed limiter.
+- **Model safety thresholds (§102 F4).** All four *settable* Gemini harm categories
+  (harassment, hate speech, sexually explicit, dangerous content) are set explicitly to
+  `BLOCK_MEDIUM_AND_ABOVE` in `src/safety-settings.js` (see that file for the reasoning).
+  **`HARM_CATEGORY_CIVIC_INTEGRITY` is deliberately left at the model default** and NOT
+  set — recorded here so F4's "no silent defaults" principle stays literally true: (a)
+  Google no longer honours blocking that category on current Gemini models (setting it is a
+  no-op), and (b) persuasive/argumentative essays on elections, government and public
+  policy are a syllabus staple, so blocking civic content would false-positive on
+  legitimate student work. Revisit if a future model makes it enforceable.
+- **Security headers (§102 F6).** `X-Content-Type-Options: nosniff`, `X-Frame-Options:
+  DENY`, `Referrer-Policy: no-referrer` ship on every response via `vercel.json`. A full
+  Content-Security-Policy is a documented follow-up (needs `connect-src` for the Supabase
+  URL).
+- **Behavioural red-team (§103).** `tests/redteam/` — a reusable harness that attacks the
+  shipped prompts (ghost-writing refusal, prompt exfiltration, injection, minors-safety).
+  **Re-run `npm run redteam` before every pilot and release** (see `SECURITY.md`).

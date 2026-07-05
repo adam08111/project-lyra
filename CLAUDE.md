@@ -36,6 +36,7 @@ This file is auto-loaded every session — **read it before every task.** It is 
 - [ ] Run the full test suite — all green, note the count (`npx vitest run`).
 - [ ] `git status` clean; push the branch to origin.
 - [ ] Land on `origin/main` (fast-forward; worktree caution in #2; never force).
+- [ ] **RECORD THE LANDED `origin/main` SHA** — in BOTH the session report AND the new `§` entry (§99–§102 kept omitting it; state it every time).
 - [ ] Report: the commit list that went up, the `origin/main` sha after, and any stale-branch list (report only).
 
 ## DEEPER DOCS (read for the relevant area)
