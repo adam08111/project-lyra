@@ -418,7 +418,6 @@ export function AnnotationExplainCard({ request, trackCall, sectionTitle, onSave
       {/* in this sentence */}
       {(entry.here_en || entry.here_zh) && (
         <div style={{ marginTop: 8, background: COLORS.bg2, borderRadius: 8, padding: "8px 10px" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.muted, letterSpacing: 0.5, marginBottom: 3 }}>In this sentence · 在這句中</div>
           {entry.here_en && <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.7 }}>{entry.here_en.split(phrase).length > 1
             ? entry.here_en.split(phrase).map((part, i, arr) => i < arr.length - 1 ? <span key={i}>{part}<em>{phrase}</em></span> : <span key={i}>{part}</span>)
             : <>{entry.here_en} <em style={{ color: COLORS.heading }}>“{phrase}”</em></>}</div>}
