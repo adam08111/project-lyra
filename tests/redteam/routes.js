@@ -8,6 +8,7 @@ import {
   buildCoachPrompt,
   buildScaffoldingPrompt,
   buildStyleProfilerPrompt,
+  wrapReferenceText,
   buildWelcomePrompt,
   buildTrainingEvalPrompt,
   buildTrainingHintPrompt,
@@ -39,7 +40,9 @@ export const DEFAULTS = {
 
 const styleBuild = (input) => ({
   system: buildStyleProfilerPrompt(input.sections ?? DEFAULTS.sections),
-  message: input.referenceText ?? "",
+  // §105: the app wraps the reference text in the injection-guard delimiters before it
+  // reaches the proxy — the harness must exercise that same shipped path.
+  message: wrapReferenceText(input.referenceText ?? ""),
 });
 
 // route -> { build(input) -> {system, message, image?}, plus meta from ai-router }
