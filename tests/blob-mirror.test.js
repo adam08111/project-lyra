@@ -94,4 +94,10 @@ describe("blob-mirror — sweep / seed / guards (§101)", () => {
     sweep();
     expect(h.enqueued).toHaveLength(0);
   });
+
+  it("never enqueues a spurious tombstone for a never-mirrored, still-empty key", async () => {
+    const { sweep } = await load();
+    sweep();                                    // no local values, no seed → every ALLOW key absent
+    expect(h.enqueued).toHaveLength(0);         // absent-and-never-mirrored → no "" markers
+  });
 });

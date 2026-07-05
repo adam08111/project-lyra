@@ -32,9 +32,10 @@ export const DENY_KEYS = new Set([
   "lyra-backup-v1", "lyra-sync-outbox", "lyra-sync-backfill-v1", "lyra-sync-import-pending",
   "lyra-recovery-code", "lyra-sb-student-id", "lyra-hydrated-v1", "lyra-growth-purge-v1",
   "lyra-title-detrunc-v1",
-  // derived caches / transient buffers / change-signals (regenerable — never durable):
+  // derived caches / transient buffers (regenerable — never durable):
   "lyra-growth-pending", "lyra-annotation-glossary", "lyra-word-dictionary",
-  "lyra-training-exercises", "lyra-stylelab-reference", "lyra-wl-debug", "lyra-concepts-changed",
+  "lyra-training-exercises", "lyra-stylelab-reference", "lyra-wl-debug",
+  // (lyra-concepts-changed is a window Event name, not a localStorage key — not classified here.)
 ]);
 
 const MAX_BYTES = 2 * 1024 * 1024; // D11 size guard

@@ -113,7 +113,17 @@ export function materialize(events, profile, localReader, blobs = []) {
 export async function hydrateIfNeeded() {
   try {
     if (!getSupabase()) return { hydrated: false };                       // sync disabled
-    if (sessionStorage.getItem(HYDRATED_FLAG)) return { hydrated: false }; // loop guard
+    if (sessionStorage.getItem(HYDRATED_FLAG)) {
+      // Post-hydration reload boot (same session): the full fetch is skipped (loop guard),
+      // but _lastSent reset on the reload — so re-seed the blob churn guard from a light
+      // blobs-only fetch (from REMOTE, so a locally-newer blob still syncs up), else the
+      // first sweep would re-upsert every mirrored key once. Never throws (#7).
+      try {
+        const { data: blobRows } = await getSupabase().from("blobs").select("key,value");
+        seedLastSent(Object.fromEntries((blobRows || []).map((b) => [b.key, b.value])));
+      } catch (e) { /* silent */ }
+      return { hydrated: false };
+    }
     const remote = await fetchRemote();
     if (!remote) return { hydrated: false };                              // fetch failed (logged)
     // Seed the churn guard so the FIRST sweep won't re-upsert what already matches remote.

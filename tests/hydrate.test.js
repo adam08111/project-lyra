@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // §99/§101 hydration. No network: mock the supabase client behind getSupabase; mock
 // blob-mirror (ALLOW_KEYS + seedLastSent) so hydrate doesn't pull the outbox chain.
 // In-memory localStorage/sessionStorage. materialize is pure (injected RAW localReader).
-const h = vi.hoisted(() => ({ client: null }));
+const h = vi.hoisted(() => ({ client: null, seeded: [] }));
 vi.mock("../src/supabase-client.js", () => ({ getSupabase: () => h.client }));
 vi.mock("../src/blob-mirror.js", () => ({
   ALLOW_KEYS: new Set(["lyra-projects", "lyra-user-name", "lyra-style-skills", "lyra-training-chats", "lyra-training-progress", "lyra-saved-concepts"]),
-  seedLastSent: () => {},
+  seedLastSent: (m) => { h.seeded.push(m); },
 }));
 
 function makeStorage() {
@@ -36,6 +36,7 @@ function makeClient({ events = [], profile = null, blobs = [], eventsError = nul
 beforeEach(() => {
   vi.resetModules();
   h.client = null;
+  h.seeded = [];
   globalThis.localStorage = makeStorage();
   globalThis.sessionStorage = makeStorage();
 });
@@ -167,12 +168,20 @@ describe("fetchRemote (§99/§101)", () => {
 });
 
 describe("hydrateIfNeeded — orchestrator (§99/§101)", () => {
-  it("loop-guard: no-op when the session flag is already set", async () => {
-    h.client = makeClient({ events: [ev("grammar", { id: "g" })] });
+  it("loop-guard: no-op write when the session flag is set, but RE-SEEDS the churn guard from remote blobs", async () => {
+    h.client = makeClient({ events: [ev("grammar", { id: "g" })], blobs: [{ key: "lyra-projects", value: "V" }] });
     sessionStorage.setItem("lyra-hydrated-v1", "1");
     const { hydrateIfNeeded } = await import("../src/hydrate.js");
     expect((await hydrateIfNeeded()).hydrated).toBe(false);
-    expect(localStorage.getItem("grammar-log")).toBe(null);
+    expect(localStorage.getItem("grammar-log")).toBe(null);        // loop guard → no write
+    expect(h.seeded).toContainEqual({ "lyra-projects": "V" });     // churn guard re-seeded (§101 review fix)
+  });
+
+  it("seeds the churn guard from the fetched blobs on a normal boot", async () => {
+    h.client = makeClient({ blobs: [{ key: "lyra-user-name", value: "Alice" }] });
+    const { hydrateIfNeeded } = await import("../src/hydrate.js");
+    await hydrateIfNeeded();
+    expect(h.seeded).toContainEqual({ "lyra-user-name": "Alice" });
   });
 
   it("disabled sync → no-op", async () => {
