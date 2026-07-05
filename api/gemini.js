@@ -58,6 +58,32 @@ function isOriginAllowed(req) {
   return !allowed || origin === allowed;   // can't resolve host → fail open (never break the app)
 }
 
+// ── F2 (§102): best-effort per-identity rate limit. In-memory ONLY, so it lives per
+// WARM serverless instance and does NOT persist across cold starts or scale-out — a
+// FLOOR against one runaway client exhausting the shared Gemini quota, not a durable
+// fortress (a Supabase-/KV-backed limiter is the noted follow-up, out of scope here).
+// Keyed by the Supabase student_id the client forwards, else the request IP.
+const RL_WINDOW_MS = 60 * 1000;
+const RL_MAX_PER_MIN = 40; // conservative ceiling; a normal coaching session stays well under
+const rlHits = new Map(); // key -> number[] (recent request timestamps)
+function clientKey(req, parsed) {
+  const sid = parsed && typeof parsed.studentId === "string" && parsed.studentId.trim();
+  if (sid) return `sid:${sid}`;
+  const xff = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return `ip:${xff || req.socket?.remoteAddress || "unknown"}`;
+}
+function rateLimited(key) {
+  const now = Date.now();
+  const recent = (rlHits.get(key) || []).filter((t) => t > now - RL_WINDOW_MS);
+  if (recent.length >= RL_MAX_PER_MIN) { rlHits.set(key, recent); return true; }
+  recent.push(now);
+  rlHits.set(key, recent);
+  if (rlHits.size > 5000) { // bound memory on a long-lived warm instance
+    for (const [k, v] of rlHits) if (!v.some((t) => t > now - RL_WINDOW_MS)) rlHits.delete(k);
+  }
+  return false;
+}
+
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
     // F1: echo the requesting origin only when it matches the allow-listed origin;
@@ -104,6 +130,13 @@ export default async function handler(req, res) {
   }
   if (!parsed || typeof parsed !== "object") {
     res.status(400).json({ error: "Invalid JSON body" });
+    return;
+  }
+
+  // F2 (§102): best-effort rate limit BEFORE any billed upstream call (covers the text,
+  // vision and TTS paths). Headers aren't sent yet, so a clean 429 is safe everywhere.
+  if (rateLimited(clientKey(req, parsed))) {
+    res.status(429).json({ error: "Too many requests — please slow down and try again in a minute." });
     return;
   }
 

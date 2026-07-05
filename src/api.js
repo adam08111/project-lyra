@@ -1,7 +1,21 @@
+import { STUDENT_ID_HINT } from "./supabase-client.js";
+
+// F2 (§102): forward the already-known Supabase student id so the proxy can rate-limit
+// per identity (it falls back to IP when this is absent / the sync flag is off). Read-only,
+// best-effort, never throws — the id is used only as a rate-limit key, never sent upstream.
+function currentStudentId() {
+  try {
+    return (typeof localStorage !== "undefined" && localStorage.getItem(STUDENT_ID_HINT)) || null;
+  } catch {
+    return null;
+  }
+}
+
 // Photo OCR via Gemini vision. Sends a base64 image + an extraction prompt to the
 // same /api/gemini proxy (which builds an inline_data part), and returns the
 // extracted text. Replaces the old direct Claude call — the app is now Gemini-only.
 export async function extractTextFromImage({ base64, mediaType, prompt, model, maxTokens = 2000 }) {
+  const sid = currentStudentId();
   const res = await fetch("/api/gemini", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -11,6 +25,7 @@ export async function extractTextFromImage({ base64, mediaType, prompt, model, m
       image: { data: base64, mediaType: mediaType || "image/jpeg" },
       maxTokens,
       stream: false,
+      ...(sid ? { studentId: sid } : {}),
       ...(model ? { model } : {}),
     }),
   });
@@ -33,6 +48,7 @@ export async function synthesizeSpeech({ word, accent, model }) {
   // caller falls back to the recording / browser TTS instead of an eternal ⏳.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 65000);
+  const sid = currentStudentId();
   try {
     const res = await fetch("/api/gemini", {
       method: "POST",
@@ -40,6 +56,7 @@ export async function synthesizeSpeech({ word, accent, model }) {
       body: JSON.stringify({
         tts: { text: word, accent },
         stream: false,
+        ...(sid ? { studentId: sid } : {}),
         ...(model ? { model } : {}),
       }),
       signal: controller.signal,
@@ -61,6 +78,8 @@ export async function callAI(systemPrompt, userMessage, useSearch = false, maxTo
   if (thinkingBudget) body.thinkingBudget = thinkingBudget;
   if (useSearch) body.useSearch = true;
   if (model) body.model = model;
+  const sid = currentStudentId();
+  if (sid) body.studentId = sid;
 
   // Use streaming when onChunk callback is provided, otherwise non-streaming
   if (!onChunk) body.stream = false;
