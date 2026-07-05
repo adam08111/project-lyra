@@ -67,13 +67,15 @@ function isOriginAllowed(req) {
 const RL_WINDOW_MS = 60 * 1000;
 const RL_MAX_PER_MIN = 40; // conservative ceiling; a normal coaching session stays well under
 const rlHits = new Map(); // key -> number[] (recent request timestamps)
-function clientKey(req, parsed) {
-  const sid = parsed && typeof parsed.studentId === "string" && parsed.studentId.trim();
+export function clientKey(req, parsed) {
+  // studentId is client-supplied, so clamp its length before using it as a Map key
+  // (bounds per-entry memory; the value is never sent upstream — rate-limit key only).
+  const sid = parsed && typeof parsed.studentId === "string" && parsed.studentId.trim().slice(0, 64);
   if (sid) return `sid:${sid}`;
   const xff = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
   return `ip:${xff || req.socket?.remoteAddress || "unknown"}`;
 }
-function rateLimited(key) {
+export function rateLimited(key) {
   const now = Date.now();
   const recent = (rlHits.get(key) || []).filter((t) => t > now - RL_WINDOW_MS);
   if (recent.length >= RL_MAX_PER_MIN) { rlHits.set(key, recent); return true; }
