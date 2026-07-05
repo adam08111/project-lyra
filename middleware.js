@@ -40,6 +40,13 @@ export default function middleware(request) {
       status: 401,
       headers: {
         "WWW-Authenticate": 'Basic realm="Lyra — enter the review password", charset="UTF-8"',
+        // F6 (§102): security headers on the gate's own 401 too. The primary set for all
+        // app/API responses lives in vercel.json (Edge middleware can only add pass-through
+        // headers via @vercel/edge's next(), a dependency we avoid). No CSP here — that is a
+        // documented follow-up needing per-origin allow-listing (connect-src the Supabase URL).
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "no-referrer",
       },
     });
   }
