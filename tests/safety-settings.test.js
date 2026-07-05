@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SAFETY_SETTINGS, SAFETY_BLOCK_MESSAGE, isSafetyBlocked } from "../src/safety-settings.js";
+import { SAFETY_SETTINGS, SAFETY_BLOCK_MESSAGE, isSafetyBlocked, BLOCKING_FINISH_REASONS } from "../src/safety-settings.js";
 
 // §102 F4: explicit Gemini safetySettings for a minors' English coach + the never-stuck
 // (#7) companion guard. These assertions pin the deliberate threshold decision so a future
@@ -31,8 +31,22 @@ describe("safety-settings (§102 F4)", () => {
     expect(isSafetyBlocked({ promptFeedback: { blockReason: "SAFETY" } })).toBe(true);
   });
 
+  it("isSafetyBlocked detects RECITATION and the other content stops (not just SAFETY)", () => {
+    // RECITATION fires when the model would reproduce copyrighted text — a real case for
+    // an app that analyses published articles; without this it would be a silent blank (#7).
+    for (const reason of ["RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "OTHER"]) {
+      expect(isSafetyBlocked({ candidates: [{ finishReason: reason }] })).toBe(true);
+    }
+  });
+
   it("isSafetyBlocked is false for a normal completed response", () => {
     expect(isSafetyBlocked({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "hi" }] } }] })).toBe(false);
+  });
+
+  it("isSafetyBlocked is false for MAX_TOKENS (partial real output, not a content block)", () => {
+    expect(isSafetyBlocked({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: "partial" }] } }] })).toBe(false);
+    expect(BLOCKING_FINISH_REASONS.has("STOP")).toBe(false);
+    expect(BLOCKING_FINISH_REASONS.has("MAX_TOKENS")).toBe(false);
   });
 
   it("isSafetyBlocked never throws on empty / malformed input", () => {

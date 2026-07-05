@@ -37,9 +37,21 @@ export const SAFETY_SETTINGS = [
 export const SAFETY_BLOCK_MESSAGE =
   "I can't help with that particular text — let's keep it to your own writing. Try a different passage.";
 
-// True when Gemini blocked the request/response on safety grounds (prompt-side block, or
-// a candidate that finished with reason SAFETY). Pure, never throws.
+// Content-driven terminations that leave NO usable text — ALL must surface as the honest
+// message above, never a silent blank (#7). SAFETY = the safetySettings block; RECITATION
+// fires when the model would reproduce copyrighted text (this app analyses published
+// articles, so it is a real case here, not just theoretical); BLOCKLIST /
+// PROHIBITED_CONTENT / SPII / OTHER are the remaining content stops. STOP and MAX_TOKENS
+// are deliberately NOT here — those carry real (or partial-real) output to show.
+export const BLOCKING_FINISH_REASONS = new Set([
+  "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "OTHER",
+]);
+
+// True when Gemini blocked/emptied the request or response for a content reason (a
+// prompt-side block, or a candidate that finished for one of the reasons above). Always
+// paired with a `!text` check so a partial/real answer is never overridden. Never throws.
 export function isSafetyBlocked(geminiData) {
+  if (geminiData?.promptFeedback?.blockReason) return true;
   const finish = geminiData?.candidates?.[0]?.finishReason;
-  return Boolean(geminiData?.promptFeedback?.blockReason) || finish === "SAFETY";
+  return Boolean(finish) && BLOCKING_FINISH_REASONS.has(finish);
 }

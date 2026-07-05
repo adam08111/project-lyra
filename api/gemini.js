@@ -18,7 +18,7 @@
 import https from "https";
 import { StringDecoder } from "string_decoder";
 import { logTokenUsage } from "../src/token-metrics.js"; // Step-0 diagnostic (counts only)
-import { SAFETY_SETTINGS, SAFETY_BLOCK_MESSAGE, isSafetyBlocked } from "../src/safety-settings.js"; // F4 (§102)
+import { SAFETY_SETTINGS, SAFETY_BLOCK_MESSAGE, isSafetyBlocked, BLOCKING_FINISH_REASONS } from "../src/safety-settings.js"; // F4 (§102)
 
 export const config = { maxDuration: 60 }; // Hobby plan ceiling
 
@@ -280,7 +280,7 @@ export default async function handler(req, res) {
             for (const part of parts) {
               if (part.text) { res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`); wroteText = true; }
             }
-            if (data.candidates?.[0]?.finishReason === "SAFETY" || data.promptFeedback?.blockReason) blocked = true;
+            if (BLOCKING_FINISH_REASONS.has(data.candidates?.[0]?.finishReason) || data.promptFeedback?.blockReason) blocked = true;
             if (data.usageMetadata) lastUsage = data.usageMetadata; // Step-0: capture for one post-loop log
           } catch (e) { /* skip unparseable chunk */ }
         }
