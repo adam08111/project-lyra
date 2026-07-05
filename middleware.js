@@ -16,6 +16,17 @@ export const config = {
   matcher: "/:path*",
 };
 
+// F7 (§102): constant-time credential compare so the gate can't leak the password via
+// response timing. For a single shared review password the timing risk is largely
+// theoretical, but the fix is trivial and exactly equivalent to `===`. Lengths are
+// compared first; the expected length is already public via the realm, so that is immaterial.
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 export default function middleware(request) {
   const PASS = process.env.GATE_PASS;
   if (!PASS) return; // gate disabled when no password configured
@@ -24,7 +35,7 @@ export default function middleware(request) {
   const expected = "Basic " + btoa(`${USER}:${PASS}`);
   const provided = request.headers.get("authorization") || "";
 
-  if (provided !== expected) {
+  if (!timingSafeEqual(provided, expected)) {
     return new Response("Authentication required.", {
       status: 401,
       headers: {
