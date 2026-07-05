@@ -24,6 +24,7 @@ import TrainingSession from "./components/TrainingSession.jsx";
 import { generateTitle, swapTitleTypePrefix } from "./titleGenerator.js";
 import { detectFormatCue, typeLabelOf } from "./genre-cues.js";
 import { nextHeaderCollapsed } from "./header-collapse.js";
+import { useTrainingLauncher } from "./hooks.js"; // §104 (D1): first extracted seam
 
 export default function Lyra() {
   // Core state
@@ -83,19 +84,10 @@ export default function Lyra() {
   const [techsEnriching, setTechsEnriching] = useState(false);
   const [pendingSkillsOpen, setPendingSkillsOpen] = useState(false);
 
-  // Training Session. trainingStartTech is the technique index to jump
-  // straight into (per-technique "Practise this technique"); null = open the
-  // overview list as before.
-  const [trainingSkill, setTrainingSkill] = useState(null);
-  const [trainingStartTech, setTrainingStartTech] = useState(null);
-  const openTrainingSession = useCallback((skill, techIdx) => {
-    setTrainingStartTech(Number.isInteger(techIdx) ? techIdx : null);
-    setTrainingSkill(skill);
-  }, []);
-  const closeTrainingSession = useCallback(() => {
-    setTrainingSkill(null);
-    setTrainingStartTech(null);
-  }, []);
+  // Training Session launcher — extracted to useTrainingLauncher (§104 D1). Holds ONLY
+  // which skill/technique the Training overlay opens (null = closed); the rationale +
+  // the technique-index behaviour now live with the hook in hooks.js.
+  const { trainingSkill, trainingStartTech, openTrainingSession, closeTrainingSession } = useTrainingLauncher();
 
   // Source text (new unified flow)
   const [sourceText, setSourceText] = useState("");
