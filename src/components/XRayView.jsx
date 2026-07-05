@@ -3,7 +3,7 @@ import { COLORS } from "../constants.js";
 import { FeatherIcon } from "./Icons.jsx";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { translatePrompt, buildStyleProfilerPrompt, XRAY_ALL_SECTIONS } from "../prompts.js";
+import { translatePrompt, buildStyleProfilerPrompt, wrapReferenceText, XRAY_ALL_SECTIONS } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
 import { normKey, explainAnnotation, buildConceptFromExplanation } from "../annotation-glossary.js";
 
@@ -1692,7 +1692,7 @@ export async function analyseMoreOfWriter(skill, { trackCall } = {}) {
   if (!remaining.length || !src) return { merged: skill, added: [] };
   if (trackCall) trackCall();
   const route = getRouteConfig("style_analysis");
-  let raw = await callAI(buildStyleProfilerPrompt(remaining), src, false, 10000, route.thinkingBudget, undefined, undefined, route.model);
+  let raw = await callAI(buildStyleProfilerPrompt(remaining), wrapReferenceText(src), false, 10000, route.thinkingBudget, undefined, undefined, route.model);
   if (raw && typeof raw === "object" && typeof raw.text === "string") raw = raw.text;
   const newSections = parseProfileSections(stripLearningData(raw || ""));
   const merged = mergeNewSectionsIntoSkill(skill, newSections);

@@ -5,7 +5,7 @@ import { FeatherIcon, CameraIcon, GalleryIcon } from "./Icons.jsx";
 import Sidebar from "./Sidebar.jsx";
 import { callAI, extractTextFromImage } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { buildStyleProfilerPrompt } from "../prompts.js";
+import { buildStyleProfilerPrompt, wrapReferenceText } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
 import XRayView, { parseProfileSections, filterSectionsToRequested, extractAuthor, saveStyleSkill, mono } from "./XRayView.jsx";
 import { prepareImageForOCR } from "../image-utils.js";
@@ -145,7 +145,7 @@ export default function SourceSetup({
       // Throttle parsing to every ~400ms — avoids O(n²) re-parsing on every token
       let lastParseAt = 0;
       let advancedToStep2 = false;
-      const result = await callAI(buildStyleProfilerPrompt(requestedSections), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
+      const result = await callAI(buildStyleProfilerPrompt(requestedSections), wrapReferenceText(userMsg), false, 10000, analysisRoute.thinkingBudget, (partial) => {
         const now = Date.now();
         if (now - lastParseAt < 400) return;
         lastParseAt = now;

@@ -7,7 +7,7 @@ import { COLORS, defaultXraySections } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { callAI } from "../api.js";
 import { getRouteConfig } from "../ai-router.js";
-import { buildStyleProfilerPrompt, translatePrompt, XRAY_ALL_SECTIONS } from "../prompts.js";
+import { buildStyleProfilerPrompt, wrapReferenceText, translatePrompt, XRAY_ALL_SECTIONS } from "../prompts.js";
 import { stripLearningData } from "../learning-sync.js";
 import { FeatherIcon } from "./Icons.jsx";
 import XRayView, {
@@ -1530,7 +1530,7 @@ export default function StyleLab({ showStyleLab, setShowStyleLab, setSidebarOpen
       // One requested set for the prompt AND both parse sites — the clamp must
       // match what was asked for, or the curation contract drifts.
       const requestedSections = defaultXraySections(writingType);
-      const result = await callAI(buildStyleProfilerPrompt(requestedSections), userMsg, false, 10000, analysisRoute.thinkingBudget, (partial) => {
+      const result = await callAI(buildStyleProfilerPrompt(requestedSections), wrapReferenceText(userMsg), false, 10000, analysisRoute.thinkingBudget, (partial) => {
         // Live-update as tokens stream in
         const clean = stripLearningData(partial);
         const author = extractAuthor(clean);
