@@ -3,12 +3,15 @@
  * chain so it can never delay first paint, reorder boot, or throw into it (#7). Flag off
  * (env unset) → exposes a disabled status() and returns. Flag on → resolves the student
  * id, exposes a console utility (precedent: backup.js), HYDRATES remote history back into
- * local (Phase 2, D7), then backfills + drains the outbox.
+ * local (Phase 2, D7 + Phase 3 blobs, D10), sets up dual-path blob capture (D9), then
+ * backfills + drains the outbox.
  */
 import { getSupabase, ensureStudent, claimStudent, STUDENT_ID_HINT } from "./supabase-client.js";
 import { flush } from "./sync-outbox.js";
 import { backfillIfNeeded, LEARNING_KEYS } from "./data-layer.js";
 import { hydrateIfNeeded, HYDRATED_FLAG } from "./hydrate.js";
+import { registerStorageListener } from "./storage-shim.js";
+import { noteWrite, sweep } from "./blob-mirror.js";
 
 const IMPORT_PENDING = "lyra-sync-import-pending";
 
@@ -61,6 +64,21 @@ export async function initSync({ restoredKeys = [] } = {}) {
     // flag respected as-is → no re-sweep of what we just pulled).
     const { hydrated } = await hydrateIfNeeded();
     if (hydrated) return;
+
+    // §101 Step 5 (D9): dual-path blob capture. The shim listener catches shim-carried
+    // writes (2s debounce); the 60s sweep catches RAW-written allow-list keys. Set up AFTER
+    // the hydrate early-return so a hydrating boot (which reloads) doesn't register a
+    // listener/interval it is about to discard. flush also fires on visibility→hidden
+    // (best-effort capture before the tab backgrounds); `online` is handled in sync-outbox.
+    registerStorageListener(noteWrite);
+    try { setInterval(() => { try { sweep(); } catch (e) { /* silent */ } }, 60000); } catch (e) { /* silent */ }
+    try {
+      if (typeof document !== "undefined" && window.addEventListener) {
+        window.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "hidden") { try { flush(); } catch (e) { /* silent */ } }
+        });
+      }
+    } catch (e) { /* silent */ }
 
     // §99 Step 4: a just-imported backup forces a re-mirror (DataExport's raw setItem
     // bypassed the producer hooks); consume the one-shot flag. Otherwise the §96

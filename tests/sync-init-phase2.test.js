@@ -18,6 +18,9 @@ vi.mock("../src/data-layer.js", () => ({
   LEARNING_KEYS: ["grammar-log", "lyra-growth-log", "lyra-skill-deployments", "lyra-structures", "lyra-vocabulary", "lyra-masterclass-reports", "lyra-growth-profile"],
 }));
 vi.mock("../src/sync-outbox.js", () => ({ flush: () => { h.flushCalls++; } }));
+// §101: initSync now wires blob capture — stub the shim listener + blob-mirror.
+vi.mock("../src/storage-shim.js", () => ({ registerStorageListener: () => {} }));
+vi.mock("../src/blob-mirror.js", () => ({ noteWrite: () => {}, sweep: () => {} }));
 
 function makeStorage() {
   let s = {};
@@ -31,12 +34,13 @@ function makeStorage() {
 
 beforeEach(() => {
   vi.resetModules();
+  vi.useFakeTimers(); // §101: initSync starts a 60s sweep interval — fake it so it doesn't linger
   h.backfillCalls = []; h.flushCalls = 0; h.seq = []; h.studentId = "student-A"; h.claimResult = true; h.hydrateResult = { hydrated: false };
   globalThis.window = {};
   globalThis.localStorage = makeStorage();
   globalThis.sessionStorage = makeStorage();
 });
-afterEach(() => { delete globalThis.window; delete globalThis.localStorage; delete globalThis.sessionStorage; });
+afterEach(() => { vi.useRealTimers(); delete globalThis.window; delete globalThis.localStorage; delete globalThis.sessionStorage; });
 
 describe("detectIdentityChanged — pure (§99 D8)", () => {
   it("true ONLY when a differing hint pre-existed", async () => {
