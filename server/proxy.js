@@ -8,6 +8,7 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { StringDecoder } from "string_decoder";
 import { logTokenUsage } from "../src/token-metrics.js"; // Step-0 diagnostic (counts only)
+import { SAFETY_SETTINGS, SAFETY_BLOCK_MESSAGE, isSafetyBlocked } from "../src/safety-settings.js"; // F4 (§102)
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -230,6 +231,7 @@ const server = http.createServer((req, res) => {
         system_instruction: { parts: [{ text: system || "" }] },
         contents: [{ role: "user", parts: userParts }],
         generationConfig: genConfig,
+        safetySettings: SAFETY_SETTINGS, // F4 (§102): gates text AND the vision/OCR path (shared body)
       };
       if (useSearch) {
         geminiReq.tools = [{ google_search: {} }];
@@ -289,6 +291,8 @@ const server = http.createServer((req, res) => {
 
             let buffer = "";
             let lastUsage = null; // Step-0: usageMetadata rides the FINAL SSE chunk; capture, log once after the loop
+            let wroteText = false; // F4 (§102): did any content reach the client?
+            let blocked = false;   // F4 (§102): safety block seen (finishReason SAFETY / promptFeedback)
             const utf8Decoder = new StringDecoder("utf8");
             proxyRes.on("data", (chunk) => {
               // Use StringDecoder so multi-byte UTF-8 chars (Chinese, em-dashes, emoji)
@@ -305,8 +309,9 @@ const server = http.createServer((req, res) => {
                     const data = JSON.parse(jsonStr);
                     const parts = data.candidates?.[0]?.content?.parts || [];
                     for (const part of parts) {
-                      if (part.text) res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
+                      if (part.text) { res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`); wroteText = true; }
                     }
+                    if (data.candidates?.[0]?.finishReason === "SAFETY" || data.promptFeedback?.blockReason) blocked = true;
                     // Step-0: capture usage from whichever chunk carries it (the final
                     // SSE chunk) — logged ONCE after the stream ends, via the shared helper.
                     if (data.usageMetadata) lastUsage = data.usageMetadata;
@@ -323,6 +328,8 @@ const server = http.createServer((req, res) => {
               const tail = utf8Decoder.end();
               if (tail) buffer += tail;
               logTokenUsage(lastUsage, { model: MODEL, stream: true });
+              // F4 (#7): a safety block yields no text — surface an honest, retryable line, never a blank.
+              if (!wroteText && blocked) res.write(`data: ${JSON.stringify({ text: SAFETY_BLOCK_MESSAGE })}\n\n`);
               endStream(null);
             });
           });
@@ -389,6 +396,8 @@ const server = http.createServer((req, res) => {
                 const geminiData = JSON.parse(responseBody);
                 const text = geminiData.candidates?.[0]?.content?.parts?.map(p => p.text || "").filter(Boolean).join("\n") || "";
                 logTokenUsage(geminiData.usageMetadata, { model: MODEL, stream: false });
+                // F4 (#7): a safety block yields no text — return an honest, retryable message, not a blank.
+                if (!text && isSafetyBlocked(geminiData)) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ text: SAFETY_BLOCK_MESSAGE })); return; }
                 const result = { text };
                 // Include grounding search results if available
                 const grounding = geminiData.candidates?.[0]?.groundingMetadata;

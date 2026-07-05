@@ -18,6 +18,7 @@
 import https from "https";
 import { StringDecoder } from "string_decoder";
 import { logTokenUsage } from "../src/token-metrics.js"; // Step-0 diagnostic (counts only)
+import { SAFETY_SETTINGS, SAFETY_BLOCK_MESSAGE, isSafetyBlocked } from "../src/safety-settings.js"; // F4 (§102)
 
 export const config = { maxDuration: 60 }; // Hobby plan ceiling
 
@@ -219,6 +220,7 @@ export default async function handler(req, res) {
     system_instruction: { parts: [{ text: system || "" }] },
     contents: [{ role: "user", parts: userParts }],
     generationConfig: genConfig,
+    safetySettings: SAFETY_SETTINGS, // F4 (§102): gates text AND the vision/OCR path (shared body)
   };
   if (useSearch) geminiReq.tools = [{ google_search: {} }];
   const postData = Buffer.from(JSON.stringify(geminiReq));
@@ -261,6 +263,8 @@ export default async function handler(req, res) {
       }
       let buffer = "";
       let lastUsage = null; // Step-0: usageMetadata rides the FINAL SSE chunk; capture, log once after the loop
+      let wroteText = false; // F4 (§102): did any content reach the client?
+      let blocked = false;   // F4 (§102): safety block seen (finishReason SAFETY / promptFeedback)
       const utf8Decoder = new StringDecoder("utf8");
       proxyRes.on("data", (chunk) => {
         buffer += utf8Decoder.write(chunk); // never split a multi-byte UTF-8 char
@@ -274,8 +278,9 @@ export default async function handler(req, res) {
             const data = JSON.parse(jsonStr);
             const parts = data.candidates?.[0]?.content?.parts || [];
             for (const part of parts) {
-              if (part.text) res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`);
+              if (part.text) { res.write(`data: ${JSON.stringify({ text: part.text })}\n\n`); wroteText = true; }
             }
+            if (data.candidates?.[0]?.finishReason === "SAFETY" || data.promptFeedback?.blockReason) blocked = true;
             if (data.usageMetadata) lastUsage = data.usageMetadata; // Step-0: capture for one post-loop log
           } catch (e) { /* skip unparseable chunk */ }
         }
@@ -285,6 +290,8 @@ export default async function handler(req, res) {
         const tail = utf8Decoder.end();
         if (tail) buffer += tail;
         logTokenUsage(lastUsage, { model: MODEL, stream: true });
+        // F4 (#7): a safety block yields no text — surface an honest, retryable line, never a blank.
+        if (!wroteText && blocked) res.write(`data: ${JSON.stringify({ text: SAFETY_BLOCK_MESSAGE })}\n\n`);
         endStream(null);
       });
     });
@@ -329,6 +336,8 @@ export default async function handler(req, res) {
         const geminiData = JSON.parse(responseBody);
         logTokenUsage(geminiData.usageMetadata, { model: MODEL, stream: false });
         const text = geminiData.candidates?.[0]?.content?.parts?.map((p) => p.text || "").filter(Boolean).join("\n") || "";
+        // F4 (#7): a safety block yields no text — return an honest, retryable message, not a blank.
+        if (!text && isSafetyBlocked(geminiData)) { res.status(200).json({ text: SAFETY_BLOCK_MESSAGE }); return; }
         const result = { text };
         const grounding = geminiData.candidates?.[0]?.groundingMetadata;
         if (grounding?.groundingChunks) {
