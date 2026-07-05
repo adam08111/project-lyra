@@ -2925,3 +2925,23 @@ Phase 1 made the mirror one-way (local → remote). Phase 2 makes it heal in rev
 
 **Deferred Phase-1 closures + the acceptance test — MANUAL, staged by reality on `:3000` (Adam runs; env set):** the app's real acceptance is Adam's standing state — `:3000` session-bound to `e9798498`, **15 remote grammar events, empty local**. Reload once → expect `[sync] hydrated 1 keys` → one auto-reload → Grammar Log renders the 15 (matching the §97.1 CIP table), `grammar-log` length 15, no reload loop, outbox empty (backfill flag already set on `:3000`). Then items 2–5 (proofread ×2 → remote count stable; §70 save + manual achievement → new rows; offline turn → outbox queues then drains; hammer reload ×5 → counts stable); check 6 (regen the profile — now fed by real hydrated history → `growth_profiles` row + `last_regen_at`); check 7 (non-destructive LWW: current payload + OLDER timestamp → row unchanged). Cross-device: a second Chrome profile → mint throwaway → `lyraSync.claim('ZJKY-VXVZ-FQAH-TWR7')` → auto-reload → the 15 hydrate there too (SQL census: still one student). **Phase 1 closes on those checks.**
 
+---
+
+## 99.1 UPDATE — 5 July 2026 — P0 Phase 1/2 CLOSED — live acceptance + deferred checks all pass
+
+Ran the §99 manual acceptance and the deferred Phase-1 closures live on `:3000` (env set), against `e9798498`. **All pass — P0 Phase 0/1/2 are fully verified.**
+
+- **Hydration acceptance (D7):** reload → console logged **`[sync] hydrated 1 keys`** (hydrate.js:32) → one automatic reload → `grammar-log` length **15**, `lyra-sync-outbox` **null** (no re-enqueue), `lyraSync.status()` = `{enabled:true, studentId:'e9798498…'}`, no reload loop; the Grammar Log UI rendered the 15. Confirmed three ways (console log, localStorage, UI).
+- **Items 2–3 (producer→remote mirror, live):** 3 real coaching turns in skill-practice generated new learning data; `learning_events` under `e9798498` is now **47** — vocabulary 17, grammar 16, skill_deployed 8, report 3, growth 2, structure 1 (Content-Range authoritative). The new report/growth/skill/structure/vocab rows (ts today) mirrored through the producer hooks → outbox → Supabase without intervention.
+- **Check 6 (regen → profile mirror):** "Generate my report" (once ≥3 practices unlocked it — the gate counts deduped masterclass reports, not grammar) created a `growth_profiles` row via `saveProfileRemote` → `upsert_growth_profile` (`last_regen_at 2026-07-05T06:34:36`).
+- **Check 7 (LWW older-loses, non-destructive):** called `upsert_growth_profile({lww_probe:true}, 2026-07-01T00:00:00Z)` — an OLDER timestamp. RPC returned 204 but the LWW guard **rejected the write**: `last_regen_at` + `updated_at` unchanged and the probe marker never landed (the real profile is untouched). Older-loses proven.
+- **Plumbing detour (no code impact):** during the session the dev server was swapped to `preview_start`, which serves only the headless preview browser, not the real OS `localhost:3000` → the app's AI calls failed `ERR_CONNECTION_REFUSED` and showed "my engine just sputtered." That is the **#7 never-stuck fallback working correctly** (an honest error on a dead backend, not a hang), NOT a bug; restored a plain `vite --host` (reachable on 127.0.0.1 + ::1) and calls resumed. Lesson: for the user's own browser, run the dev server via plain Vite, not `preview_start`.
+
+Housekeeping (report-only): two orphan `students` rows exist (`ffe76d14` from §97.1; one throwaway anon minted by the live-preview check) — deletable in the SQL editor, unlinked to `e9798498`.
+
+---
+
+## 100. UPDATE — 5 July 2026 — Style Lab / X-Ray: drop the redundant "In this sentence" label
+
+Small UI fix (user-reported). The annotation-explainer card (the "tap a highlighted phrase to learn it" popup, `XRayView.jsx`, shared by the X-Ray analysis and Style Lab) hard-coded an **`In this sentence · 在這句中`** header above the in-context example — redundant, since the example (`here_en`/`here_zh`) is self-evidently the in-context use. Removed the label div only (XRayView.jsx:421); the example content and the sibling `Give it a go` / `For example` labels are unchanged. Verified live: the served module no longer contains the label, HMR compiled clean, the app renders. One-line change, one file.
+
