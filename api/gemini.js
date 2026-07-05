@@ -38,9 +38,34 @@ const ttsInstruction = (word, accent) => accent === "uk"
   : `Say this single English word, and nothing else, clearly and naturally in a General American accent: "${word}"`;
 const UPSTREAM_TIMEOUT_MS = 55000; // leave headroom under the 60s function cap
 
+// ── F1 (§102): origin allow-listing. The Basic-Auth gate (middleware.js) stays the
+// primary control; this is defense-in-depth so a cross-origin page can't invoke the
+// Gemini-billed endpoint from a gated user's browser. Allowed origin = ALLOWED_ORIGIN
+// env when set, else the deployment's own origin (derived from the request Host). A
+// request with NO Origin header (same-origin fetch / server-to-server) is allowed —
+// browsers always send Origin on a cross-origin POST, so its absence is never the attack.
+function allowedOrigin(req) {
+  if (process.env.ALLOWED_ORIGIN) return process.env.ALLOWED_ORIGIN;
+  const host = req.headers.host;
+  if (!host) return null;
+  const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+  return `${proto}://${host}`;
+}
+function isOriginAllowed(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;                // same-origin / non-browser (still gated by Basic-Auth)
+  const allowed = allowedOrigin(req);
+  return !allowed || origin === allowed;   // can't resolve host → fail open (never break the app)
+}
+
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // F1: echo the requesting origin only when it matches the allow-listed origin;
+    // otherwise advertise the configured origin so a foreign origin fails the preflight.
+    const allowed = allowedOrigin(req);
+    const origin = req.headers.origin;
+    res.setHeader("Access-Control-Allow-Origin", (origin && allowed && origin === allowed) ? origin : (allowed || ""));
+    res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     res.status(204).end();
@@ -48,6 +73,11 @@ export default async function handler(req, res) {
   }
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  // F1 (§102): reject cross-origin POSTs (defense-in-depth alongside the Basic-Auth gate).
+  if (!isOriginAllowed(req)) {
+    res.status(403).json({ error: "Cross-origin request rejected" });
     return;
   }
 
