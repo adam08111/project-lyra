@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// §99 hydration. No network: mock the supabase client behind getSupabase; in-memory
-// localStorage/sessionStorage. materialize is pure (injected localReader); hydrateIfNeeded
-// is the orchestrator.
+// §99/§101 hydration. No network: mock the supabase client behind getSupabase; mock
+// blob-mirror (ALLOW_KEYS + seedLastSent) so hydrate doesn't pull the outbox chain.
+// In-memory localStorage/sessionStorage. materialize is pure (injected RAW localReader).
 const h = vi.hoisted(() => ({ client: null }));
 vi.mock("../src/supabase-client.js", () => ({ getSupabase: () => h.client }));
+vi.mock("../src/blob-mirror.js", () => ({
+  ALLOW_KEYS: new Set(["lyra-projects", "lyra-user-name", "lyra-style-skills", "lyra-training-chats", "lyra-training-progress", "lyra-saved-concepts"]),
+  seedLastSent: () => {},
+}));
 
 function makeStorage() {
   let s = {};
@@ -15,14 +19,16 @@ function makeStorage() {
     clear: () => { s = {}; },
   };
 }
-// A chainable stub: learning_events → .select().order().range() ; growth_profiles → .select().limit()
-function makeClient({ events = [], profile = null, eventsError = null, profileError = null } = {}) {
+// learning_events → .select().order().range(); growth_profiles → .select().limit();
+// blobs → .select() awaited directly (the chain is thenable, resolving to blobs).
+function makeClient({ events = [], profile = null, blobs = [], eventsError = null, profileError = null, blobsError = null } = {}) {
   const chain = {
     select: () => chain,
     order: () => chain,
     eq: () => chain,
     limit: () => Promise.resolve({ data: profile ? [profile] : [], error: profileError }),
     range: (from, to) => Promise.resolve({ data: eventsError ? null : events.slice(from, to + 1), error: eventsError }),
+    then: (resolve) => resolve({ data: blobsError ? null : blobs, error: blobsError }),
   };
   return { from: () => chain };
 }
@@ -65,15 +71,16 @@ describe("materialize — pure (§99)", () => {
   it("per-key conservatism: a non-empty local key is NOT overwritten", async () => {
     const { materialize } = await import("../src/hydrate.js");
     const events = [ev("grammar", { id: "g1" }), ev("vocabulary", { id: "v1" })];
-    const localReader = (k) => (k === "grammar-log" ? [{ id: "local-existing" }] : null);
+    const localReader = (k) => (k === "grammar-log" ? '[{"id":"local-existing"}]' : null);
     const map = materialize(events, null, localReader);
     expect(map["grammar-log"]).toBeUndefined();          // present locally → skip
     expect(map["lyra-vocabulary"]).toEqual([{ id: "v1" }]); // empty locally → fill
   });
 
-  it("empty local value ([] / {}) counts as absent → fills", async () => {
+  it("RAW empty local value (null / '' / '[]' / '{}') counts as absent → fills", async () => {
     const { materialize } = await import("../src/hydrate.js");
-    expect(materialize([ev("grammar", { id: "g" })], null, () => [])["grammar-log"]).toEqual([{ id: "g" }]);
+    expect(materialize([ev("grammar", { id: "g" })], null, () => "[]")["grammar-log"]).toEqual([{ id: "g" }]);
+    expect(materialize([ev("grammar", { id: "g" })], null, () => "")["grammar-log"]).toEqual([{ id: "g" }]);
   });
 
   it("skips a store when the remote has no rows for it", async () => {
@@ -85,7 +92,7 @@ describe("materialize — pure (§99)", () => {
     const { materialize } = await import("../src/hydrate.js");
     const row = { profile: { level: 3, lastRegenAt: "2026-07-01T00:00:00.000Z" }, last_regen_at: "2026-07-01T00:00:00.000Z" };
     expect(materialize([], row, () => null)["lyra-growth-profile"]).toEqual({ level: 3, lastRegenAt: "2026-07-01T00:00:00.000Z" });
-    expect(materialize([], row, (k) => (k === "lyra-growth-profile" ? { level: 1 } : null))["lyra-growth-profile"]).toBeUndefined();
+    expect(materialize([], row, (k) => (k === "lyra-growth-profile" ? '{"level":1}' : null))["lyra-growth-profile"]).toBeUndefined();
   });
 
   it("profile row with null profile → no lyra-growth-profile write", async () => {
@@ -94,7 +101,29 @@ describe("materialize — pure (§99)", () => {
   });
 });
 
-describe("fetchRemote (§99)", () => {
+describe("materialize — blobs, fill-empty-only (§101)", () => {
+  it("fills an ALLOW key from a blob row as a RAW STRING; skips DENY keys and '' tombstones", async () => {
+    const { materialize } = await import("../src/hydrate.js");
+    const blobs = [
+      { key: "lyra-projects", value: '[{"id":"w1"}]' },   // ALLOW, non-empty → fill (raw)
+      { key: "grammar-log", value: '[{"g":1}]' },         // DENY (Layer 2 owns) → skip
+      { key: "lyra-user-name", value: "" },               // tombstone → never hydrate
+    ];
+    const map = materialize([], null, () => null, blobs);
+    expect(map["lyra-projects"]).toBe('[{"id":"w1"}]');   // raw string, NOT re-parsed
+    expect(map["grammar-log"]).toBeUndefined();
+    expect(map["lyra-user-name"]).toBeUndefined();
+  });
+
+  it("fill-empty-only: a non-empty local blob is NOT overwritten", async () => {
+    const { materialize } = await import("../src/hydrate.js");
+    const blobs = [{ key: "lyra-style-skills", value: "remote" }];
+    const localReader = (k) => (k === "lyra-style-skills" ? "local-present" : null);
+    expect(materialize([], null, localReader, blobs)["lyra-style-skills"]).toBeUndefined();
+  });
+});
+
+describe("fetchRemote (§99/§101)", () => {
   it("returns null when sync is disabled", async () => {
     h.client = null;
     const { fetchRemote } = await import("../src/hydrate.js");
@@ -106,7 +135,7 @@ describe("fetchRemote (§99)", () => {
     h.client = makeClient({ events });
     const { fetchRemote } = await import("../src/hydrate.js");
     const r = await fetchRemote();
-    expect(r.events).toHaveLength(750); // page1=500 (not <500 → continue) + page2=250 (<500 → stop)
+    expect(r.events).toHaveLength(750);
   });
 
   it("returns null on an events fetch error", async () => {
@@ -121,16 +150,23 @@ describe("fetchRemote (§99)", () => {
     expect(await fetchRemote()).toBe(null);
   });
 
-  it("returns { events, profile } on success", async () => {
-    h.client = makeClient({ events: [ev("grammar", { id: "g" })], profile: { profile: { level: 2 }, last_regen_at: "x" } });
+  it("returns null on a blobs fetch error", async () => {
+    h.client = makeClient({ blobsError: { code: "PGRST" } });
+    const { fetchRemote } = await import("../src/hydrate.js");
+    expect(await fetchRemote()).toBe(null);
+  });
+
+  it("returns { events, profile, blobs } on success", async () => {
+    h.client = makeClient({ events: [ev("grammar", { id: "g" })], profile: { profile: { level: 2 }, last_regen_at: "x" }, blobs: [{ key: "lyra-projects", value: "v" }] });
     const { fetchRemote } = await import("../src/hydrate.js");
     const r = await fetchRemote();
     expect(r.events).toHaveLength(1);
     expect(r.profile).toEqual({ profile: { level: 2 }, last_regen_at: "x" });
+    expect(r.blobs).toEqual([{ key: "lyra-projects", value: "v" }]);
   });
 });
 
-describe("hydrateIfNeeded — orchestrator (§99)", () => {
+describe("hydrateIfNeeded — orchestrator (§99/§101)", () => {
   it("loop-guard: no-op when the session flag is already set", async () => {
     h.client = makeClient({ events: [ev("grammar", { id: "g" })] });
     sessionStorage.setItem("lyra-hydrated-v1", "1");
@@ -159,8 +195,16 @@ describe("hydrateIfNeeded — orchestrator (§99)", () => {
     expect(sessionStorage.getItem("lyra-hydrated-v1")).toBe("1");
   });
 
+  it("hydrates a blob value RAW (not JSON-re-encoded)", async () => {
+    h.client = makeClient({ blobs: [{ key: "lyra-user-name", value: "Alice" }] });
+    const { hydrateIfNeeded } = await import("../src/hydrate.js");
+    const r = await hydrateIfNeeded();
+    expect(r.hydrated).toBe(true);
+    expect(localStorage.getItem("lyra-user-name")).toBe("Alice"); // raw, not '"Alice"'
+  });
+
   it("nothing qualifies (empty remote) → no write, guard NOT set (a later boot can still hydrate)", async () => {
-    h.client = makeClient({ events: [], profile: null });
+    h.client = makeClient({ events: [], profile: null, blobs: [] });
     const { hydrateIfNeeded } = await import("../src/hydrate.js");
     expect((await hydrateIfNeeded()).hydrated).toBe(false);
     expect(sessionStorage.getItem("lyra-hydrated-v1")).toBe(null);

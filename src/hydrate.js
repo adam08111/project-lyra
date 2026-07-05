@@ -1,24 +1,22 @@
 /**
- * HYDRATION — P0 Phase 2 (D7). Materialize the remote learning mirror back into the
- * native localStorage shapes when a device is authenticated but its local stores are
- * empty and the mirror holds history. Precedent: DataExport import (write keys → reload).
+ * HYDRATION — P0 Phase 2 (D7) + Phase 3 blob fold-in (D10). Materialize the remote mirror
+ * back into native localStorage when a device is authenticated but its local stores are
+ * empty. Layer 2 (learning_events + growth_profiles) AND Layer 1 blobs hydrate in ONE fetch
+ * pass, ONE materialize map, the SAME sessionStorage guard, and ONE reload — so a claim on a
+ * fresh device returns writings, skills, training history, AND the Grammar Log in one cycle.
  *
- * Runs inside the UN-AWAITED initSync (never blocks first paint, #7). Per-key
- * conservative: only fills a key whose local value is empty/absent — no merging of
- * divergent non-empty locals in v1. §87/§88: counts/status-only logging, never content.
- *
- * The app writes every event store newest-first (prepend); learning_events carries the
- * FULL original entry in `payload`, and events are fetched ts-ASCENDING, so materialize
- * REVERSES each type-group → an array indistinguishable from a locally-built one.
+ * Runs inside the UN-AWAITED initSync (never blocks first paint, #7). Per-key conservative:
+ * only fills a locally empty/absent key. Empty-string remote blob values are TOMBSTONES and
+ * never hydrate (D10). §87/§88: counts/status-only logging, never content.
  */
 import { getSupabase } from "./supabase-client.js";
+import { ALLOW_KEYS, seedLastSent } from "./blob-mirror.js";
 
 // sessionStorage marker: set once we hydrate+reload, so the reload boot doesn't loop.
 export const HYDRATED_FLAG = "lyra-hydrated-v1";
 const GROWTH_PROFILE_KEY = "lyra-growth-profile";
 
-// learning_events type → local store key (mirror of data-layer STORE_MIRRORS; the six
-// array stores). Kept here (not imported) so materialize stays a pure, self-contained map.
+// learning_events type → local store key (the six Layer-2 array stores). Newest-first native.
 const TYPE_TO_KEY = {
   grammar: "grammar-log",
   growth: "lyra-growth-log",
@@ -31,22 +29,16 @@ const TYPE_TO_KEY = {
 // Counts/status-only log (§87/§88) — never content.
 function logSync(msg, extra) { try { console.info(`[sync] ${msg}`, extra || ""); } catch (e) { /* silent */ } }
 
-// A local value counts as empty/absent (safe to fill) when it is null, [] or {}.
-// A non-empty value — or an UNPARSEABLE one (returned verbatim by the reader) — is
-// treated as present, so hydration never clobbers real local data.
-function isEmptyValue(v) {
-  if (v == null) return true;
-  if (Array.isArray(v)) return v.length === 0;
-  if (typeof v === "object") return Object.keys(v).length === 0;
-  return !v;
+// A RAW local value counts as empty/absent (safe to fill) when null, "", "[]" or "{}" —
+// covering both Layer-2 JSON stores ([]/{}) and raw blob strings (""/absent).
+function isEmptyRaw(raw) {
+  return raw == null || raw === "" || raw === "[]" || raw === "{}";
 }
 
 /**
- * Fetch this student's remote mirror. RLS scopes every row to the session, so this
- * returns only the caller's data. Pages learning_events ts-ascending (500/page) + the
- * single growth_profiles row. Any failure → null (counts-only log); never throws (#7).
- * @param {string} [studentId] - defensive explicit filter; RLS already scopes.
- * @returns {Promise<{events: object[], profile: object|null}|null>}
+ * Fetch this student's remote mirror (RLS-scoped). Pages learning_events ts-ascending
+ * (500/page) + the growth_profiles row + all blobs rows. Any failure → null; never throws.
+ * @returns {Promise<{events: object[], profile: object|null, blobs: object[]}|null>}
  */
 export async function fetchRemote(studentId) {
   const sb = getSupabase();
@@ -63,11 +55,12 @@ export async function fetchRemote(studentId) {
       events.push(...data);
       if (data.length < PAGE) break;
     }
-    const { data: profRows, error: pErr } = await sb
-      .from("growth_profiles").select("profile,last_regen_at").limit(1);
+    const { data: profRows, error: pErr } = await sb.from("growth_profiles").select("profile,last_regen_at").limit(1);
     if (pErr) { logSync("fetch profile failed", { code: pErr.code }); return null; }
     const profile = profRows && profRows.length ? profRows[0] : null;
-    return { events, profile };
+    const { data: blobRows, error: bErr } = await sb.from("blobs").select("key,value");
+    if (bErr) { logSync("fetch blobs failed", { code: bErr.code }); return null; }
+    return { events, profile, blobs: blobRows || [] };
   } catch (e) {
     logSync("fetchRemote threw", { code: e?.name });
     return null;
@@ -75,16 +68,17 @@ export async function fetchRemote(studentId) {
 }
 
 /**
- * Pure. Build the { key: value } map of stores to write. For each of the six event
- * stores, when the remote has rows AND the local value is empty/absent, produce the
- * payload array in native (newest-first) order — events arrive ts-ascending, so reverse.
- * The growth-profile row → lyra-growth-profile, only if locally absent.
- * @param {object[]} events - learning_events rows ({type, payload, ...}), ts-ascending
- * @param {object|null} profile - the growth_profiles row ({profile, ...}) or null
- * @param {(key:string)=>any} localReader - returns the parsed local value (or null)
+ * Pure. Build the { key: value } map to write, fill-empty-only. Layer-2 event stores → the
+ * newest-first payload array (events arrive ts-ascending → reverse); the growth profile
+ * object; and ALLOW-listed blob strings (skipping "" tombstones). Values are OBJECTS for
+ * Layer 2 (caller stringifies) and RAW STRINGS for blobs (caller writes as-is).
+ * @param {object[]} events  ts-ascending learning_events rows
+ * @param {object|null} profile  growth_profiles row
+ * @param {(key:string)=>(string|null)} localReader  RAW local value (localStorage.getItem)
+ * @param {{key:string,value:string}[]} [blobs]  blobs rows
  * @returns {Object<string, any>}
  */
-export function materialize(events, profile, localReader) {
+export function materialize(events, profile, localReader, blobs = []) {
   const out = {};
   const byType = {};
   for (const ev of (events || [])) {
@@ -94,23 +88,26 @@ export function materialize(events, profile, localReader) {
   for (const type of Object.keys(TYPE_TO_KEY)) {
     const key = TYPE_TO_KEY[type];
     const group = byType[type];
-    if (!group || !group.length) continue;               // remote has no rows → nothing to fill
-    if (!isEmptyValue(localReader(key))) continue;        // local non-empty → conservative skip
-    // ts-ascending (oldest→newest) → reverse to the store's native newest-first order.
-    out[key] = group.map((ev) => ev.payload).reverse();
+    if (!group || !group.length) continue;                 // remote has no rows → nothing to fill
+    if (!isEmptyRaw(localReader(key))) continue;            // local non-empty → conservative skip
+    out[key] = group.map((ev) => ev.payload).reverse();    // OBJECT array (caller stringifies)
   }
-  if (profile && profile.profile && isEmptyValue(localReader(GROWTH_PROFILE_KEY))) {
-    out[GROWTH_PROFILE_KEY] = profile.profile;
+  if (profile && profile.profile && isEmptyRaw(localReader(GROWTH_PROFILE_KEY))) {
+    out[GROWTH_PROFILE_KEY] = profile.profile;             // OBJECT (caller stringifies)
+  }
+  for (const row of (blobs || [])) {
+    if (!row || !ALLOW_KEYS.has(row.key)) continue;        // classification gate (never a DENY key)
+    if (row.value === "" || row.value == null) continue;   // tombstone / absent — never hydrate
+    if (!isEmptyRaw(localReader(row.key))) continue;       // fill-empty-only
+    out[row.key] = row.value;                              // RAW STRING (caller writes as-is)
   }
   return out;
 }
 
 /**
- * Orchestrator. Skips when sync is disabled, when already hydrated this session (loop
- * guard), or when nothing qualifies. Otherwise writes the materialized map with raw
- * localStorage.setItem (pre-reload writes; the app re-reads through its normal load paths
- * after reload, and the grammar save-effect's first recordGrammarLogDelta then BASELINES
- * from the hydrated log so nothing re-enqueues), sets the guard, and reloads once.
+ * Orchestrator. Skips when disabled, already hydrated this session (loop guard), or nothing
+ * qualifies. Seeds blob-mirror with the fetched blobs (churn guard) BEFORE deciding writes,
+ * then fill-empty-only writes (blobs RAW, Layer-2 stringified), sets the guard, reloads once.
  * @returns {Promise<{hydrated: boolean, keys?: number}>}
  */
 export async function hydrateIfNeeded() {
@@ -119,15 +116,15 @@ export async function hydrateIfNeeded() {
     if (sessionStorage.getItem(HYDRATED_FLAG)) return { hydrated: false }; // loop guard
     const remote = await fetchRemote();
     if (!remote) return { hydrated: false };                              // fetch failed (logged)
-    const localReader = (key) => {
-      try { const raw = localStorage.getItem(key); return raw == null ? null : JSON.parse(raw); }
-      catch (e) { return "__present__"; }                                 // unparseable → treat as present
-    };
-    const map = materialize(remote.events, remote.profile, localReader);
+    // Seed the churn guard so the FIRST sweep won't re-upsert what already matches remote.
+    try { seedLastSent(Object.fromEntries((remote.blobs || []).map((b) => [b.key, b.value]))); } catch (e) { /* silent */ }
+    const localReader = (key) => { try { return localStorage.getItem(key); } catch (e) { return "__present__"; } };
+    const map = materialize(remote.events, remote.profile, localReader, remote.blobs);
     const keys = Object.keys(map);
     if (!keys.length) return { hydrated: false };                        // nothing qualifies (flag NOT set)
     for (const k of keys) {
-      try { localStorage.setItem(k, JSON.stringify(map[k])); } catch (e) { /* silent */ }
+      const v = map[k];
+      try { localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v)); } catch (e) { /* silent */ }
     }
     try { sessionStorage.setItem(HYDRATED_FLAG, "1"); } catch (e) { /* silent */ }
     logSync(`hydrated ${keys.length} keys`);
