@@ -40,13 +40,14 @@ function log(msg, extra) { try { console.info(`[lyra-sync] ${msg}`, extra || "")
 /**
  * Append an item to the outbox and schedule a debounced flush. No-op — and no
  * `lyra-sync-outbox` key is ever written — unless sync is enabled. Never throws.
- * @param {{ kind: "event"|"profile", payload: object }} item
+ * @param {{ kind: "event"|"profile"|"blob", payload?: object, key?: string }} item
+ *   blob items carry only a `key` marker; the flush reads the live value at send time.
  */
 export function enqueue(item) {
   try {
     if (!item || !getSupabase()) return; // flag off → inert
     const q = readQueue();
-    q.push({ id: `${Date.now()}_${_seq++}`, kind: item.kind, payload: item.payload, qts: Date.now() });
+    q.push({ id: `${Date.now()}_${_seq++}`, kind: item.kind, payload: item.payload, key: item.key, qts: Date.now() });
     if (q.length > CAP) {
       const dropped = q.length - CAP;
       q.splice(0, dropped);               // drop OLDEST
@@ -121,6 +122,19 @@ export async function flush() {
         p_last_regen_at: newestProfile.payload.last_regen_at ?? null,
       });
       if (error) { log("profile flush failed", { code: error.code || error.status }); scheduleBackoff(); return; }
+    }
+
+    // 3. Blobs (§101) — coalesce markers per key (one send per key per flush), read the
+    //    LIVE value at send time (freshest wins; absent/empty → a tombstone ""), upsert on
+    //    (student_id, key). Value bytes go only to the RLS database, never a log (§87/§88).
+    const blobKeys = [...new Set(queued.filter(it => it.kind === "blob").map(it => it.key))];
+    for (const key of blobKeys) {
+      const value = localStorage.getItem(key) ?? "";
+      const { error } = await sb.from("blobs").upsert(
+        { student_id: studentId, key, value, updated_at: new Date().toISOString() },
+        { onConflict: "student_id,key" }
+      );
+      if (error) { log("blob flush failed", { code: error.code || error.status }); scheduleBackoff(); return; }
     }
 
     // Success: remove exactly the items we flushed (by id) from the CURRENT queue,

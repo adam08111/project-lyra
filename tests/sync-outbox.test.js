@@ -180,3 +180,55 @@ describe("sync-outbox (§96)", () => {
     expect(readOutbox()).toHaveLength(1);
   });
 });
+
+describe("sync-outbox — blob kind (§101)", () => {
+  const blobMarker = (key) => ({ kind: "blob", key });
+
+  it("flush upserts a blob on (student_id,key) reading the LIVE value", async () => {
+    globalThis.localStorage.setItem("lyra-projects", '[{"id":"w1"}]');
+    const { enqueue, flush } = await load();
+    enqueue(blobMarker("lyra-projects"));
+    await flush();
+    expect(h.state.upsertCalls).toHaveLength(1);
+    expect(h.state.upsertCalls[0].opts).toEqual({ onConflict: "student_id,key" });
+    expect(h.state.upsertCalls[0].rows).toMatchObject({ student_id: "stud-1", key: "lyra-projects", value: '[{"id":"w1"}]' });
+    expect(typeof h.state.upsertCalls[0].rows.updated_at).toBe("string");
+    expect(readOutbox()).toHaveLength(0);
+  });
+
+  it("flush-reads-live: enqueue stale → the value changes → flush sends the CURRENT value", async () => {
+    globalThis.localStorage.setItem("lyra-user-name", "Old");
+    const { enqueue, flush } = await load();
+    enqueue(blobMarker("lyra-user-name"));
+    globalThis.localStorage.setItem("lyra-user-name", "New");
+    await flush();
+    expect(h.state.upsertCalls[0].rows.value).toBe("New");
+  });
+
+  it("coalesces multiple markers for the same key → ONE upsert per flush", async () => {
+    globalThis.localStorage.setItem("lyra-style-skills", "[1,2]");
+    const { enqueue, flush } = await load();
+    enqueue(blobMarker("lyra-style-skills"));
+    enqueue(blobMarker("lyra-style-skills"));
+    enqueue(blobMarker("lyra-style-skills"));
+    await flush();
+    expect(h.state.upsertCalls).toHaveLength(1);
+    expect(readOutbox()).toHaveLength(0);
+  });
+
+  it("tombstone: absent/empty local value → upserts \"\"", async () => {
+    const { enqueue, flush } = await load();
+    enqueue(blobMarker("lyra-saved-concepts")); // key absent
+    await flush();
+    expect(h.state.upsertCalls[0].rows.value).toBe("");
+  });
+
+  it("blob flush failure keeps the marker (retries later)", async () => {
+    globalThis.localStorage.setItem("lyra-projects", "x");
+    h.state.upsertResult = { error: { code: "XX000" } };
+    const { enqueue, flush } = await load();
+    enqueue(blobMarker("lyra-projects"));
+    await flush();
+    expect(readOutbox()).toHaveLength(1);
+  });
+});
