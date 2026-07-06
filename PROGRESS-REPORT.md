@@ -3169,5 +3169,18 @@ A **prompt-side** nudge so the model names a SPECIFIC grammar rule instead of le
 
 **Verification.** Product suite **562 green** (561 + 1 new: the §58 drift-guard extended to pin `NAME_THE_RULE` on both surfaces, plus a content assertion that it demands a specific plain rule, names the banned "grammar fix", and stays jargon-free). `node --check` clean; `npm run redteam -- --dry-run` re-run — the real builders still assemble the LYRA_BRAIN/proofread prompts with the new constant, no tokens spent. The pinned `deriveRule` / `groupGrammarByRule` exact-string tests (`chat-actions.test.js`, `group-grammar.test.js`) pass **unmodified** (their code was not touched). **Adam's manual check:** run proofread on a draft seeded with three distinct errors (one agreement, one tense, one article) → the Grammar Log entries carry three *different, specific* rule names → `select * from student_rule_frequency` shows named rules accumulating, the generic label absent from new rows.
 
-**Landing record.** Commits (local, per unit — shared constant + interpolation / test / log): to be listed at land. **Push/land is OFFERED, not executed** (maintainer controls origin/main). When landed FF, record the new `origin/main` sha here.
+**Landing record.** Commits (per unit — shared constant + interpolation `a5fe60d` / test `d763abb` / log `666a07d`). Landed with §106+§107 in the session close-out below.
+
+---
+
+## Close-out — §106 / §107 / §108 landed on origin/main — 6 July 2026
+
+Adam approved the land after the adversarial review. The three briefs FF-landed on `origin/main` together (§-tip before this session: `35a44df` = §105 + §101.1; `git merge-base --is-ancestor origin/main HEAD` held — fast-forward, never force). **This close-out commit is the new `origin/main` tip** (its own hash, per the §104/§105 convention; the exact sha is in the session report).
+
+Commit list, per brief (per logical unit):
+- **§106** — `4657b1c` migration 0005 · `fe64030` teacher sign-in surface + multi-entry build · `2e98198` auth tests · `e531edc` synthetic seed · `29b695d` log/docs.
+- **§107** — `38168e4` queries · `de04b38` roster+detail views + wiring · `774a446` Class-D + query tests · `cb965b2` log/SECURITY · `f02829b` review-hardening (stale-response guards + race test).
+- **§108** — `a5fe60d` shared `NAME_THE_RULE` constant + interpolation · `d763abb` SSOT drift-guard test · `666a07d` log.
+
+State at land: **563 tests green**; `vite build` clean, both `index.html` + `teacher.html` emit; adversarial review 0 critical/high (2 medium races fixed, 1 low row-cap deferred). **Still Adam's, outside this loop (landed ≠ lived):** apply migration 0005 + run the seed (both need the live Supabase project); the RLS isolation proof, §107 poison probe, and §108 proofread check; raise the row-cap query when a class exceeds 1000 lifetime events; the live red-team re-run before the CIP demo. Branch `claude/practical-kirch-28bdd9` retained (branch hygiene is report-only — never delete).
 
