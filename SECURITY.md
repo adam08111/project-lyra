@@ -55,6 +55,19 @@ real builders, via the same proxy (so §102's `SAFETY_SETTINGS` are live). It co
 4. Any vulnerability the harness finds is fixed in a **separate** change (the harness finds
    and documents; it does not patch the prompts).
 
+## Teacher panel (§106 →)
+
+§106 adds Lyra's first **privileged** surface: an operator-provisioned teacher sign-in
+(`teacher.html`, email+password) that can READ enrolled students' `learning_events` +
+`growth_profiles` — **never `blobs`/raw writings** — via SELECT-only RLS joined through
+`enrolments → classes → teachers` on `auth.uid()` (permissive, OR'd with the existing
+student policies, so student isolation is not weakened). This is the first place one
+person's typed text renders inside a *different, more privileged* person's session, so
+**§103's Class D sanitize-on-render checklist is the law of this surface**: every event /
+profile field is treated as hostile input, escaped by React default rendering, with zero
+raw-HTML sinks — the §107 dashboard consumes the checklist in full and adds a
+`no dangerouslySetInnerHTML in src/teacher` guard test. Demo data is synthetic only.
+
 ## Reporting
 
 This is a pre-pilot educational project. Security concerns → the maintainer (see the repo

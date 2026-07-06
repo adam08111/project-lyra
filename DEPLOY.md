@@ -138,3 +138,24 @@ See `SECURITY.md` for the full posture; the operational notes:
 - **Behavioural red-team (§103).** `tests/redteam/` — a reusable harness that attacks the
   shipped prompts (ghost-writing refusal, prompt exfiltration, injection, minors-safety).
   **Re-run `npm run redteam` before every pilot and release** (see `SECURITY.md`).
+
+## Teacher panel (Phase A) — §106
+A separate static entry `teacher.html` (bundle `src/teacher/`), **same origin** as the
+student app and already behind the same Basic-Auth gate + security headers — no separate
+deploy, no `vercel.json`/middleware change. Operator-provisioned; read-only.
+
+1. **Apply migration `0005_teachers.sql`** in the Supabase SQL editor, after `0001`–`0004`.
+   It adds `schools`/`teachers`/`classes`/`enrolments` + `current_teacher_id()` and
+   SELECT-only teacher-read RLS on `learning_events` + `growth_profiles` (never `blobs`).
+2. **Seed a synthetic demo class** (operator machine only — never CI, never a bundle):
+   ```
+   $env:SUPABASE_URL="https://<proj>.supabase.co"
+   $env:SUPABASE_SERVICE_ROLE_KEY="<service-role-key>"   # local env ONLY — never commit
+   $env:LYRA_SEED_CONFIRM="SYNTHETIC"
+   node scripts/seed-synthetic-class.mjs
+   ```
+   Refuses to run without `LYRA_SEED_CONFIRM=SYNTHETIC`; prints the demo teacher's email +
+   password once; idempotent (re-run converges). **Synthetic data only — never real
+   minors' data in demo or application materials.**
+3. **Sign in** at `https://<your-app>/teacher.html` with the printed credentials. The
+   read-only roster → per-student rule-frequency/growth view lands in §107.
