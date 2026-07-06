@@ -29,13 +29,23 @@ function logSync(msg, extra) {
  * each call until a client is successfully created (so tests can vi.stubEnv). Both
  * vars present → memoized client; otherwise null. Never throws.
  */
+/**
+ * §109 — the SINGLE place the env pair is read (lazily, so tests can vi.stubEnv). Both the
+ * student client (getSupabase, below) and the teacher client (src/teacher/teacher-client.js)
+ * consume THIS — never a second env read (single source of truth #3).
+ */
+export function getSupabaseConfig() {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  return { url, anonKey, isConfigured: !!(url && anonKey) };
+}
+
 export function getSupabase() {
   if (_client) return _client;
   try {
-    const url = import.meta.env.VITE_SUPABASE_URL;
-    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (!url || !key) return null;
-    _client = createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
+    const { url, anonKey, isConfigured } = getSupabaseConfig();
+    if (!isConfigured) return null;
+    _client = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
     return _client;
   } catch (e) {
     logSync("createClient failed", { code: e?.name });
@@ -74,6 +84,19 @@ export async function ensureStudent() {
 
     // 1. Existing session, or anonymous sign-in (gives a real auth.uid()).
     const { data: sess } = await sb.auth.getSession();
+
+    // §109 (Layer 2 guard): NEVER resolve/mint a student under a NON-anonymous session. If a
+    // teacher signed in on this same browser+origin, running the student sync under their uid
+    // would attribute this device's data to the teacher (the §97.1 clobber). Fail SAFE — treat
+    // anything not provably anonymous as non-anonymous, and refuse. This sits inside
+    // ensureStudent so EVERY caller (initSync boot AND the sync-outbox flush) is protected, so
+    // the bug can't return via a new call site. The teacher client (§109 Layer 1) already keeps
+    // the sessions in separate storage; this is defense-in-depth against any future identity.
+    if (sess?.session && sess.session.user?.is_anonymous !== true) {
+      logSync("non-anonymous session — refusing to resolve student");
+      return { nonAnonymous: true };
+    }
+
     if (!sess?.session) {
       const { error: signErr } = await sb.auth.signInAnonymously();
       if (signErr) { logSync("anon sign-in failed", { code: signErr.status || signErr.name }); return null; }
