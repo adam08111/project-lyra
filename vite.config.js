@@ -1,8 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   plugins: [react()],
+  // §106: multi-page build — the student app (index.html) AND the teacher panel
+  // (teacher.html), both at the project root. Listing `main` is REQUIRED: once `input`
+  // is explicit, omitting index.html would silently drop the student entry from the build.
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        teacher: fileURLToPath(new URL("./teacher.html", import.meta.url)),
+      },
+    },
+  },
   server: {
     port: 3000,
     proxy: {
