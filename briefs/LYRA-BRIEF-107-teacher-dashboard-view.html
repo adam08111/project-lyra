@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>§107 · Teacher dashboard v1: read-only roster → rules → growth</title>
+<style>
+  :root {
+    --ink:      #171b24;
+    --ink-soft: #454b58;
+    --paper:    #ffffff;
+    --tint:     #f6f7f9;   /* code + quiet blocks */
+    --rule:     #dde1e8;   /* hairlines */
+    --blue:     #274a86;   /* primary accent — engineering blue */
+    --blue-dk:  #1c3866;
+    --amber:    #a75f00;   /* action / ratify only */
+    --amber-bg: #fbf3e4;
+    --green:    #216342;   /* verify */
+    --mono: "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--rule);
+    font-family: var(--sans); color: var(--ink);
+    line-height: 1.62; font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .sheet {
+    max-width: 820px; margin: 32px auto; background: var(--paper);
+    padding: 56px 60px 72px;
+    box-shadow: 0 1px 0 var(--rule), 0 18px 44px -28px rgba(20,26,40,.4);
+  }
+
+  /* ---- masthead ---- */
+  .mast { border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 8px; }
+  .kicker {
+    font-size: 11px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--blue); margin: 0 0 14px;
+  }
+  .mast h1 {
+    font-size: 30px; line-height: 1.16; letter-spacing: -.015em; font-weight: 800;
+    margin: 0; color: var(--ink);
+  }
+  .mast .num {
+    display: inline-block; font-family: var(--mono); font-weight: 700;
+    color: var(--blue-dk); margin-right: 12px;
+  }
+  .dek {
+    margin: 18px 0 0; color: var(--ink-soft); font-size: 14.5px; line-height: 1.55;
+    border-left: 2px solid var(--rule); padding-left: 16px;
+  }
+  .handoff-note {
+    margin: 22px 0 40px; font-family: var(--mono); font-size: 12px;
+    color: var(--ink-soft); background: var(--tint);
+    border: 1px solid var(--rule); border-left: 3px solid var(--blue);
+    padding: 10px 14px;
+  }
+  .handoff-note b { color: var(--ink); }
+
+  /* ---- sections ---- */
+  .sec { margin: 0 0 34px; padding-top: 4px; }
+  .eyebrow {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--ink-soft); margin: 0 0 6px;
+  }
+  .sec h2 {
+    font-size: 18.5px; line-height: 1.3; font-weight: 750; letter-spacing: -.01em;
+    margin: 0 0 12px; padding-bottom: 9px; border-bottom: 1px solid var(--rule);
+    color: var(--ink);
+  }
+  .sec-body > :first-child { margin-top: 0; }
+  .sec-body > :last-child  { margin-bottom: 0; }
+  .sec-body p { margin: 0 0 12px; }
+  .sec-body ul, .sec-body ol { margin: 0 0 12px; padding-left: 22px; }
+  .sec-body li { margin: 0 0 7px; }
+  .sec-body li::marker { color: var(--blue); }
+  .sec-body strong { color: var(--ink); font-weight: 700; }
+  .sec-body h3 { font-size: 15px; margin: 18px 0 8px; letter-spacing: -.005em; }
+
+  /* inline + block code */
+  code {
+    font-family: var(--mono); font-size: 12.5px;
+    background: var(--tint); border: 1px solid var(--rule);
+    padding: 1px 5px; border-radius: 3px; color: var(--blue-dk);
+    word-break: break-word;
+  }
+  pre {
+    background: var(--tint); border: 1px solid var(--rule); border-left: 3px solid var(--ink-soft);
+    border-radius: 5px; padding: 14px 16px; overflow-x: auto; margin: 0 0 14px;
+    line-height: 1.5;
+  }
+  pre code {
+    background: none; border: 0; padding: 0; color: var(--ink);
+    font-size: 12px; white-space: pre;
+  }
+
+  /* tables (if any) */
+  table { border-collapse: collapse; width: 100%; margin: 0 0 14px; font-size: 13.5px; }
+  th, td { border: 1px solid var(--rule); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--tint); font-weight: 700; }
+
+  /* ---- role tints (structure is information) ---- */
+  .sec--locked  h2 { border-bottom-color: var(--rule); }
+  .sec--locked  .eyebrow { color: #7a2d2d; }
+  .sec--verify  .eyebrow { color: var(--green); }
+  .sec--verify  .sec-body li::marker { color: var(--green); }
+  .sec--scope   .sec-body { color: var(--ink-soft); }
+  .sec--close   { border-top: 1px solid var(--rule); padding-top: 20px; }
+  .sec--close   .sec-body { font-size: 14.5px; color: var(--ink-soft); }
+
+  /* ---- SIGNATURE: the ratify gate ---- */
+  .sec--ratify {
+    background: var(--amber-bg);
+    border: 1px solid #e6d3ad; border-left: 4px solid var(--amber);
+    border-radius: 6px; padding: 20px 24px; margin: 34px 0;
+  }
+  .sec--ratify .eyebrow { color: var(--amber); letter-spacing: .16em; }
+  .sec--ratify h2 { border-bottom-color: #e6d3ad; color: #5c3600; }
+  .sec--ratify code { background: #fff; border-color: #ecd9b6; color: var(--amber); }
+  .sec--ratify strong { color: #5c3600; }
+  .sec--ratify .sec-body li::marker { color: var(--amber); }
+
+  footer {
+    margin-top: 44px; padding-top: 14px; border-top: 2px solid var(--ink);
+    font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+
+  a { color: var(--blue); }
+
+  @media (max-width: 640px) {
+    .sheet { margin: 0; padding: 30px 20px 44px; box-shadow: none; }
+    .mast h1 { font-size: 24px; }
+    body { font-size: 15.5px; }
+  }
+  @media print {
+    body { background: #fff; font-size: 11pt; }
+    .sheet { margin: 0; max-width: none; padding: 0; box-shadow: none; }
+    .handoff-note, .sec--ratify { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sec, pre, .sec--ratify { page-break-inside: avoid; }
+    h1, h2 { page-break-after: avoid; }
+    a { color: var(--ink); text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="sheet">
+    <header class="mast">
+      <p class="kicker">Lyra · Executor Brief</p>
+      <h1><span class="num">§107</span>Teacher dashboard v1: read-only roster → rules → growth</h1>
+    </header>
+    <p class="dek">Self-contained executor brief. Requires §106 landed (migration 0005 applied, teacher sign-in working, synthetic class seeded). One session, one § entry, one FF landing.</p>
+    <div class="handoff-note">
+      <b>This is the human-readable copy.</b> Hand Claude Code the <code>.md</code> file, not this HTML —
+      the workflow consumes markdown. Amber block below is the gate: reply <b>ratified</b> or amend by decision number before executing.
+    </div>
+    <section class="sec sec--context"><div class="eyebrow">Context</div><h2>Context</h2><div class="sec-body"><p>§106 gave teachers identity and read-rights. This brief gives them the view — the CIP
+demo artifact: sign in → class roster → per-student detail (rule frequency, growth
+profile, activity counts). <strong>Read-only. Synthetic data only.</strong> This is the first surface
+in Lyra where one person's typed text renders inside a <em>different, more privileged</em>
+person's session — §103's Class D checklist exists precisely for it and is consumed here
+in full.</p></div></section>
+<section class="sec sec--locked"><div class="eyebrow">Locked — do not relitigate</div><h2>Decisions — do NOT relitigate</h2><div class="sec-body"><p>Everything in §106's list, plus: teachers read <code>learning_events</code> + <code>growth_profiles</code>
+only (no <code>blobs</code>, no <code>students</code>); display names come from <code>enrolments.display_name</code>;
+separate Vite entry; no student-app UI change.</p></div></section>
+<section class="sec sec--ratify"><div class="eyebrow">Action required — ratify by number</div><h2>New decisions this brief sets — RATIFY before executing</h2><div class="sec-body"><ul>
+<li><strong>D-B1 <code>bandEstimate</code> renders, teacher-side only, labelled "estimate".</strong> It was stored
+  dual-audience from day one and its display was gated <em>awaiting exactly this surface</em>
+  (§-log, Report-tab arc). <code>report-card-brain.js</code> is authoritative for the profile
+  schema — read it in Step 0; render what it defines, invent nothing.</li>
+<li><strong>D-B2 Rule labels render as stored.</strong> Until the rule-label brief (§108) lands, cells
+  may read the §70 fallback ("Grammar fix"). Do not relabel in the view — the fix is
+  prompt-side, not display-side.</li>
+<li><strong>D-B3 Desktop-first.</strong> Teachers are on staff machines; the 430px mobile constraint is
+  a student-app rule and does not bind here. Keep it responsive-sane, nothing more.</li>
+</ul></div></section>
+<section class="sec sec--steps"><div class="eyebrow">Steps</div><h2>Steps</h2><div class="sec-body"><p><strong>Step 0 — verify reality (STOP-AND-REPORT if it differs).</strong> Read <code>CLAUDE.md</code>, § tip
+(expected §106 → this is §107), the §103 log entry's <strong>Class D field inventory and
+checklist</strong> (in <code>PROGRESS-REPORT.md</code> — it lists exactly which event/profile fields carry
+raw student text), <code>report-card-brain.js</code> (profile schema), the <code>student_rule_frequency</code>
+view definition in 0001, and §106's actual landed shapes.</p>
+<p><strong>Step 1 — data layer (<code>src/teacher/queries.js</code>).</strong> Three read functions on the existing
+client: <code>myClasses()</code> (classes + enrolment counts), <code>roster(classId)</code> (enrolments with
+display_name + per-student event counts by type), <code>studentDetail(studentId)</code> (rule
+frequency — via the view or a grouped query, whichever Step 0 finds cleaner under
+teacher RLS; growth profile row; recent-activity counts by week). All failure paths
+resolve to an honest empty/error state (#7) — never a spinner.</p>
+<p><strong>Step 2 — views.</strong> <code>Roster.jsx</code> (class picker if &gt;1, table of display_name + counts) →
+<code>StudentDetail.jsx</code> (rule-frequency table, growth-profile card incl. bandEstimate
+labelled "estimate", activity summary). Plain tables; no charts in v1.</p>
+<p><strong>Step 3 — Class D, enforced not assumed.</strong>
+- Every field renders through React default escaping. <code>dangerouslySetInnerHTML</code> and any
+  <code>innerHTML</code> are FORBIDDEN in <code>src/teacher/</code> — add a test that greps the directory for
+  both and fails on a hit.
+- Treat <code>payload</code> jsonb as hostile at any depth; render only whitelisted fields the
+  Step-0 inventory names, as text.
+- URLs in any field render as plain text (no anchor) in v1.
+- No CSV/XLSX export in v1 (formula-injection handling is the documented reason —
+  Class D item 2 — deferred with a note in the § entry).
+- Characterization test: seed a hostile string (<code>&lt;img src=x onerror=alert(1)&gt;</code> and a
+  <code>javascript:</code> URL) into a mock event's rule/topic/payload; render with the §104
+  happy-dom harness; assert the DOM contains the <em>escaped</em> text and no <code>img</code>/script
+  node materialized.</p>
+<p><strong>Step 4 — tests.</strong> The Class D tests above + query-shape tests (mocked client) + empty
+states (no classes / empty class / student with no profile). Full suite green.</p>
+<p><strong>Step 5 — docs + landing.</strong> § entry (§107) — include a "Class D consumed" line item —
+tip sha stated, commits listed, FF-land, record the sha. <code>SECURITY.md</code>: one paragraph —
+the dashboard exists, is read-only, escapes everything, export deferred. Re-run
+<code>npm run redteam -- --dry-run</code> (free) to confirm the harness still assembles; a live
+red-team re-run remains required before the CIP demo per SECURITY.md — note it, don't
+run it here.</p></div></section>
+<section class="sec sec--verify"><div class="eyebrow">Manual verification</div><h2>Manual verification (Adam)</h2><div class="sec-body"><ol>
+<li>Sign in → roster shows the 8 synthetic students → open one → rules, growth card with
+   band estimate, activity counts all render.</li>
+<li>Poison probe: insert one synthetic <code>learning_events</code> row whose <code>rule</code> is
+   <code>&lt;b&gt;bold?&lt;/b&gt;&lt;script&gt;x&lt;/script&gt;</code> via SQL editor → reload detail → renders as literal
+   text, no formatting, no script.</li>
+<li>Second teacher account sees an empty state, not an error, not data.</li>
+<li>Student app: open, write, proofread — unchanged; suite count reported.</li>
+</ol></div></section>
+<section class="sec sec--scope"><div class="eyebrow">Out of scope</div><h2>Out of scope</h2><div class="sec-body"><p>Everything §106 excluded, plus: charts, exports, filters/search, write actions,
+multi-teacher class sharing, headmaster/aggregate rollups (Phase B+).</p></div></section>
+<section class="sec sec--close"><div class="eyebrow">Discipline</div><h2>Karpathy close</h2><div class="sec-body"><p>Smallest diff. Commit per unit (queries / roster / detail / Class D tests / docs). The
+Class D checklist is the law of this surface: if a field isn't on the Step-0 inventory
+as safe-to-render, it doesn't render. Land FF, record the sha. Repo wins.</p></div></section>
+    <footer>
+      <span>Lyra progress log · §107</span>
+      <span>brief = one Claude Code session = one § entry = one FF landing</span>
+    </footer>
+  </main>
+</body>
+</html>
