@@ -35,6 +35,17 @@ export async function initSync({ restoredKeys = [] } = {}) {
     try { hadHint = localStorage.getItem(STUDENT_ID_HINT); } catch (e) { /* silent */ }
 
     const res = await ensureStudent();
+
+    // §109 (D-D2): a non-anonymous session (a teacher signed in on this browser) must never
+    // drive the student sync layer. ensureStudent already refused to resolve; here we surface
+    // it and no-op the rest of this boot — the app runs localStorage-native (its normal
+    // degraded mode), never-stuck #7. No hydrate, no backfill, no flush, no student minted.
+    if (res?.nonAnonymous) {
+      console.warn("[sync] non-anonymous session — sync disabled");
+      window.lyraSync = { status: () => ({ enabled: true, nonAnonymousSession: true }) };
+      return;
+    }
+
     const studentId = res?.studentId || null;
 
     // §99 Step 5 (D8): surface a forked identity. ids are opaque UUIDs — safe to log;
