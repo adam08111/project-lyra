@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // §99 Phase 2 wiring in initSync. Mock every collaborator so we exercise the orchestration
 // (identity surfacing, import-pending consumption, claim wiring) with no network.
-const h = vi.hoisted(() => ({ backfillCalls: [], flushCalls: 0, seq: [], studentId: "student-A", claimResult: true, hydrateResult: { hydrated: false } }));
+const h = vi.hoisted(() => ({ backfillCalls: [], flushCalls: 0, seq: [], studentId: "student-A", claimResult: true, hydrateResult: { hydrated: false }, ensureResult: null }));
 vi.mock("../src/supabase-client.js", () => ({
   getSupabase: () => ({}),
-  ensureStudent: () => Promise.resolve({ studentId: h.studentId }),
+  ensureStudent: () => Promise.resolve(h.ensureResult || { studentId: h.studentId }),
   claimStudent: () => Promise.resolve(h.claimResult),
   STUDENT_ID_HINT: "lyra-sb-student-id",
 }));
@@ -35,7 +35,7 @@ function makeStorage() {
 beforeEach(() => {
   vi.resetModules();
   vi.useFakeTimers(); // §101: initSync starts a 60s sweep interval — fake it so it doesn't linger
-  h.backfillCalls = []; h.flushCalls = 0; h.seq = []; h.studentId = "student-A"; h.claimResult = true; h.hydrateResult = { hydrated: false };
+  h.backfillCalls = []; h.flushCalls = 0; h.seq = []; h.studentId = "student-A"; h.claimResult = true; h.hydrateResult = { hydrated: false }; h.ensureResult = null;
   globalThis.window = {};
   globalThis.localStorage = makeStorage();
   globalThis.sessionStorage = makeStorage();
@@ -111,5 +111,17 @@ describe("initSync — Phase 2 wiring (§99)", () => {
     await initSync();                          // nothing hydrated (default), nothing to restore
     expect(h.seq).toEqual(["hydrate", "backfill"]);
     expect(h.backfillCalls[0]).toEqual({ force: false }); // hydrate never forces; §96 flag respected as-is
+  });
+
+  it("§109 (D-D2): a non-anonymous session no-ops the sync layer + flags status, never hydrates/backfills/flushes", async () => {
+    h.ensureResult = { nonAnonymous: true };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { initSync } = await import("../src/sync-init.js");
+    await initSync();
+    expect(window.lyraSync.status()).toEqual({ enabled: true, nonAnonymousSession: true });
+    expect(h.seq).toEqual([]);        // no hydrate, no backfill
+    expect(h.flushCalls).toBe(0);     // no flush
+    expect(warn.mock.calls.map((c) => c[0]).join(" ")).toContain("non-anonymous session");
+    warn.mockRestore();
   });
 });

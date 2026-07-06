@@ -3,9 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // §107 — teacher read queries against a MOCKED Supabase client (no network). The mock's
 // query builder is a chainable thenable: select/order/eq/in/limit all return the builder,
 // and awaiting it resolves to the per-table { data, error } configured for the test.
-vi.mock("../src/supabase-client.js", () => ({ getSupabase: vi.fn() }));
+vi.mock("../src/teacher/teacher-client.js", () => ({ getTeacherClient: vi.fn() }));
 
-import { getSupabase } from "../src/supabase-client.js";
+import { getTeacherClient } from "../src/teacher/teacher-client.js";
 import { myClasses, roster, studentDetail } from "../src/teacher/queries.js";
 
 function makeClient(tables) {
@@ -19,11 +19,11 @@ function makeClient(tables) {
   return { from: (t) => build(tables[t] || { data: [], error: null }) };
 }
 
-beforeEach(() => { getSupabase.mockReset(); });
+beforeEach(() => { getTeacherClient.mockReset(); });
 
 describe("teacher queries — myClasses()", () => {
   it("→ classes with enrolment counts", async () => {
-    getSupabase.mockReturnValue(makeClient({
+    getTeacherClient.mockReturnValue(makeClient({
       classes: { data: [{ id: "c1", name: "3B" }, { id: "c2", name: "3A" }], error: null },
       enrolments: { data: [{ class_id: "c1" }, { class_id: "c1" }, { class_id: "c2" }], error: null },
     }));
@@ -35,24 +35,24 @@ describe("teacher queries — myClasses()", () => {
   });
 
   it("→ empty list when the teacher has no classes", async () => {
-    getSupabase.mockReturnValue(makeClient({ classes: { data: [], error: null } }));
+    getTeacherClient.mockReturnValue(makeClient({ classes: { data: [], error: null } }));
     expect(await myClasses()).toEqual({ ok: true, data: [] });
   });
 
   it("→ query-failed when the classes select errors", async () => {
-    getSupabase.mockReturnValue(makeClient({ classes: { data: null, error: { code: "42501" } } }));
+    getTeacherClient.mockReturnValue(makeClient({ classes: { data: null, error: { code: "42501" } } }));
     expect(await myClasses()).toEqual({ ok: false, error: "query-failed" });
   });
 
   it("→ not-configured when Supabase is off", async () => {
-    getSupabase.mockReturnValue(null);
+    getTeacherClient.mockReturnValue(null);
     expect(await myClasses()).toEqual({ ok: false, error: "not-configured" });
   });
 });
 
 describe("teacher queries — roster()", () => {
   it("→ rows with per-type event counts", async () => {
-    getSupabase.mockReturnValue(makeClient({
+    getTeacherClient.mockReturnValue(makeClient({
       enrolments: { data: [{ student_id: "s1", display_name: "Amy" }, { student_id: "s2", display_name: "Ben" }], error: null },
       learning_events: { data: [
         { student_id: "s1", type: "grammar" }, { student_id: "s1", type: "grammar" },
@@ -68,12 +68,12 @@ describe("teacher queries — roster()", () => {
   });
 
   it("→ empty rows for an empty class (and does not error)", async () => {
-    getSupabase.mockReturnValue(makeClient({ enrolments: { data: [], error: null } }));
+    getTeacherClient.mockReturnValue(makeClient({ enrolments: { data: [], error: null } }));
     expect(await roster("c1")).toEqual({ ok: true, data: [] });
   });
 
   it("→ query-failed when the events select errors", async () => {
-    getSupabase.mockReturnValue(makeClient({
+    getTeacherClient.mockReturnValue(makeClient({
       enrolments: { data: [{ student_id: "s1", display_name: "Amy" }], error: null },
       learning_events: { data: null, error: { code: "500" } },
     }));
@@ -83,7 +83,7 @@ describe("teacher queries — roster()", () => {
 
 describe("teacher queries — studentDetail()", () => {
   it("→ rule frequency + profile + activity counts", async () => {
-    getSupabase.mockReturnValue(makeClient({
+    getTeacherClient.mockReturnValue(makeClient({
       student_rule_frequency: { data: [
         { rule: "Tense", occurrences: 3, first_seen: "2026-06-01", last_seen: "2026-07-01" },
         { rule: "Articles", occurrences: 1, first_seen: "2026-06-10", last_seen: "2026-06-10" },
@@ -100,7 +100,7 @@ describe("teacher queries — studentDetail()", () => {
   });
 
   it("→ profile:null (honest empty) when the student has no growth profile", async () => {
-    getSupabase.mockReturnValue(makeClient({
+    getTeacherClient.mockReturnValue(makeClient({
       student_rule_frequency: { data: [], error: null },
       growth_profiles: { data: [], error: null },
       learning_events: { data: [], error: null },
@@ -110,7 +110,7 @@ describe("teacher queries — studentDetail()", () => {
   });
 
   it("→ query-failed when any of the three reads errors", async () => {
-    getSupabase.mockReturnValue(makeClient({
+    getTeacherClient.mockReturnValue(makeClient({
       student_rule_frequency: { data: [], error: null },
       growth_profiles: { data: null, error: { code: "500" } },
       learning_events: { data: [], error: null },
@@ -119,7 +119,7 @@ describe("teacher queries — studentDetail()", () => {
   });
 
   it("→ not-configured when Supabase is off", async () => {
-    getSupabase.mockReturnValue(null);
+    getTeacherClient.mockReturnValue(null);
     expect(await studentDetail("s1")).toEqual({ ok: false, error: "not-configured" });
   });
 });
