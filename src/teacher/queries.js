@@ -45,6 +45,10 @@ export async function roster(classId) {
     const ids = (enr || []).map((e) => e.student_id);
     let events = [];
     if (ids.length) {
+      // NOTE (review Group B): counts are tallied client-side from raw rows, so PostgREST's
+      // default db.max_rows (1000) would silently undercount a class with >1000 lifetime
+      // events. Inert at seed/pilot scale (~dozens); when it matters, switch to a grouped
+      // count view or `count: 'exact', head: true` rather than transferring per-row data.
       const { data: ev, error: e2 } = await sb.from("learning_events").select("student_id, type").in("student_id", ids);
       if (e2) { logT("roster events failed", { code: e2.code }); return { ok: false, error: "query-failed" }; }
       events = ev || [];
@@ -79,6 +83,9 @@ export async function studentDetail(studentId) {
       sb.from("student_rule_frequency").select("rule, occurrences, first_seen, last_seen")
         .eq("student_id", studentId).order("occurrences", { ascending: false }),
       sb.from("growth_profiles").select("profile, last_regen_at").eq("student_id", studentId).limit(1),
+      // NOTE (review Group B): same db.max_rows (1000) caveat as roster() — activity tallies
+      // are client-side; fine at seed/pilot scale, revisit with a count view if a single
+      // student ever exceeds 1000 lifetime events.
       sb.from("learning_events").select("type, ts").eq("student_id", studentId),
     ]);
     if (freqRes.error || profRes.error || evRes.error) {

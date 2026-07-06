@@ -1,7 +1,7 @@
 // TEACHER DASHBOARD — §107. Container: orchestrates the read queries and the pure views
 // (RosterTable, StudentDetailView), owning loading / empty / error+retry states so no path
 // ever leaves a stuck spinner (never-stuck #7). Read-only; synthetic data in the demo.
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { myClasses, roster, studentDetail } from "./queries.js";
 import RosterTable from "./RosterTable.jsx";
 import StudentDetailView from "./StudentDetailView.jsx";
@@ -29,6 +29,13 @@ export default function Dashboard({ teacher, onSignOut }) {
   const [selected, setSelected] = useState(null); // { studentId, displayName }
   const [detail, setDetail] = useState({ status: "idle", data: null });
 
+  // Request-generation guards: each load stamps a monotonic id; a resolved response commits
+  // state only if it is still the latest for its concern. Prevents a slow EARLIER load (an
+  // older class / student) from landing last and pinning stale data under a newer selection —
+  // e.g. one student's grades shown under another student's name.
+  const rosterReq = useRef(0);
+  const detailReq = useRef(0);
+
   const loadClasses = useCallback(async () => {
     setClasses({ status: "loading", data: [] });
     const r = await myClasses();
@@ -39,21 +46,26 @@ export default function Dashboard({ teacher, onSignOut }) {
 
   const loadRoster = useCallback(async (id) => {
     if (!id) return;
+    const req = ++rosterReq.current;
     setRosterState({ status: "loading", rows: [] });
     const r = await roster(id);
+    if (req !== rosterReq.current) return;                 // a newer class load has superseded this one
     if (!r.ok) { setRosterState({ status: "error", rows: [] }); return; }
     setRosterState({ status: "loaded", rows: r.data });
   }, []);
 
   const openStudent = useCallback(async (studentId, displayName) => {
+    const req = ++detailReq.current;
     setSelected({ studentId, displayName });
     setDetail({ status: "loading", data: null });
     const r = await studentDetail(studentId);
+    if (req !== detailReq.current) return;                 // a newer student open has superseded this one
     if (!r.ok) { setDetail({ status: "error", data: null }); return; }
     setDetail({ status: "loaded", data: r.data });
   }, []);
 
-  const backToRoster = useCallback(() => { setSelected(null); setDetail({ status: "idle", data: null }); }, []);
+  // Bump detailReq so any in-flight studentDetail is dropped and can't land after Back.
+  const backToRoster = useCallback(() => { detailReq.current++; setSelected(null); setDetail({ status: "idle", data: null }); }, []);
 
   useEffect(() => { loadClasses(); }, [loadClasses]);
   useEffect(() => { if (classId) loadRoster(classId); }, [classId, loadRoster]);
