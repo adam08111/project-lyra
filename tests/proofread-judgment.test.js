@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildProofreadPrompt } from "../src/prompts.js";
 import { LYRA_BRAIN } from "../src/lyra-brain.js";
-import { PROOFREAD_JUDGMENT_RULES, CORRECTION_VS_TASTE, NO_REWRITE_ILLUSTRATION } from "../src/judgment-rules.js";
+import { PROOFREAD_JUDGMENT_RULES, CORRECTION_VS_TASTE, NO_REWRITE_ILLUSTRATION, NAME_THE_RULE } from "../src/judgment-rules.js";
 
 describe("§58 proofread judgment rules", () => {
   const prompt = buildProofreadPrompt("Is AI good?", "Exam Essay", [], null, "Some exam rules here.");
@@ -28,5 +28,16 @@ describe("§58 proofread judgment rules", () => {
     expect(LYRA_BRAIN).toContain(NO_REWRITE_ILLUSTRATION);
     expect(PROOFREAD_JUDGMENT_RULES).toContain(CORRECTION_VS_TASTE);
     expect(PROOFREAD_JUDGMENT_RULES).toContain(NO_REWRITE_ILLUSTRATION);
+    // §108 — the rule-naming nudge is ONE shared constant on BOTH correction surfaces.
+    expect(LYRA_BRAIN).toContain(NAME_THE_RULE);
+    expect(PROOFREAD_JUDGMENT_RULES).toContain(NAME_THE_RULE);
+  });
+
+  it("§108 — NAME_THE_RULE demands a specific plain-English rule and bans the generic fallback", () => {
+    expect(NAME_THE_RULE).toMatch(/NAME THE SPECIFIC RULE/);
+    expect(NAME_THE_RULE).toMatch(/Subject-Verb Agreement/);      // a plain-English example, no jargon
+    expect(NAME_THE_RULE).toMatch(/grammar fix/i);                // names the banned fallback explicitly
+    expect(NAME_THE_RULE).toMatch(/NEVER a vague catch-all/);
+    expect(NAME_THE_RULE).not.toMatch(/collocation|concord|morpheme/i); // stays student-plain (no linguistics jargon)
   });
 });
