@@ -1,14 +1,13 @@
 /**
- * TEACHER QUERIES — §107. Read-only data access for the teacher dashboard, over the same
- * Supabase client the student app uses (getSupabase()). All reads are scoped by the
- * teacher-read RLS from migration 0005 — this module trusts the DB to filter; it never
- * reads the students table or blobs.
+ * TEACHER QUERIES — §107, on the §109 isolated teacher client. Read-only data access for the
+ * teacher dashboard. All reads are scoped by the teacher-read RLS from migration 0005 — this
+ * module trusts the DB to filter; it never reads the students table or blobs.
  *
  * Every function is fully try/catch'd and resolves to a discriminated result
  * ({ ok:true, data } | { ok:false, error }) — never throws, never leaves the UI on a
  * spinner (never-stuck #7). Logging is counts/status-only (§87/§88) — never student text.
  */
-import { getSupabase } from "../supabase-client.js";
+import { getTeacherClient } from "./teacher-client.js";
 
 function logT(msg, extra) {
   try { console.info(`[lyra-teacher] ${msg}`, extra || ""); } catch (e) { /* silent */ }
@@ -17,7 +16,7 @@ function logT(msg, extra) {
 /** Classes the signed-in teacher owns, each with an enrolment count. */
 export async function myClasses() {
   try {
-    const sb = getSupabase();
+    const sb = getTeacherClient();
     if (!sb) return { ok: false, error: "not-configured" };
     const { data: classes, error } = await sb.from("classes").select("id, name").order("name");
     if (error) { logT("classes query failed", { code: error.code }); return { ok: false, error: "query-failed" }; }
@@ -38,7 +37,7 @@ export async function myClasses() {
 /** Roster for a class: each enrolled student's display_name + per-type event counts. */
 export async function roster(classId) {
   try {
-    const sb = getSupabase();
+    const sb = getTeacherClient();
     if (!sb) return { ok: false, error: "not-configured" };
     const { data: enr, error } = await sb.from("enrolments").select("student_id, display_name").eq("class_id", classId);
     if (error) { logT("roster query failed", { code: error.code }); return { ok: false, error: "query-failed" }; }
@@ -77,7 +76,7 @@ export async function roster(classId) {
  */
 export async function studentDetail(studentId) {
   try {
-    const sb = getSupabase();
+    const sb = getTeacherClient();
     if (!sb) return { ok: false, error: "not-configured" };
     const [freqRes, profRes, evRes] = await Promise.all([
       sb.from("student_rule_frequency").select("rule, occurrences, first_seen, last_seen")

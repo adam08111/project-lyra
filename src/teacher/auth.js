@@ -1,15 +1,15 @@
 /**
- * TEACHER AUTH — §106. Email + password sign-in for the operator-provisioned teacher
- * surface, layered on the SAME Supabase client the student app uses (getSupabase()).
- * Teachers reach the `authenticated` role; RLS + current_teacher_id() (migration 0005)
- * do the authorization. No student-app import beyond supabase-client.js (D-A4).
+ * TEACHER AUTH — §106, session-isolated in §109. Email + password sign-in for the operator-
+ * provisioned teacher surface, on the ISOLATED teacher client (its own auth storageKey) so it
+ * NEVER touches the student's anonymous session. Teachers reach the `authenticated` role;
+ * RLS + current_teacher_id() (migration 0005) do the authorization.
  *
  * Every function is fully try/catch'd and resolves to a discriminated result — never
  * throws, never leaves a caller hanging (never-stuck #7). Logging is counts/status-only
  * (§87/§88): these sessions sit in front of minors' learning data — never log content,
  * credentials, or the email.
  */
-import { getSupabase } from "../supabase-client.js";
+import { getTeacherClient } from "./teacher-client.js";
 
 function logT(msg, extra) {
   try { console.info(`[lyra-teacher] ${msg}`, extra || ""); } catch (e) { /* silent */ }
@@ -18,14 +18,14 @@ function logT(msg, extra) {
 /**
  * Resolve the signed-in teacher, if any. Returns:
  *   { ok: true, teacher: { id, display_name } }         — signed in AND mapped to a teachers row
- *   { ok: false, error: "not-configured" }              — Supabase flag off (getSupabase() null)
+ *   { ok: false, error: "not-configured" }              — Supabase flag off (no teacher client)
  *   { ok: false, error: "signed-out" }                  — no active session
  *   { ok: false, error: "no-teacher-row" }              — session exists but no teachers mapping
  *   { ok: false, error: "query-failed" | "threw" }      — transient/unexpected failure (retryable)
  */
 export async function currentTeacher() {
   try {
-    const sb = getSupabase();
+    const sb = getTeacherClient();
     if (!sb) return { ok: false, error: "not-configured" };
     const { data: sess } = await sb.auth.getSession();
     if (!sess?.session) return { ok: false, error: "signed-out" };
@@ -48,7 +48,7 @@ export async function currentTeacher() {
  */
 export async function signIn(email, password) {
   try {
-    const sb = getSupabase();
+    const sb = getTeacherClient();
     if (!sb) return { ok: false, error: "not-configured" };
     const { error } = await sb.auth.signInWithPassword({
       email: String(email || "").trim(),
@@ -65,7 +65,7 @@ export async function signIn(email, password) {
 /** Sign out. Best-effort — never throws; a failure just leaves the session as-is. */
 export async function signOut() {
   try {
-    const sb = getSupabase();
+    const sb = getTeacherClient();
     if (sb) await sb.auth.signOut();
     return { ok: true };
   } catch (e) {
