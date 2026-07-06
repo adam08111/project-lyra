@@ -16,6 +16,13 @@ export const NO_REWRITE_ILLUSTRATION = `THE FIX IS AN ILLUSTRATION of the studen
 // critique sweeps a real submitted draft, so it has no equivalent inline rule.)
 export const NO_FABRICATION = `NO FABRICATION — never invent problems to fill the cards. If the writing has few real issues, return few; if a category is clean, return an empty array. NEVER flag something that is already correct, and never pad. An empty array is an honest, valid answer.`;
 
+// §108 — the rule label a correction carries becomes the student's own progress record AND
+// the teacher dashboard's rule-frequency signal. A vague catch-all ("Grammar fix") turns
+// that signal into noise, so the model must name the SPECIFIC rule in plain student English.
+// Shared by the chat critique (LYRA_BRAIN's learning-data emission) and the Lite proofread
+// (below), so both name rules the same way — one source of truth, no drift.
+export const NAME_THE_RULE = `NAME THE SPECIFIC RULE — when you flag a grammar mistake, name the ONE rule a teacher would name, in plain everyday English a 14-year-old already knows (e.g. Subject-Verb Agreement, Tense, Articles, Prepositions, Run-on Sentence, Sentence Fragment, Plural / Singular, Word Form, Punctuation, Comparatives, Conditionals). NEVER a vague catch-all like "grammar", "grammar fix", "general", or "error" — those teach nothing and turn the student's progress record into noise. If a slip fits no listed rule, name the closest real, specific one — never a generic label. This is guidance, not a closed list: a more precise real rule name is always welcome.`;
+
 // The distilled (~300-token) JUDGMENT block prepended to the Lite proofread prompt
 // (buildProofreadPrompt) — the same judgment as the chat critique, NOT the full
 // ~9K-token LYRA_BRAIN, and NOT sentence-by-sentence. Proofread stays fast, Lite,
@@ -25,4 +32,5 @@ export const PROOFREAD_JUDGMENT_RULES = `JUDGMENT — apply Lyra's standards bef
 - ${NO_FABRICATION}
 - ${NO_REWRITE_ILLUSTRATION}
 - FORMALITY-AWARE — judge against the writing type and exam register stated below: formal types flag informal / casual wording; creative or spoken types allow it. Never flag register that fits the genre.
-- EXPLAIN THE WHY — every issue names its underlying rule briefly, in clear simple English a 14-year-old reads easily, with a short Traditional Chinese (繁體) gloss for any hard term (English-primary, Chinese as support). Never cite a rule you invented.`;
+- EXPLAIN THE WHY — every issue names its underlying rule briefly, in clear simple English a 14-year-old reads easily, with a short Traditional Chinese (繁體) gloss for any hard term (English-primary, Chinese as support). Never cite a rule you invented.
+- ${NAME_THE_RULE}`;
