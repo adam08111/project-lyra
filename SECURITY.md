@@ -77,6 +77,15 @@ roster display_name is shown instead). **CSV/XLSX export is deferred** (Class D 
 spreadsheet formula-injection neutralization is required before any export ships). A live
 red-team re-run is still required before the CIP demo (see Required process above).
 
+**§109 session isolation (landed).** The teacher session is **storage-isolated** from the
+student's anonymous session — the teacher surface uses its own Supabase client with a distinct
+auth `storageKey` (`lyra-teacher-auth`), so a teacher sign-in on a shared browser can never
+overwrite a student's anonymous session. Defense-in-depth: the **student sync layer refuses to
+operate under any non-anonymous session** — `ensureStudent` mints/resolves a student ONLY under
+a provably-anonymous session (fail-safe: anything not `is_anonymous === true` is refused), so
+even a future non-anonymous identity cannot make the student boot attribute a device's data to
+the wrong uid (the §97.1 clobber class).
+
 ## Reporting
 
 This is a pre-pilot educational project. Security concerns → the maintainer (see the repo

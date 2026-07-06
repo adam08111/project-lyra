@@ -147,12 +147,17 @@ deploy, no `vercel.json`/middleware change. Operator-provisioned; read-only.
 1. **Apply migration `0005_teachers.sql`** in the Supabase SQL editor, after `0001`–`0004`.
    It adds `schools`/`teachers`/`classes`/`enrolments` + `current_teacher_id()` and
    SELECT-only teacher-read RLS on `learning_events` + `growth_profiles` (never `blobs`).
-2. **Seed a synthetic demo class** (operator machine only — never CI, never a bundle):
+2. **Seed a synthetic demo class** (operator machine only — never CI, never a bundle; the
+   keys come from your LOCAL env only and must never be committed). Command Prompt (cmd):
    ```
-   $env:SUPABASE_URL="https://<proj>.supabase.co"
-   $env:SUPABASE_SERVICE_ROLE_KEY="<service-role-key>"   # local env ONLY — never commit
-   $env:LYRA_SEED_CONFIRM="SYNTHETIC"
+   set SUPABASE_URL=https://<proj>.supabase.co
+   set SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+   set LYRA_SEED_CONFIRM=SYNTHETIC
    node scripts/seed-synthetic-class.mjs
+   ```
+   PowerShell alternate:
+   ```
+   $env:SUPABASE_URL="https://<proj>.supabase.co"; $env:SUPABASE_SERVICE_ROLE_KEY="<service-role-key>"; $env:LYRA_SEED_CONFIRM="SYNTHETIC"; node scripts/seed-synthetic-class.mjs
    ```
    Refuses to run without `LYRA_SEED_CONFIRM=SYNTHETIC`; prints the demo teacher's email +
    password once; idempotent (re-run converges). **Synthetic data only — never real
