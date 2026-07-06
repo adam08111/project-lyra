@@ -4,6 +4,7 @@
 // spinner (never-stuck #7). Desktop-first (D-B3).
 import React, { useState, useEffect, useCallback } from "react";
 import { currentTeacher, signIn, signOut } from "./auth.js";
+import Dashboard from "./Dashboard.jsx";
 
 const C = {
   ink: "#171b24", inkSoft: "#454b58", paper: "#ffffff", line: "#dde1e8",
@@ -39,6 +40,11 @@ export default function TeacherApp() {
   const onSignedIn = useCallback((t) => { setTeacher(t); setStatus("in"); }, []);
   const onSignOut = useCallback(async () => { await signOut(); setTeacher(null); setStatus("out"); }, []);
 
+  // Signed in → the full-width read-only dashboard (§107), not the narrow sign-in card.
+  if (status === "in") {
+    return <Dashboard teacher={teacher} onSignOut={onSignOut} />;
+  }
+
   let body;
   if (status === "checking") {
     body = <p style={{ color: C.inkSoft, margin: 0 }}>Checking your session…</p>;
@@ -58,8 +64,6 @@ export default function TeacherApp() {
         <Btn onClick={onSignOut}>Sign out</Btn>
       </Notice>
     );
-  } else if (status === "in") {
-    body = <SignedIn teacher={teacher} onSignOut={onSignOut} />;
   } else {
     body = <SignInForm onSignedIn={onSignedIn} />;
   }
@@ -101,20 +105,6 @@ function SignInForm({ onSignedIn }) {
       {err ? <p role="alert" style={{ color: C.red, fontSize: 13, margin: "0 0 14px" }}>{err}</p> : null}
       <Btn type="submit" disabled={busy} full>{busy ? "Signing in…" : "Sign in"}</Btn>
     </form>
-  );
-}
-
-function SignedIn({ teacher, onSignOut }) {
-  return (
-    <div>
-      <p style={{ margin: "0 0 6px" }}>
-        Signed in as <strong>{teacher?.display_name}</strong>.
-      </p>
-      <p style={{ color: C.inkSoft, fontSize: 14, margin: "0 0 20px" }}>
-        Your class roster and student insights will appear here.
-      </p>
-      <Btn onClick={onSignOut}>Sign out</Btn>
-    </div>
   );
 }
 
