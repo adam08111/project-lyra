@@ -68,6 +68,15 @@ profile field is treated as hostile input, escaped by React default rendering, w
 raw-HTML sinks — the §107 dashboard consumes the checklist in full and adds a
 `no dangerouslySetInnerHTML in src/teacher` guard test. Demo data is synthetic only.
 
+**§107 dashboard (landed).** Read-only roster → per-student rule-frequency + growth report
+(incl. the teacher-only `bandEstimate`, labelled an estimate). Every field renders as
+default-escaped text — a characterization test injects `<img onerror>` / `<script>` /
+`javascript:` into rule/label/summary/display-name and asserts no live node materializes;
+the highest-risk raw field `growth_profiles.profile.studentName` is not rendered at all (the
+roster display_name is shown instead). **CSV/XLSX export is deferred** (Class D item 2 —
+spreadsheet formula-injection neutralization is required before any export ships). A live
+red-team re-run is still required before the CIP demo (see Required process above).
+
 ## Reporting
 
 This is a pre-pilot educational project. Security concerns → the maintainer (see the repo
