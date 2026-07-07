@@ -3233,3 +3233,5 @@ The role-inverted brief: **Adam drove** (SQL editor + browser); this session pre
 
 **Landing record.** This entry is the only diff. FF-landed on `origin/main` with Adam's same-session approval (CLAUDE.md #2); the new tip is this commit's own hash (recorded in the session report).
 
+*Addendum (same day, follow-up commit):* §110 landed as **`564384a`** — the `origin/main` tip at the close of the sitting. Session tally for the two-day run: **§106 `4657b1c`…§110 `564384a`**, all FF, per-unit commits, 574 tests green throughout, the sitting itself zero-diff. This addendum lands together with the HANDOFF.md refresh (the front door was still describing §105 — now current through §110).
+
