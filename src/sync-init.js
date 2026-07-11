@@ -12,6 +12,7 @@ import { backfillIfNeeded, LEARNING_KEYS } from "./data-layer.js";
 import { hydrateIfNeeded, HYDRATED_FLAG } from "./hydrate.js";
 import { registerStorageListener } from "./storage-shim.js";
 import { noteWrite, sweep } from "./blob-mirror.js";
+import { captureWritings } from "./writing-snapshots.js";
 
 const IMPORT_PENDING = "lyra-sync-import-pending";
 
@@ -82,7 +83,9 @@ export async function initSync({ restoredKeys = [] } = {}) {
     // listener/interval it is about to discard. flush also fires on visibility→hidden
     // (best-effort capture before the tab backgrounds); `online` is handled in sync-outbox.
     registerStorageListener(noteWrite);
-    try { setInterval(() => { try { sweep(); } catch (e) { /* silent */ } }, 60000); } catch (e) { /* silent */ }
+    // §101 blob sweep + BRIEF-114 writing-snapshot capture (seam b) share the 60s interval —
+    // captureWritings self-diffs per writing, so it emits only on a changed/new/deleted draft.
+    try { setInterval(() => { try { sweep(); captureWritings("sweep"); } catch (e) { /* silent */ } }, 60000); } catch (e) { /* silent */ }
     try {
       if (typeof document !== "undefined" && window.addEventListener) {
         window.addEventListener("visibilitychange", () => {
@@ -97,6 +100,10 @@ export async function initSync({ restoredKeys = [] } = {}) {
     const importPending = !!localStorage.getItem(IMPORT_PENDING);
     backfillIfNeeded({ force: importPending || (restoredKeys || []).some((k) => LEARNING_KEYS.includes(k)) });
     if (importPending) { try { localStorage.removeItem(IMPORT_PENDING); } catch (e) { /* silent */ } }
+    // BRIEF-114: snapshot existing drafts on the first authenticated boot (don't wait for the
+    // 60s sweep) so the pilot's first drafts are captured durably from day one. Server dedup
+    // makes this idempotent across boots.
+    try { captureWritings("sweep"); } catch (e) { /* silent */ }
     flush();
   } catch (e) {
     // Never strand boot — degrade to a disabled shim so callers still get an answer.

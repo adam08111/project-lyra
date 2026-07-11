@@ -12,6 +12,7 @@ import { tsOf } from "./report-utils.js";
 import { grammarKey, growthKey, skillKey, structureKey, vocabKey, reportKey } from "./content-keys.js";
 import { enqueue } from "./sync-outbox.js";
 import { getSupabase } from "./supabase-client.js";
+import { captureWritings } from "./writing-snapshots.js";
 
 // The local stores the mirror + backfill sweep cover (grammar lives under the shim key
 // "grammar-log"; the rest are raw localStorage). Defined ONCE here (§3 single source).
@@ -78,13 +79,18 @@ export function recordGrammarLogDelta(logArray) {
     _grammarBaseline = new Set(arr.map(grammarKey));
     return;
   }
+  let emitted = false;
   for (const e of arr) {
     const k = grammarKey(e);
     if (_grammarBaseline.has(k)) continue;
     _grammarBaseline.add(k);
     const ev = toEvent("grammar", e, k);
-    if (ev) enqueue({ kind: "event", payload: ev });
+    if (ev) { enqueue({ kind: "event", payload: ev }); emitted = true; }
   }
+  // BRIEF-114 seam (a): a coaching/proofread turn that produced NEW corrections is a meaningful
+  // moment — snapshot the current writing(s) too (trigger:'proofread'). Sync-layer only; captureWritings
+  // self-diffs (no snapshot if the draft didn't change) and no-ops when sync is off.
+  if (emitted) captureWritings("proofread");
 }
 
 /**
