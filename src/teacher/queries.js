@@ -18,7 +18,7 @@ export async function myClasses() {
   try {
     const sb = getTeacherClient();
     if (!sb) return { ok: false, error: "not-configured" };
-    const { data: classes, error } = await sb.from("classes").select("id, name").order("name");
+    const { data: classes, error } = await sb.from("classes").select("id, name, class_code").order("name");
     if (error) { logT("classes query failed", { code: error.code }); return { ok: false, error: "query-failed" }; }
     const ids = (classes || []).map((c) => c.id);
     const counts = {};
@@ -27,7 +27,7 @@ export async function myClasses() {
       if (e2) { logT("enrolment count failed", { code: e2.code }); return { ok: false, error: "query-failed" }; }
       for (const r of enr || []) counts[r.class_id] = (counts[r.class_id] || 0) + 1;
     }
-    return { ok: true, data: (classes || []).map((c) => ({ id: c.id, name: c.name, studentCount: counts[c.id] || 0 })) };
+    return { ok: true, data: (classes || []).map((c) => ({ id: c.id, name: c.name, class_code: c.class_code, studentCount: counts[c.id] || 0 })) };
   } catch (e) {
     logT("myClasses threw", { code: e?.name });
     return { ok: false, error: "threw" };

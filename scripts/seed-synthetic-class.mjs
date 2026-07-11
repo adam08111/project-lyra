@@ -144,7 +144,7 @@ async function main() {
 
   const klass = await findOrCreateRow(
     "classes", { teacher_id: teacher.id, name: CLASS_NAME },
-    { teacher_id: teacher.id, school_id: school.id, name: CLASS_NAME },
+    { teacher_id: teacher.id, school_id: school.id, name: CLASS_NAME, class_code: "DEMO-CLASS-1" }, // D-L7: stable demo code
   );
 
   for (let i = 0; i < STUDENTS.length; i++) {

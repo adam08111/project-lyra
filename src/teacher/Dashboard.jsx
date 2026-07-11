@@ -98,6 +98,14 @@ export default function Dashboard({ teacher, onSignOut }) {
                   </select>
                 </div>
               )}
+              {(() => {
+                const active = classes.data.find((c) => c.id === classId);
+                return active && active.class_code ? (
+                  <p style={{ fontSize: 13, color: "#454b58", margin: "0 0 16px" }}>
+                    Class code: <strong style={{ fontFamily: "ui-monospace, monospace", letterSpacing: 1 }}>{active.class_code}</strong> — students enrol with this
+                  </p>
+                ) : null;
+              })()}
               {rosterState.status === "loading" && <Msg>Loading roster…</Msg>}
               {rosterState.status === "error" && <Retry onClick={() => loadRoster(classId)} />}
               {rosterState.status === "loaded" && <RosterTable rows={rosterState.rows} onOpen={openStudent} />}

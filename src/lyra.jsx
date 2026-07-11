@@ -21,6 +21,7 @@ import GrammarLog from "./components/GrammarLog.jsx";
 import StyleLab from "./components/StyleLab.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import TrainingSession from "./components/TrainingSession.jsx";
+import EnrolOverlay from "./enrol/EnrolOverlay.jsx";
 import { generateTitle, swapTitleTypePrefix } from "./titleGenerator.js";
 import { detectFormatCue, typeLabelOf } from "./genre-cues.js";
 import { nextHeaderCollapsed } from "./header-collapse.js";
@@ -1022,6 +1023,8 @@ Rules:
         <StyleLab showStyleLab={showStyleLab} setShowStyleLab={setShowStyleLab} setSidebarOpen={setSidebarOpen} projects={projects} trackCall={trackCall} setAppliedSkill={setAppliedSkill} setWritingTechniques={setWritingTechniques} initialTab={styleLabInitialTab} onOpenTraining={openTrainingSession} writingType={type} />
         <WordLookup trackCall={trackCall} />
         {trainingSkill && <TrainingSession skill={trainingSkill} startTechIdx={trainingStartTech} onClose={closeTrainingSession} trackCall={trackCall} />}
+        {/* BRIEF-ENROL: leaf mount — the overlay owns its own visibility (flag-off / enrolled → null) */}
+        {userNameLoaded && userName && <EnrolOverlay userName={userName} />}
       </>
     );
   }
