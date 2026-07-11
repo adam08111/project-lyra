@@ -24,7 +24,8 @@ real Supabase project; the last such LIVE sitting is **§110** (§111–§113 �
 tip — are mocked-path tests + a schema migration, not a live sitting). Identity v1 is
 `LIVE-VERIFIED`. A few items are now **`BUILT-UNVERIFIED`**: the identity-semantics
 tripwires (§111, 589 green, mock-only), the writing-snapshot ledger (§112), and the
-auth-cascade sever (§113 — migration authored, not yet applied to the live project).
+auth-cascade sever (§113 draft, corrected to `ON DELETE RESTRICT` in **§115** per BRIEF-FK —
+migration authored, not yet applied to the live project).
 **Everything else in this document is RATIFIED-UNBUILT, PROPOSED, or OPERATOR.** Any text
 describing v2, tiers, or custodians in the present tense is describing a destination.
 
@@ -181,15 +182,18 @@ unbuilt; the PDPO / de-identification guardrails are not yet in force.)*
 
 ## 7. Time-critical verifications — this week. `OPERATOR.`
 
-1. **P0 — the summer-purge data-loss chain. FK: FIXED (§113); retention posture: still an
-   operator check.** The code-confirmed defect — `students.auth_user_id` was `ON DELETE
-   CASCADE` (`0001:20`), so an anonymous-user auto-purge cascade-deleted the entire student
-   subtree (events, profile, essays, enrolments) — is **fixed** by migration `0007`
-   (`CASCADE → SET NULL`; `BUILT-UNVERIFIED` until the operator applies it — DEPLOY.md, §113).
-   With 0007 applied, a purge now DETACHES a student (recoverable via the written code),
-   never destroys. The operator retention check remains as belt-and-braces: confirm the
-   anonymous-user auto-cleanup posture (Hong Kong's summer exceeds 30 days; permanent accounts
-   are exempt from anon cleanup — one more reason v2 is the right destination).
+1. **P0 — the summer-purge data-loss chain. FK: FIXED (§115); retention posture: still an
+   operator check.** The code-confirmed defect — BOTH `students.auth_user_id` (`0001:20`) and
+   `teachers.auth_user_id` (`0005:31`) were `ON DELETE CASCADE`, so a single `auth.users`
+   deletion (an anonymous-user auto-purge, or an operator slip) cascade-deleted the entire
+   subtree (events, profile, essays, snapshots, enrolments; for a teacher, their classes +
+   enrolments) — is **fixed** by migration `0007` (`CASCADE → RESTRICT` on both edges;
+   `BUILT-UNVERIFIED` until the operator applies it — DEPLOY.md, §115). With 0007 applied, an
+   auth-user deletion that would destroy a subtree **fails loudly** (the correct failure mode);
+   legitimate deletion handles the child (`students`/`teachers`) row first, then the auth user.
+   The operator retention check remains belt-and-braces: confirm the anonymous-user auto-cleanup
+   posture (Hong Kong's summer exceeds 30 days; permanent accounts are exempt from anon cleanup —
+   one more reason v2 is the right destination).
 2. **Safari eviction rule** current behavior + the install nudge.
 3. **Vercel registration** (DEPLOY.md runbook): Hobby = synthetic-data demo only;
    **Pro before any real human types a word** — per Vercel's terms (as understood June 2026,
@@ -198,12 +202,12 @@ unbuilt; the PDPO / de-identification guardrails are not yet in force.)*
 
 ## 8. Build order — the canonical queue
 
-**Operator, parallel:** apply migrations **0006** (snapshots) + **0007** (auth-cascade sever)
+**Operator, parallel:** apply migrations **0006** (snapshots) + **0007** (auth-FK → RESTRICT)
 · the anon-retention posture check · Vercel registration + first flag-OFF deploy ·
 successor-package commit (the source transcript into `docs/decisions/`; this document is now
 committed, §114) · CIP skeleton, LOIs, incorporation.
 **Claude Code — DONE this run:** identity-semantics tripwires (§111) · writing snapshots
-(§112) · auth-cascade sever (§113) · this document + review corrections (§114).
+(§112) · auth-cascade sever (§113 draft → RESTRICT final §115) · this document + review corrections (§114).
 **Claude Code — still pending, in order:** red-team full-output capture (§110.1 finding #1 —
 the `last-run.json` truncation) → maintainer's class-E read (OPERATOR) → BRIEF-112 recovery
 surface (**migration 0008** — renumbered: snapshots took 0006, the FK fix took 0007) →
