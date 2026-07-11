@@ -73,6 +73,11 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
    6. `0006_writing_snapshots.sql` — the append-only essay-draft ledger (BRIEF-114): a
       student-owned, teacher-excluded `writing_snapshots` table so a written draft can't be
       silently destroyed. Additive; safe to apply after 0005.
+   7. `0007_auth_cascade_sever.sql` — **P0 durability fix.** Flips `students.auth_user_id`'s
+      FK from `ON DELETE CASCADE` to `ON DELETE SET NULL`, so an anonymous-user auto-purge (or
+      any `auth.users` deletion) DETACHES a student instead of cascade-deleting their whole
+      record. Apply after 0006. **Before applying, run the summer-purge posture check**
+      (anon-user retention setting) — this fix removes the data-loss teeth regardless.
    Existing deployments only need **0003 then 0004**.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:
