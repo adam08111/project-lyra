@@ -208,12 +208,14 @@ successor-package commit (the source transcript into `docs/decisions/`; this doc
 committed, §114) · CIP skeleton, LOIs, incorporation.
 **Claude Code — DONE this run:** identity-semantics tripwires (§111) · writing snapshots
 (§112) · auth-cascade sever (§113 draft → RESTRICT final §115) · this document + review corrections (§114).
-**Claude Code — still pending, in order:** red-team full-output capture (§110.1 finding #1 —
-the `last-run.json` truncation) → maintainer's class-E read (OPERATOR) → BRIEF-112 recovery
-surface (**migration 0008** — renumbered: snapshots took 0006, the FK fix took 0007) →
-enrolment (brief TBW) → teacher-mediated regen (own brief, own review) → BRIEF-115 offsite
-dump → flag-ON via staging verification → BRIEF-116 take-home export → report-card snapshot
-(the D-I5 follow-up, TBW).
+**Claude Code — still pending, in order:** ~~red-team full-output capture (§110.1 finding
+#1 — the `last-run.json` truncation)~~ **DONE (§116)** — the harness now stores full,
+untruncated reply transcripts (`tests/redteam/record.js`); a live re-run to regenerate
+`last-run.json` + the maintainer's **class-E read (OPERATOR)** are what remain of this item →
+BRIEF-112 recovery surface (**migration 0008** — renumbered: snapshots took 0006, the FK fix
+took 0007) → enrolment (brief TBW) → teacher-mediated regen (own brief, own review) →
+BRIEF-115 offsite dump → flag-ON via staging verification → BRIEF-116 take-home export →
+report-card snapshot (the D-I5 follow-up, TBW).
 **Pilot-term, behind the consent framework:** Identity v2 attach flow + the §109 guard
 evolution.
 *(Brief IDs are names; the § number is always tip+1 at landing — Step 0 renumbers.)*
