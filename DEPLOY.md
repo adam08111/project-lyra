@@ -79,7 +79,10 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
       teacher's whole subtree now **fails loudly** instead of silently deleting it. Legitimate
       deletion: delete the child (`students`/`teachers`) row first — its subtree cascades by
       design — then the auth user. Apply after 0006. The anon-retention posture check remains
-      worthwhile (belt-and-braces), but this removes the data-loss teeth regardless.
+      worthwhile (belt-and-braces), but this removes the data-loss teeth regardless. **No orphan
+      pre-cleanup needed:** the existing `CASCADE` FK already guarantees every `auth_user_id`
+      points to a live `auth.users` row, so the `RESTRICT` re-add cannot fail on a dangling
+      reference (the §110 "orphans" are empty-*data* rows with valid auth users, not dangling FKs).
    Existing deployments only need **0003 then 0004**.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:
