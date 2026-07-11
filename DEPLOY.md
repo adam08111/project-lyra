@@ -93,6 +93,18 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
       reload/replay double-insert, never a distinct regen — do NOT expect a no-op second row);
       `select report->'level'->>'bandEstimate', ts from report_snapshots order by ts` shows the
       band trajectory; teacher session `select count(*) from report_snapshots` → denied.
+   9. `0009_enrolment.sql` — enrolment (BRIEF-ENROL): adds `class_code` to `classes` (backfills a
+      unique 6-char code, then NOT NULL + unique), a **student self-SELECT** policy on `enrolments`
+      (a student can see their own membership; teachers keep their class scope), and the
+      **`enrol_student(code, name)` RPC** — a SECURITY DEFINER verify-and-link with a server-side
+      name sanitize (control-strip, collapse, 40-cap) and ONE non-oracle error. Grants: execute to
+      `authenticated` only, revoked from public/anon. Additive; safe to apply after 0008. **How
+      students enrol:** the teacher reads the class code off the Dashboard header and puts it on the
+      board; each student, on her own phone, enters that code + her name in the "Join your class"
+      screen after onboarding, and banks her recovery code on the success screen. Manual check:
+      seed sets `DEMO-CLASS-1`; a throwaway profile → onboarding → wrong code → honest error → right
+      code → confirmation → recovery code shown; re-enrol → no duplicate; a hostile name (`<img
+      onerror>`) renders as literal text in the dashboard; flag-off → no overlay.
    Existing deployments only need **0003 then 0004**.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:

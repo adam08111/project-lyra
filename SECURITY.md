@@ -97,6 +97,16 @@ growth reports, migration 0008) carries the **same posture**: student-owned, stu
 (SELECT + INSERT under `current_student_id()`, no update/delete), **teachers excluded** (no
 policy, no grant — teachers keep reading only the current `growth_profiles` view), anon revoked.
 
+**Enrolment (BRIEF-ENROL, §118).** The `enrol_student(code, name)` RPC (migration 0009) is
+`SECURITY DEFINER` with `search_path=public`, granted to `authenticated` only (revoked from
+public/anon); it links **only the calling** student (via `current_student_id()`, never a caller-
+supplied id) and returns ONE non-oracle error so class codes can't be enumerated by error shape.
+The display name is the **first genuinely student-controlled string** that renders in a teacher's
+session — it is sanitized server-side (control-strip, whitespace-collapse, 40-char cap; the server
+is the law) and rendered as an inert React text child everywhere (enrol success screen + the §107
+dashboard), so Class D now covers a real threat, not a synthetic one. Students stay anonymous — the
+name lives only on the `enrolments` row, never in the identity model.
+
 ## Reporting
 
 This is a pre-pilot educational project. Security concerns → the maintainer (see the repo

@@ -216,10 +216,10 @@ committed, §114) · CIP skeleton, LOIs, incorporation.
 #1 — the `last-run.json` truncation)~~ **DONE (§116)** — the harness now stores full,
 untruncated reply transcripts (`tests/redteam/record.js`); a live re-run to regenerate
 `last-run.json` + the maintainer's **class-E read (OPERATOR)** are what remain of this item →
-BRIEF-112 recovery surface (**migration renumbers at its Step 0** — 0006/0007/0008 are taken by
-snapshots / FK / report-snapshots; and BRIEF-ENROL is slated for the next slot, so recovery lands
-after that — next free when built) → enrolment (brief TBW; migration **0009**) → teacher-mediated
-regen (own brief, own review) →
+BRIEF-112 recovery surface (**migration `0010`** — 0006/0007/0008/0009 are taken by snapshots / FK
+/ report-snapshots / enrolment; renumbers at its Step 0 if the tree moved) → ~~enrolment~~ **DONE
+(§118 — BRIEF-ENROL, migration 0009: class codes + the enrol_student RPC + the one-minute phone
+onboarding)** → teacher-mediated regen (own brief, own review) →
 BRIEF-115 offsite dump → flag-ON via staging verification → BRIEF-116 take-home export →
 ~~report-card snapshot (the D-I5 follow-up)~~ **DONE (§117 — BRIEF-RS, migration 0008)**.
 **Pilot-term, behind the consent framework:** Identity v2 attach flow + the §109 guard
