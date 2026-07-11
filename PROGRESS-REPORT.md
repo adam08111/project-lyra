@@ -3326,5 +3326,21 @@ The canonical identity/sync/permanence document is now **version-controlled** (i
 
 **Verification.** Product suite **589 green, UNMODIFIED** (constraint swap; no test touches the live FK, no source change). Migration chain `0001→0007` contiguous (0007 renamed, not duplicated). **Adam's manual proof (D-J3, in the same sitting as 0006 — the crash-test doubles as orphan cleanup):** apply 0007 after 0006; (1) `delete from auth.users where id = '<c09dcf1e auth id>';` → **expect an FK RESTRICT error** — that error IS the fix, witnessed; paste it into the record as the artifact; (2) the correct path — delete `c09dcf1e`'s `students` row (its subtree cascades away), then its auth user → both succeed, the orphan is gone, census drops by one; (3) confirm normal boot + claim flow unaffected (a constraint swap touches neither).
 
-**Landing record.** Three commits (migration swap / doc corrections / this log). Landing per CLAUDE.md #2 (BRIEF-FK is the maintainer's ratified directive). When landed FF, record the new `origin/main` sha here.
+**Landing record.** Four commits FF-landed on `origin/main` (migration swap `01d3754` / doc corrections `f6cab2f` / log `7cc9f6b` / DEPLOY apply-safety note `85bb9bd`); prior tip `04c636c` → new tip **`85bb9bd`** (never force). Main folder synced. Review: safe to land, 0 must-fix. §115 corrects §113 — the SET NULL migration is removed; RESTRICT (both edges) is the shipped fix.
+
+---
+
+## Session close-out — §111–§115 (8 July 2026)
+
+The §111–§115 run landed on `origin/main` as one continuous fast-forward chain, prior tip `8dc16d8` (§110.1) → **`85bb9bd`** (§115), 589 tests green throughout, no force, main folder synced at each step:
+
+- **§111** `312978e`,`4df447c` — identity-semantics characterization tripwires (mock-only, 577→ green).
+- **§112** `b605002`…`10e7862` — writing_snapshots append-only ledger (migration `0006` + emitter + 2 seams + 12 tests → 589 green).
+- **§113** `…`,`0eb2cda` — auth-cascade fix, first draft (migration `0007`, SET NULL — superseded).
+- **§114** `…`,`04c636c` — `DATA-ARCHITECTURE.md` committed with its adversarial-review corrections (16/17 findings).
+- **§115** `01d3754`…`85bb9bd` — the FK fix corrected to `ON DELETE RESTRICT` on both `students` + `teachers` auth edges (per BRIEF-FK), owning the §113 SET NULL inference.
+
+**`HANDOFF.md` refreshed** to §115 in this close-out (§4 current state, §5 backlog + the next-sitting migration/D-J3 work, §6 reserve stack, §8 calibration, footer — front door current through the tip).
+
+**Owed, outside this loop (operator / next sitting):** apply migrations `0006` + `0007` in the SQL editor (after 0005) + the §115 D-J3 crash-test (which doubles as the `c09dcf1e` orphan cleanup) + the §112 snapshot manual checks; the red-team full-output capture (§110.1); the class-E human read; the still-standing pilot-gate items (concurrency, localStorage root-cause, outside human review, MFA/Pro/backup, the PDPO erasure procedure). The full ordered queue lives in `DATA-ARCHITECTURE.md` §8.
 
