@@ -232,3 +232,34 @@ describe("sync-outbox — blob kind (§101)", () => {
     expect(readOutbox()).toHaveLength(1);
   });
 });
+
+describe("sync-outbox — snapshot kind (BRIEF-114)", () => {
+  const snap = (id, hash) => ({ kind: "snapshot", payload: { writing_id: id, content: "draft", content_hash: hash, trigger: "proofread", deleted: false } });
+
+  it("flush upserts writing_snapshots with the content-key onConflict + student_id attached", async () => {
+    const { enqueue, flush } = await load();
+    enqueue(snap("w1", "h1"));
+    await flush();
+    expect(h.state.upsertCalls).toHaveLength(1);
+    expect(h.state.upsertCalls[0].opts).toEqual({ onConflict: "student_id,writing_id,content_hash", ignoreDuplicates: true });
+    expect(h.state.upsertCalls[0].rows[0]).toMatchObject({ student_id: "stud-1", writing_id: "w1", content: "draft", content_hash: "h1", trigger: "proofread", deleted: false });
+    expect(readOutbox()).toHaveLength(0);
+  });
+
+  it("batches snapshots in 50-row chunks", async () => {
+    const { enqueue, flush } = await load();
+    for (let i = 0; i < 55; i++) enqueue(snap("w" + i, "h" + i));
+    await flush();
+    expect(h.state.upsertCalls).toHaveLength(2); // 50 + 5
+    expect(h.state.upsertCalls[0].rows).toHaveLength(50);
+    expect(h.state.upsertCalls[1].rows).toHaveLength(5);
+  });
+
+  it("snapshot flush failure keeps the queue (retries later)", async () => {
+    h.state.upsertResult = { error: { code: "XX000" } };
+    const { enqueue, flush } = await load();
+    enqueue(snap("w1", "h1"));
+    await flush();
+    expect(readOutbox()).toHaveLength(1);
+  });
+});

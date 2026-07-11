@@ -21,6 +21,7 @@ vi.mock("../src/sync-outbox.js", () => ({ flush: () => { h.flushCalls++; } }));
 // §101: initSync now wires blob capture — stub the shim listener + blob-mirror.
 vi.mock("../src/storage-shim.js", () => ({ registerStorageListener: () => {} }));
 vi.mock("../src/blob-mirror.js", () => ({ noteWrite: () => {}, sweep: () => {} }));
+vi.mock("../src/writing-snapshots.js", () => ({ captureWritings: () => {} }));
 
 function makeStorage() {
   let s = {};
