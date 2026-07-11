@@ -1,2 +1,3 @@
-# Local run artifact (verdicts + truncated evidence). Regenerated each run; not committed.
+# Local run artifact (verdicts + FULL reply transcripts, incl. class-E safety replies).
+# Regenerated each run; not committed.
 last-run.json

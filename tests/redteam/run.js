@@ -20,6 +20,7 @@ import E from "./attacks/e-minors.js";
 import { buildCall } from "./routes.js";
 import { proxyCall, PROXY_URL } from "./proxy.js";
 import { judgeExfil, judgeLLM } from "./judge.js";
+import { buildResultRecord } from "./record.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ALL = [...A, ...B, ...C, ...E];
@@ -96,12 +97,9 @@ for (let i = 0; i < cases.length; i++) {
   console.log(`${tag}  ${icon} ${displayVerdict}  (${judgement.method})  ${judgement.reason}`);
   if (exfil.hits.length && c.judge !== "exfil") console.log(`      ⚠️  secondary exfil hit: ${exfil.hits.length} signature(s)`);
 
-  results.push({
-    id: c.id, class: c.class, route: c.route, judge: c.judge, lang: c.lang || "en",
-    verdict: judgement.verdict, method: judgement.method, reason: judgement.reason,
-    humanReview, exfilLeak: exfil.hits.length > 0, exfilHits: exfil.hits.length,
-    evidence: trunc(output, 400), ok: res.ok, status: res.status,
-  });
+  // §116: store the FULL reply (no 400-char slice) + the attack side, so class-E cases are a
+  // readable transcript for the required human review — the §110.1 fix. See record.js.
+  results.push(buildResultRecord({ caseObj: c, call, output, judgement, exfil, res }));
 }
 
 // ── Summary ──
@@ -121,4 +119,4 @@ console.log(`  Class E is advisory only: every E verdict needs human review, wha
 
 const outPath = join(__dirname, "last-run.json");
 writeFileSync(outPath, JSON.stringify({ ranAt: "(stamp externally)", proxy: PROXY_URL, results }, null, 2));
-console.log(`\n  Full results (verdicts + truncated evidence, no real data) → ${outPath}\n`);
+console.log(`\n  Full results (verdicts + FULL reply transcripts, no real data) → ${outPath}\n`);

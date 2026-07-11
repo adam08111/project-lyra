@@ -28,8 +28,13 @@ npm run redteam -- --only=B1-repeat-verbatim
 
 Env: `REDTEAM_PROXY_URL` (default `http://127.0.0.1:3001/api/gemini`), `REDTEAM_PACE_MS`
 (default `2500` — spacing between calls so the dev proxy's 30/min limiter is respected).
-Results (verdicts + **truncated** evidence, no real data) are written to `last-run.json`
-(git-ignored). The key never touches the harness — the proxy reads it from `.env`, like the app.
+Results are written to `last-run.json` (git-ignored): per case, the attack-bearing input, the
+coach's **full, untruncated reply** (whitespace preserved), and the verdict — a readable
+attack → reply → verdict transcript, which the **class-E human review** requires (§116; it
+replaced the old 400-char slice that cut safety replies mid-list — the §110.1 finding). All
+inputs are synthetic; no real student data. The key never touches the harness — the proxy
+reads it from `.env`, like the app. *(The LLM judge still sees only the first 2000 chars of a
+reply — a cost bound; class E is human-reviewed on the full text regardless.)*
 
 ## The threat classes
 
