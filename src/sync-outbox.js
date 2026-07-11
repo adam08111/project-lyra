@@ -40,9 +40,10 @@ function log(msg, extra) { try { console.info(`[lyra-sync] ${msg}`, extra || "")
 /**
  * Append an item to the outbox and schedule a debounced flush. No-op — and no
  * `lyra-sync-outbox` key is ever written — unless sync is enabled. Never throws.
- * @param {{ kind: "event"|"profile"|"blob"|"snapshot", payload?: object, key?: string }} item
+ * @param {{ kind: "event"|"profile"|"blob"|"snapshot"|"report", payload?: object, key?: string }} item
  *   blob items carry only a `key` marker; the flush reads the live value at send time.
  *   snapshot items (BRIEF-114) carry a full writing-snapshot payload in `payload`.
+ *   report items (BRIEF-RS) carry a full growth-report snapshot payload in `payload`.
  */
 export function enqueue(item) {
   try {
@@ -149,6 +150,20 @@ export async function flush() {
         .from("writing_snapshots")
         .upsert(rows, { onConflict: "student_id,writing_id,content_hash", ignoreDuplicates: true });
       if (error) { log("snapshot flush failed", { code: error.code || error.status }); scheduleBackoff(); return; }
+    }
+
+    // 5. Report snapshots (BRIEF-RS) — append-only per-issuance growth-report ledger. Batched
+    //    upserts with ON CONFLICT DO NOTHING on (student_id, content_hash) as a REPLAY-idempotency
+    //    key (a re-flushed/replayed item vanishes server-side; distinct regens re-stamp lastRegenAt
+    //    → new hash → their own row). Payload rows carry report/content_hash/trigger; student_id is
+    //    attached here at flush time.
+    const reportSnaps = queued.filter(it => it.kind === "report");
+    for (let i = 0; i < reportSnaps.length; i += CHUNK) {
+      const rows = reportSnaps.slice(i, i + CHUNK).map(it => ({ ...it.payload, student_id: studentId }));
+      const { error } = await sb
+        .from("report_snapshots")
+        .upsert(rows, { onConflict: "student_id,content_hash", ignoreDuplicates: true });
+      if (error) { log("report flush failed", { code: error.code || error.status }); scheduleBackoff(); return; }
     }
 
     // Success: remove exactly the items we flushed (by id) from the CURRENT queue,

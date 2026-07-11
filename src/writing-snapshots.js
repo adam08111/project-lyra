@@ -16,25 +16,13 @@
  */
 import { enqueue } from "./sync-outbox.js";
 import { getSupabase } from "./supabase-client.js";
+import { hashContent, byteLen } from "./content-hash.js"; // BRIEF-RS: shared with report-snapshots
 
 const PROJECTS_KEY = "lyra-projects";
 const MAX_BYTES = 64 * 1024;          // D-I4 sanity rail (essays are ~3KB); skip, don't fail.
 const _lastHash = new Map();          // writing_id → content_hash last emitted (per-writing diff)
 
 function log(msg, extra) { try { console.info(`[snapshot] ${msg}`, extra || ""); } catch (e) { /* silent */ } }
-
-// FNV-1a + length — the same cheap, stable hash the blob mirror uses. A collision only MISSES a
-// snapshot (self-healed by the next change), never corrupts.
-function hashContent(v) {
-  const s = v == null ? "" : String(v);
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return (h >>> 0) + ":" + s.length;
-}
-function byteLen(s) {
-  try { return new TextEncoder().encode(s == null ? "" : String(s)).length; }
-  catch (e) { return (s == null ? 0 : String(s).length); }
-}
 
 // Flatten lyra-projects → [{ id, content }] over every project's writings. `draft` is the essay
 // text (lyra.jsx auto-save); `id` is the writing id. Malformed shapes yield [] (never throw).

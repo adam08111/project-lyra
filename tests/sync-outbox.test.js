@@ -21,9 +21,9 @@ vi.mock("../src/supabase-client.js", () => ({
 
 function makeClient() {
   return {
-    from: () => ({
+    from: (table) => ({
       upsert: (rows, opts) => {
-        h.state.upsertCalls.push({ rows, opts });
+        h.state.upsertCalls.push({ table, rows, opts });
         if (h.state.upsertImpl) return h.state.upsertImpl(rows, opts);
         return Promise.resolve(h.state.upsertResult);
       },
@@ -259,6 +259,38 @@ describe("sync-outbox — snapshot kind (BRIEF-114)", () => {
     h.state.upsertResult = { error: { code: "XX000" } };
     const { enqueue, flush } = await load();
     enqueue(snap("w1", "h1"));
+    await flush();
+    expect(readOutbox()).toHaveLength(1);
+  });
+});
+
+describe("sync-outbox — report kind (BRIEF-RS)", () => {
+  const rep = (hash) => ({ kind: "report", payload: { report: { level: { bandEstimate: "3" } }, content_hash: hash, trigger: "regen" } });
+
+  it("flush upserts report_snapshots with the content-key onConflict + student_id attached", async () => {
+    const { enqueue, flush } = await load();
+    enqueue(rep("h1"));
+    await flush();
+    expect(h.state.upsertCalls).toHaveLength(1);
+    expect(h.state.upsertCalls[0].table).toBe("report_snapshots");
+    expect(h.state.upsertCalls[0].opts).toEqual({ onConflict: "student_id,content_hash", ignoreDuplicates: true });
+    expect(h.state.upsertCalls[0].rows[0]).toMatchObject({ student_id: "stud-1", content_hash: "h1", trigger: "regen", report: { level: { bandEstimate: "3" } } });
+    expect(readOutbox()).toHaveLength(0);
+  });
+
+  it("batches report snapshots in 50-row chunks", async () => {
+    const { enqueue, flush } = await load();
+    for (let i = 0; i < 55; i++) enqueue(rep("h" + i));
+    await flush();
+    expect(h.state.upsertCalls).toHaveLength(2); // 50 + 5
+    expect(h.state.upsertCalls[0].rows).toHaveLength(50);
+    expect(h.state.upsertCalls[1].rows).toHaveLength(5);
+  });
+
+  it("report flush failure keeps the queue (retries later)", async () => {
+    h.state.upsertResult = { error: { code: "XX000" } };
+    const { enqueue, flush } = await load();
+    enqueue(rep("h1"));
     await flush();
     expect(readOutbox()).toHaveLength(1);
   });

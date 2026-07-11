@@ -15,6 +15,7 @@ import { getRouteConfig } from "./ai-router.js";
 import { REPORT_CARD_BRAIN } from "./report-card-brain.js";
 import { anonymiseSkillsForAI, restoreAuthorNames } from "./utils.js";
 import { saveProfileRemote } from "./data-layer.js"; // §96: mirror the profile to Layer 2
+import { captureReport } from "./report-snapshots.js"; // BRIEF-RS: archive the as-issued report
 
 export const GROWTH_PROFILE_KEY = "lyra-growth-profile";
 
@@ -68,7 +69,8 @@ export function loadProfile() {
 export function saveProfile(profile) {
   try {
     localStorage.setItem(GROWTH_PROFILE_KEY, JSON.stringify(profile));
-    saveProfileRemote(profile, profile?.lastRegenAt); // §96: mirror to Layer 2 (LWW upsert)
+    saveProfileRemote(profile, profile?.lastRegenAt); // §96: mirror to Layer 2 (LWW upsert — current)
+    captureReport(profile, "regen");                  // BRIEF-RS: archive this issue (append-only, dedup)
     return true;
   } catch (e) {
     return false;
