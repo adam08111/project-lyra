@@ -68,6 +68,11 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
       couldn't resolve it).
    4. `0004_revoke_anon.sql` — revokes the anon role's residual table/function access
       (defence-in-depth; RLS already gated it). Zero app impact.
+   5. `0005_teachers.sql` — the teacher foundation (schools/teachers/classes/enrolments +
+      SELECT-only teacher-read RLS; see the Teacher-panel section below).
+   6. `0006_writing_snapshots.sql` — the append-only essay-draft ledger (BRIEF-114): a
+      student-owned, teacher-excluded `writing_snapshots` table so a written draft can't be
+      silently destroyed. Additive; safe to apply after 0005.
    Existing deployments only need **0003 then 0004**.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:

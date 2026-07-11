@@ -86,6 +86,12 @@ a provably-anonymous session (fail-safe: anything not `is_anonymous === true` is
 even a future non-anonymous identity cannot make the student boot attribute a device's data to
 the wrong uid (the §97.1 clobber class).
 
+**Writing snapshots (BRIEF-114).** The append-only `writing_snapshots` table (essay drafts) is
+**student-owned and student-read-only** (SELECT + INSERT under `current_student_id()`, no
+update/delete policy or grant — the history can't be rewritten) and **teachers are excluded
+entirely** — no teacher policy, no teacher grant — because it is essay content, extending the
+SELECT-only, no-essays teacher posture.
+
 ## Reporting
 
 This is a pre-pilot educational project. Security concerns → the maintainer (see the repo
