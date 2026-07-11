@@ -40,8 +40,9 @@ function log(msg, extra) { try { console.info(`[lyra-sync] ${msg}`, extra || "")
 /**
  * Append an item to the outbox and schedule a debounced flush. No-op — and no
  * `lyra-sync-outbox` key is ever written — unless sync is enabled. Never throws.
- * @param {{ kind: "event"|"profile"|"blob", payload?: object, key?: string }} item
+ * @param {{ kind: "event"|"profile"|"blob"|"snapshot", payload?: object, key?: string }} item
  *   blob items carry only a `key` marker; the flush reads the live value at send time.
+ *   snapshot items (BRIEF-114) carry a full writing-snapshot payload in `payload`.
  */
 export function enqueue(item) {
   try {
@@ -135,6 +136,19 @@ export async function flush() {
         { onConflict: "student_id,key" }
       );
       if (error) { log("blob flush failed", { code: error.code || error.status }); scheduleBackoff(); return; }
+    }
+
+    // 4. Writing snapshots (BRIEF-114) — append-only essay-draft ledger. Batched upserts with
+    //    ON CONFLICT DO NOTHING on (student_id, writing_id, content_hash), so reload/multi-trigger
+    //    replays vanish server-side. Payload rows carry writing_id/content/content_hash/trigger/
+    //    deleted; student_id is attached here at flush time.
+    const snapshots = queued.filter(it => it.kind === "snapshot");
+    for (let i = 0; i < snapshots.length; i += CHUNK) {
+      const rows = snapshots.slice(i, i + CHUNK).map(it => ({ ...it.payload, student_id: studentId }));
+      const { error } = await sb
+        .from("writing_snapshots")
+        .upsert(rows, { onConflict: "student_id,writing_id,content_hash", ignoreDuplicates: true });
+      if (error) { log("snapshot flush failed", { code: error.code || error.status }); scheduleBackoff(); return; }
     }
 
     // Success: remove exactly the items we flushed (by id) from the CURRENT queue,
