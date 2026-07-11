@@ -98,7 +98,10 @@ deletes propagate, hydration fill-empty, last sweep wins — `LIVE-VERIFIED §10
 **this is the glass.** The **Continuous Growth report card is ALSO on the glass** (D-I5,
 §112): it is LWW-upserted to `growth_profiles` — one mutable row overwritten each
 regeneration, NOT archived as-issued (only the separate Masterclass achievement cards
-archive append-only as `report` events). A report-card snapshot is a follow-up brief.
+archive append-only as `report` events). The **current** `growth_profiles` row stays LWW
+(intended — it is the live view); the append-only archive is now the parallel
+`report_snapshots` table — `BUILT-UNVERIFIED — §117 (migration 0008 + emitter, 611 green;
+live-unverified — the operator applies 0008 and runs the regen→snapshot manual check).`
 
 **The change: extend the ledger to cover the glass.** `BUILT-UNVERIFIED — §112 (migration
 0006 + emitter, 589 green; live-unverified — the operator applies 0006 and runs the
@@ -111,8 +114,9 @@ snapshots/student/year ≈ ~1MB/student/year; ten schools × five years ≈ sing
 GB. There is no cost argument against keeping every draft. Teachers never read
 snapshots (essay content — the SELECT-only-no-essays posture extends to this table).
 (The §112 D-I5 verify CORRECTED the standing "report cards archive as-issued" claim — see
-the growth-report note under **Today** above; the report card is on the glass, and its
-append-only snapshot is a queued follow-up brief.)
+the growth-report note under **Today** above; the report card WAS on the glass — its
+append-only snapshot shipped as `report_snapshots` in **§117** (BRIEF-RS, migration 0008),
+mirroring the essay-draft ledger; the live `growth_profiles` row remains the current view.)
 
 ## 4. Custody (Tier 2) — the five holders, canonical list
 
@@ -203,7 +207,7 @@ unbuilt; the PDPO / de-identification guardrails are not yet in force.)*
 ## 8. Build order — the canonical queue
 
 **Operator, parallel:** apply migrations **0006** (snapshots) + **0007** (auth-FK → RESTRICT)
-· the anon-retention posture check · Vercel registration + first flag-OFF deploy ·
++ **0008** (report snapshots) · the anon-retention posture check · Vercel registration + first flag-OFF deploy ·
 successor-package commit (the source transcript into `docs/decisions/`; this document is now
 committed, §114) · CIP skeleton, LOIs, incorporation.
 **Claude Code — DONE this run:** identity-semantics tripwires (§111) · writing snapshots
@@ -212,10 +216,12 @@ committed, §114) · CIP skeleton, LOIs, incorporation.
 #1 — the `last-run.json` truncation)~~ **DONE (§116)** — the harness now stores full,
 untruncated reply transcripts (`tests/redteam/record.js`); a live re-run to regenerate
 `last-run.json` + the maintainer's **class-E read (OPERATOR)** are what remain of this item →
-BRIEF-112 recovery surface (**migration 0008** — renumbered: snapshots took 0006, the FK fix
-took 0007) → enrolment (brief TBW) → teacher-mediated regen (own brief, own review) →
+BRIEF-112 recovery surface (**migration renumbers at its Step 0** — 0006/0007/0008 are taken by
+snapshots / FK / report-snapshots; and BRIEF-ENROL is slated for the next slot, so recovery lands
+after that — next free when built) → enrolment (brief TBW; migration **0009**) → teacher-mediated
+regen (own brief, own review) →
 BRIEF-115 offsite dump → flag-ON via staging verification → BRIEF-116 take-home export →
-report-card snapshot (the D-I5 follow-up, TBW).
+~~report-card snapshot (the D-I5 follow-up)~~ **DONE (§117 — BRIEF-RS, migration 0008)**.
 **Pilot-term, behind the consent framework:** Identity v2 attach flow + the §109 guard
 evolution.
 *(Brief IDs are names; the § number is always tip+1 at landing — Step 0 renumbers.)*

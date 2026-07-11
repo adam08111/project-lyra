@@ -83,6 +83,16 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
       pre-cleanup needed:** the existing `CASCADE` FK already guarantees every `auth_user_id`
       points to a live `auth.users` row, so the `RESTRICT` re-add cannot fail on a dangling
       reference (the §110 "orphans" are empty-*data* rows with valid auth users, not dangling FKs).
+   8. `0008_report_snapshots.sql` — the append-only growth-report ledger (BRIEF-RS): a
+      student-owned, teacher-excluded `report_snapshots` table so an as-issued Continuous Growth
+      Report can't be silently overwritten (the report is otherwise LWW-mutable in
+      `growth_profiles`); the stream doubles as the band-estimate trajectory. Additive; safe to
+      apply after 0007. Manual check: trigger a regen → one row; **each further regen appends
+      another row** — this is a per-issuance archive, not content-deduplicated (every regen
+      re-stamps `lastRegenAt`, so the `unique(student_id, content_hash)` key only guards against a
+      reload/replay double-insert, never a distinct regen — do NOT expect a no-op second row);
+      `select report->'level'->>'bandEstimate', ts from report_snapshots order by ts` shows the
+      band trajectory; teacher session `select count(*) from report_snapshots` → denied.
    Existing deployments only need **0003 then 0004**.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:

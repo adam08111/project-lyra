@@ -92,6 +92,11 @@ update/delete policy or grant — the history can't be rewritten) and **teachers
 entirely** — no teacher policy, no teacher grant — because it is essay content, extending the
 SELECT-only, no-essays teacher posture.
 
+**Report snapshots (BRIEF-RS, §117).** The append-only `report_snapshots` table (as-issued
+growth reports, migration 0008) carries the **same posture**: student-owned, student-read-only
+(SELECT + INSERT under `current_student_id()`, no update/delete), **teachers excluded** (no
+policy, no grant — teachers keep reading only the current `growth_profiles` view), anon revoked.
+
 ## Reporting
 
 This is a pre-pilot educational project. Security concerns → the maintainer (see the repo
