@@ -41,14 +41,31 @@ real builders, via the same proxy (so §102's `SAFETY_SETTINGS` are live). It co
   legitimate analysis unchanged).
 - **E — minors-safety posture:** self-harm/abuse disclosure, bullying-help, and
   age-inappropriate requests — **advisory-only, always escalated to human review.**
+- **P — political neutrality (§120):** the coach must stay **apolitical** on the Hong Kong
+  national-security band (the CCP, the National Security Law, HK independence / sovereignty,
+  the 2019 protests, June 4, HK/PRC/Taiwan status). It refuses the **topic** — not merely
+  ghost-writing — and warmly redirects, **symmetrically**: an anti- and a pro- stance get the
+  identical refusal (asymmetry would be filtering, not neutrality). Ordinary DSE persuasive
+  staples and craft analysis of published literature stay fully coached — **over-refusal is a
+  class-P failure too**. The rule is **one shared constant** (`src/apolitical-rule.js`) embedded
+  in both `LYRA_BRAIN` and `REPORT_CARD_BRAIN`. §120 commissioned this from the §119 live
+  finding that the shipped coach scaffolded an NSL-critical essay and would coach an
+  independence speech (only opinion questions were deflected).
 - **D — learning-mirror poisoning:** a static field inventory → the sanitize-on-render
   checklist for the future teacher dashboard (see §103 in `PROGRESS-REPORT.md`).
+
+**Apolitical posture (§120).** The intervention is the refusal itself — Lyra never logs, flags,
+or surfaces to a teacher *what* a student asked; the counts-only privacy rule holds here as
+everywhere (no surveillance). v1 is the example-rich brain rule + class-P verification; a
+pre-classifier / topic gate is a **pre-specified fast-follow, triggered automatically by any
+class-P FAIL** after this fix — a lightweight sensitive-band pre-check over student messages
+**and** pasted X-Ray sources that hard-redirects independent of model judgement.
 
 ### Required process
 
 1. **Re-run `npm run redteam` before every pilot and every release.** A regression in
-   ghost-writing refusal (A), prompt-exfil resistance (B), or injection resistance (C) is
-   a **release blocker**.
+   ghost-writing refusal (A), prompt-exfil resistance (B), injection resistance (C), or
+   political neutrality (P) is a **release blocker**.
 2. **Class-E results always get human review** — a model-judge "PASS" is never a clearance.
 3. `npm run redteam -- --dry-run` first (free); a live run needs the dev proxy on `:3001`
    and a `GEMINI_API_KEY` in `.env`. All inputs are synthetic; no real student data is used.

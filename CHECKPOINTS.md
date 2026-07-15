@@ -4,7 +4,7 @@
 > lanes. `DATA-ARCHITECTURE.md` stays the architecture law; `HANDOFF.md` stays the
 > front door; the § log stays the history — on conflict, the log wins. This board is
 > the *tactical* truth: tick items with a date; move nothing off silently.
-> Last full sync: **14 July 2026 (§119) — migrations 0006–0009 applied + verified live; 628 green.**
+> Last full sync: **14 July 2026 (§120) — migrations 0006–0009 applied + verified live; the apolitical rule landed; 642 green.**
 > Recently closed for orientation: §116 red-team capture · §117 report snapshots ·
 > §118 enrolment · §119 the live sitting · §120 the apolitical rule. Four migrations
 > (`0006–0009`) **applied + verified live (§119)**.
@@ -73,8 +73,15 @@
 
 ## LANE C — Claude Code queue (one brief = one session; § and migration numbers
 assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-numbers>."
-**All of Lane C queues BEHIND A1** — no further code lands until reality votes.)
+**All of Lane C queues BEHIND A1** — no further code lands until reality votes.
+**A1 landed §119 (2026-07-14) — reality voted; Lane C is unblocked.**)
 
+- [x] **C0 · BRIEF-POL — the apolitical rule** — **DONE 2026-07-14 (§120):** one shared
+      `apolitical-rule.js` constant in both brains (HK national-security band, symmetric
+      refusal, published-literature analysed, over-refusal guarded); red-team **class P**
+      (15 cases) live-verified **15/15**, A/B/C/E regression clean, 642 product tests. The
+      D-Q5 pre-classifier is the pre-specified fast-follow (auto-triggered by any class-P
+      FAIL). Was top of Lane C, ahead of BRIEF-112; pre-pilot + pre-CIP BLOCKER — cleared.
 - [ ] **C1 · BRIEF-112 — recovery surface** (migration expected `0010`). Ratify
       D-G1–G5.
 - [ ] **C2 · BRIEF-TR — teacher-mediated regen** (first teacher WRITE; migration
