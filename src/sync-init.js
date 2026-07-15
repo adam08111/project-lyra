@@ -68,6 +68,17 @@ export async function initSync({ restoredKeys = [] } = {}) {
       },
     };
 
+    // §121 (D8): bridge the fork signal to the recovery UI. window.lyraSync is populated HERE —
+    // AFTER the async ensureStudent, later than React's mount effects — so a mount-time read in the
+    // modal races and misses it. Persist a session flag (survives in-app remounts until the student
+    // acknowledges) AND fire a one-shot event so a RecoveryModal already mounted at boot opens the
+    // "is this you?" interstitial now. Only fires on the boot that detects the fork — cacheStudent
+    // updated the hint, so later boots see identityChanged=false.
+    if (identityChanged) {
+      try { sessionStorage.setItem("lyra-fork-pending", "1"); } catch (e) { /* silent */ }
+      try { window.dispatchEvent(new CustomEvent("lyra:identity-changed")); } catch (e) { /* silent */ }
+    }
+
     // §99 Step 2 (D7): hydrate BEFORE backfill — a device that pulls remote history must
     // not then re-sweep it. hydrateIfNeeded RELOADS when it writes, but location.reload()
     // does NOT halt synchronous JS — so we must explicitly STOP here when it hydrated,

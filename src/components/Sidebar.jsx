@@ -2,6 +2,7 @@ import { useState } from "react";
 import { COLORS, writingTypes } from "../constants.js";
 import { FeatherIcon } from "./Icons.jsx";
 import DataExport from "./DataExport.jsx";
+import { getSupabase } from "../supabase-client.js";
 
 export default function Sidebar({
   sidebarOpen, setSidebarOpen, projects, setProjects, activeWritingId,
@@ -11,6 +12,8 @@ export default function Sidebar({
   setShowStyleLab, onHome,
 }) {
   const [search, setSearch] = useState("");
+  // §121: the recovery trigger shows only when sync is on (D-G4: flag-off leaves no trace).
+  const recoverable = !!getSupabase();
 
   if (!sidebarOpen) return null;
 
@@ -105,9 +108,19 @@ export default function Sidebar({
             <div style={{ textAlign: "center", padding: "24px 18px", color: COLORS.muted, fontSize: 12, fontStyle: "italic" }}>No writings match "{search}"</div>
           )}
         </div>
-        <div style={{ padding: "12px 18px", borderTop: `1px solid ${COLORS.border}`, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 10, color: COLORS.accent2 }}>{projects.reduce((sum, p) => sum + p.writings.length, 0)} writings across {projects.length} project{projects.length !== 1 ? "s" : ""}</div>
-          <DataExport projects={projects} grammarLog={grammarLog} />
+        <div style={{ borderTop: `1px solid ${COLORS.border}`, background: COLORS.card }}>
+          <div style={{ padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontSize: 10, color: COLORS.accent2 }}>{projects.reduce((sum, p) => sum + p.writings.length, 0)} writings across {projects.length} project{projects.length !== 1 ? "s" : ""}</div>
+            <DataExport projects={projects} grammarLog={grammarLog} />
+          </div>
+          {recoverable && (
+            <button
+              onClick={() => { try { window.dispatchEvent(new CustomEvent("lyra:open-recovery")); } catch (e) { /* silent */ } setSidebarOpen(false); }}
+              style={{ width: "100%", padding: "11px 18px", borderTop: `1px solid ${COLORS.border}`, background: "none", border: "none", cursor: "pointer", fontFamily: "'Courier Prime', monospace", fontSize: 12, color: COLORS.muted, textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}
+            >
+              <FeatherIcon size={13} /> Lost your phone? Recover your work
+            </button>
+          )}
         </div>
       </div>
     </>

@@ -12,7 +12,9 @@
 import { createClient } from "@supabase/supabase-js";
 
 export const STUDENT_ID_HINT = "lyra-sb-student-id";
-const RECOVERY_CODE_KEY = "lyra-recovery-code";
+// §121: exported so the recovery lib (src/recovery/) reuses the SAME key/generator/hash
+// as the mint + claim paths — single source of truth (#3), never a divergent copy.
+export const RECOVERY_CODE_KEY = "lyra-recovery-code";
 // No ambiguous glyphs (0/O, 1/I/L) so a student can transcribe the code by hand.
 const RECOVERY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
@@ -53,8 +55,9 @@ export function getSupabase() {
   }
 }
 
-// 16 chars in 4 dash-separated groups: XXXX-XXXX-XXXX-XXXX.
-function generateRecoveryCode() {
+// 16 chars in 4 dash-separated groups: XXXX-XXXX-XXXX-XXXX. Exported (§121) so regen
+// reuses the exact minting generator.
+export function generateRecoveryCode() {
   const rand = new Uint32Array(16);
   crypto.getRandomValues(rand);
   let out = "";
@@ -65,7 +68,9 @@ function generateRecoveryCode() {
   return out;
 }
 
-async function sha256Hex(s) {
+// Exported (§121): regen hashes the new code with the SAME §95 WebCrypto path, so the
+// client hex matches the server's encode(extensions.digest(upper(trim(code)),'sha256'),'hex').
+export async function sha256Hex(s) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
