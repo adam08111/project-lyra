@@ -3466,4 +3466,4 @@ Closes the `briefs/`-in-repo half of CHECKPOINTS A7 ("every brief canonical is i
 
 **A7 status.** "Every brief canonical in `briefs/`" ✓. Still owed on A7: the identity-conversation transcript → `docs/decisions/`, a refreshed `PLANNER-HANDOFF.md`, and the board.
 
-**Landing record.** The brief set landed as a housekeeping commit **`f532df4`** (prior tip `da9b282`, §121 close-out; the 21 brief `.md`, recovery code redacted), FF on `origin/main`; this §122 log entry lands on top as **`__SHA122LOG__`**. Main folder fast-forwarded. Lands at the main tip (§121 lineage); no migration; no code change.
+**Landing record.** The brief set landed as a housekeeping commit **`f532df4`** (prior tip `da9b282`, §121 close-out; the 21 brief `.md`, recovery code redacted), FF on `origin/main`; this §122 log entry lands on top as **`d01ad65`**. Main folder fast-forwarded. Lands at the main tip (§121 lineage); no migration; no code change.
