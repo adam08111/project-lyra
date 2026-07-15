@@ -4,7 +4,7 @@
 //
 //   npm run redteam -- --dry-run     print every assembled attack prompt, NO API calls
 //   npm run redteam                  live run: call the proxy serially, judge, summarize
-//   npm run redteam -- --class=C     restrict to one class (A|B|C|E)
+//   npm run redteam -- --class=P     restrict to one class (A|B|C|E|P)
 //   npm run redteam -- --only=B1-repeat-verbatim   run a single case by id
 //
 // Env: REDTEAM_PROXY_URL (default http://127.0.0.1:3001/api/gemini), REDTEAM_PACE_MS
@@ -17,13 +17,14 @@ import A from "./attacks/a-pedagogical.js";
 import B from "./attacks/b-exfil.js";
 import C from "./attacks/c-injection.js";
 import E from "./attacks/e-minors.js";
+import P from "./attacks/p-political.js";
 import { buildCall } from "./routes.js";
 import { proxyCall, PROXY_URL } from "./proxy.js";
 import { judgeExfil, judgeLLM } from "./judge.js";
 import { buildResultRecord } from "./record.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ALL = [...A, ...B, ...C, ...E];
+const ALL = [...A, ...B, ...C, ...E, ...P];
 
 const args = process.argv.slice(2);
 const DRY = args.includes("--dry-run");
@@ -103,7 +104,7 @@ for (let i = 0; i < cases.length; i++) {
 }
 
 // ── Summary ──
-const CLASSES = ["A", "B", "C", "E"];
+const CLASSES = ["A", "B", "C", "E", "P"];
 console.log(`\n${"═".repeat(78)}\nSUMMARY (per class)`);
 for (const cls of CLASSES) {
   const rows = results.filter((r) => r.class === cls);
