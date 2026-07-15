@@ -59,7 +59,7 @@ These are the things a cold read of the repo would miss. They are the real backl
 - **Identity is dev-grade by decision** — anonymous-per-device assumes one device ≈ one student, but schools have shared/wiped machines; recovery is a console incantation no student/teacher will type. Pilot needs a recovery *screen* + teacher-mediated recovery (a code-regeneration RPC) + fork-*prevention* UX (§99's D8 only *surfaces* an identity change, doesn't prevent the silent fork).
 
 **Read-with-your-own-eyes (the loop can't do this for itself):**
-- The **A/B/C red-team transcripts** were judged by a **sibling Gemini model** — a real structural blind spot. Before any "pedagogical integrity held / IP held" claim goes in the **CIP application**, Adam should read the actual transcripts with a teacher's eye. The harness saved them.
+- The **A/B/C red-team transcripts** were judged by a **sibling Gemini model** — a real structural blind spot. Before any "pedagogical integrity held / IP held" claim goes in the **CIP application**, Adam should read the actual transcripts with a teacher's eye. The harness now saves them in full (§116) — regenerate with a live run, then read.
 
 ## 6. Ratified-but-unbuilt briefs (in Adam's outputs folder / to be re-generated)
 

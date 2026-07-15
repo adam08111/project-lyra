@@ -105,7 +105,7 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
       seed sets `DEMO-CLASS-1`; a throwaway profile → onboarding → wrong code → honest error → right
       code → confirmation → recovery code shown; re-enrol → no duplicate; a hostile name (`<img
       onerror>`) renders as literal text in the dashboard; flag-off → no overlay.
-   Existing deployments only need **0003 then 0004**.
+   The live project currently needs **0006 → 0007 → 0008 → 0009**, in order.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:
    | Name | Value |
