@@ -105,7 +105,18 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
       seed sets `DEMO-CLASS-1`; a throwaway profile → onboarding → wrong code → honest error → right
       code → confirmation → recovery code shown; re-enrol → no duplicate; a hostile name (`<img
       onerror>`) renders as literal text in the dashboard; flag-off → no overlay.
-   The live project currently needs **0006 → 0007 → 0008 → 0009**, in order.
+   10. `0010_regen_code.sql` — self-service recovery-code regeneration (BRIEF-112): the
+       **`regenerate_recovery_code(p_new_hash)` RPC** — SECURITY DEFINER, updates the CALLER'S OWN
+       row (`current_student_id()`) with a client-supplied SHA-256 hex hash (validated 64-char hex,
+       stored verbatim — the server never sees the new plaintext), returns void. Grants: execute to
+       `authenticated` only, revoked from public/anon; teachers stay SELECT-only (teacher-mediated
+       regen is a separate future brief). Additive; safe to apply after 0009. Manual check (use the
+       tooling orphan or a throwaway profile, NEVER real data): open the sidebar → "Lost your phone?
+       Recover your work" → **Your code** shows the device's code; **Regenerate** → confirm → a new
+       code appears, and the OLD code then fails a claim while the NEW one succeeds and reloads to the
+       same work; **Use a code** with a code from another device claims it; flag-off build → no
+       recovery trigger, no modal.
+   The live project currently needs **0006 → 0007 → 0008 → 0009 → 0010**, in order.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:
    | Name | Value |

@@ -4,7 +4,7 @@
 > lanes. `DATA-ARCHITECTURE.md` stays the architecture law; `HANDOFF.md` stays the
 > front door; the § log stays the history — on conflict, the log wins. This board is
 > the *tactical* truth: tick items with a date; move nothing off silently.
-> Last full sync: **14 July 2026 (§120) — migrations 0006–0009 applied + verified live; the apolitical rule landed; 642 green.**
+> Last full sync: **15 July 2026 (§121) — migrations 0006–0009 applied + verified live; 0010 authored (recovery); the apolitical rule + recovery surface landed; 659 green.**
 > Recently closed for orientation: §116 red-team capture · §117 report snapshots ·
 > §118 enrolment · §119 the live sitting · §120 the apolitical rule. Four migrations
 > (`0006–0009`) **applied + verified live (§119)**.
@@ -82,8 +82,10 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       (15 cases) live-verified **15/15**, A/B/C/E regression clean, 642 product tests. The
       D-Q5 pre-classifier is the pre-specified fast-follow (auto-triggered by any class-P
       FAIL). Was top of Lane C, ahead of BRIEF-112; pre-pilot + pre-CIP BLOCKER — cleared.
-- [ ] **C1 · BRIEF-112 — recovery surface** (migration expected `0010`). Ratify
-      D-G1–G5.
+- [x] **C1 · BRIEF-112 — recovery surface** — **DONE 2026-07-15 (§121):** migration `0010`
+      (`regenerate_recovery_code`, hash-only) + `src/recovery/` lib + RecoveryModal (Your code /
+      Use a code / D8 fork interstitial) + Sidebar trigger; D-G1–G5 ratified; 659 green. Teacher-
+      mediated regen (D-G1 deferral) → **BRIEF-TR**, next in Lane C. Operator: apply `0010`.
 - [ ] **C2 · BRIEF-TR — teacher-mediated regen** (first teacher WRITE; migration
       expected `0011`). Ratify D-M1–M5. Its review MUST include the cross-surface /
       identity-interplay lens — this brief institutionalizes it.

@@ -124,6 +124,16 @@ is the law) and rendered as an inert React text child everywhere (enrol success 
 dashboard), so Class D now covers a real threat, not a synthetic one. Students stay anonymous — the
 name lives only on the `enrolments` row, never in the identity model.
 
+**Recovery (BRIEF-112, §121).** A student who loses her device recovers her work with her recovery
+code — self-service, no accounts. The `regenerate_recovery_code(p_new_hash)` RPC (migration 0010) is
+`SECURITY DEFINER` with `search_path=public`, granted to `authenticated` only (revoked from
+public/anon); it updates **only the calling** student's row (`current_student_id()`) and takes a
+**client-computed SHA-256 hash, never the plaintext** — the new code is minted and hashed on the
+device (the §95 WebCrypto path), so the server never sees it (a secret that routinely travels
+degrades; §87/§88 keeps it out of every log). Regeneration is **student self-service only** —
+teachers stay SELECT-only; teacher-mediated regeneration (the first teacher WRITE) is a separate
+future brief with its own review. Flag-off: no recovery trigger, no modal, no code path.
+
 ## Reporting
 
 This is a pre-pilot educational project. Security concerns → the maintainer (see the repo
