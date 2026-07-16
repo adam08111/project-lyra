@@ -1,10 +1,13 @@
-// STUDENT DETAIL — §107. Pure presentational: props (displayName + resolved detail) → the
-// read-only card. CLASS D LAW: every field is a React text child (default-escaped); there
-// is NO dangerouslySetInnerHTML anywhere. We render the enrolment displayName (teacher-set)
-// as the heading and deliberately do NOT render profile.studentName (the highest-risk raw
-// field). The growth-profile jsonb is treated as untrusted at any depth — only whitelisted,
+// STUDENT DETAIL — §107 read-only insights + §123 the RegenControl leaf (BRIEF-TR, Lyra's first
+// teacher WRITE). The insights are pure presentational (props → escaped text); the recovery-code
+// regeneration is owned entirely by <RegenControl> (its own flow state + the teacher_regen_code
+// write) — this file just mounts it. CLASS D LAW: every field is a React text child (default-
+// escaped); there is NO dangerouslySetInnerHTML anywhere. We render the enrolment displayName
+// (teacher-set) as the heading and deliberately do NOT render profile.studentName (the highest-risk
+// raw field). The growth-profile jsonb is treated as untrusted at any depth — only whitelisted,
 // text-rendered fields below are shown.
 import React from "react";
+import RegenControl from "./RegenControl.jsx";
 
 const card = { border: "1px solid #dde1e8", borderRadius: 8, padding: "16px 18px", marginBottom: 18, background: "#fff" };
 const h3 = { fontSize: 15, margin: "0 0 10px", color: "#171b24" };
@@ -17,7 +20,7 @@ function fmtDate(iso) {
   return iso.slice(0, 10); // YYYY-MM-DD — plain text, no locale parsing of untrusted input
 }
 
-export default function StudentDetailView({ displayName, detail, onBack }) {
+export default function StudentDetailView({ studentId, displayName, detail, onBack }) {
   const profile = detail?.profile || null;
   const level = profile?.level || null;
   const weaknesses = Array.isArray(profile?.weaknesses) ? profile.weaknesses : [];
@@ -112,6 +115,9 @@ export default function StudentDetailView({ displayName, detail, onBack }) {
           </div>
         ) : <p style={{ color: "#454b58", margin: 0 }}>No activity recorded yet.</p>}
       </div>
+
+      {/* ── Recovery (BRIEF-TR §123): the first teacher WRITE — regenerate a lost code ── */}
+      {studentId ? <RegenControl studentId={studentId} displayName={displayName} /> : null}
     </div>
   );
 }

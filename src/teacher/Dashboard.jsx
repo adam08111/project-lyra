@@ -81,7 +81,7 @@ export default function Dashboard({ teacher, onSignOut }) {
       {selected ? (
         detail.status === "loading" ? <Msg>Loading…</Msg>
           : detail.status === "error" ? <Retry onClick={() => openStudent(selected.studentId, selected.displayName)} />
-            : <StudentDetailView displayName={selected.displayName} detail={detail.data} onBack={backToRoster} />
+            : <StudentDetailView studentId={selected.studentId} displayName={selected.displayName} detail={detail.data} onBack={backToRoster} />
       ) : (
         <>
           {classes.status === "loading" && <Msg>Loading your classes…</Msg>}
