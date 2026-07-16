@@ -16,7 +16,8 @@ describe("§58 proofread judgment rules", () => {
   });
 
   it("buildProofreadPrompt prepends the rules and keeps the JSON shape + formality/exam context", () => {
-    expect(prompt.startsWith(PROOFREAD_JUDGMENT_RULES)).toBe(true); // prepended at the front
+    expect(prompt).toContain(PROOFREAD_JUDGMENT_RULES);             // the §58 judgment block is embedded…
+    expect(prompt.startsWith("APOLITICAL — do NOT polish or translate")).toBe(true); // …after the §124 band guard, which gates first
     expect(prompt).toMatch(/Return ONLY a single raw JSON object/); // JSON-shape instruction intact (§57)
     expect(prompt).toMatch(/"grammar":\[/);                         // card shape intact
     expect(prompt).toMatch(/FORMALITY:/);                           // formality context intact

@@ -3,12 +3,13 @@
 // and carries both the refuse-the-band and the don't-over-refuse halves. The LIVE
 // behavioural proof is the class-P red-team; these are the static/structural guards.
 import { describe, it, expect } from "vitest";
-import { APOLITICAL_RULE } from "../src/apolitical-rule.js";
+import { APOLITICAL_RULE, APOLITICAL_BAND, POLISH_BAND_GUARD } from "../src/apolitical-rule.js";
 import { LYRA_BRAIN } from "../src/lyra-brain.js";
 import { REPORT_CARD_BRAIN } from "../src/report-card-brain.js";
 import {
   buildCoachPrompt, buildScaffoldingPrompt, buildStyleProfilerPrompt,
   buildTrainingChatPrompt, buildWelcomePrompt,
+  buildProofreadPrompt, buildStructuralPrompt, translatePrompt,
 } from "../src/prompts.js";
 
 describe("APOLITICAL_RULE constant — THE LINE", () => {
@@ -88,5 +89,31 @@ describe("reaches the live brain-bearing coaching surfaces (representative spot-
   });
   it("the welcome greeting carries the rule", () => {
     expect(has(buildWelcomePrompt({ name: "Ming", type: "Essay", purpose: "school", wordCount: "400", topic: "t" }))).toBe(true);
+  });
+});
+
+describe("§124 (BRIEF-POL2) — the polish/translate residual + single-source band", () => {
+  it("the band is one shared source, used by BOTH the full rule and the Lite guard (no drift)", () => {
+    expect(typeof APOLITICAL_BAND).toBe("string");
+    expect(APOLITICAL_BAND).toContain("National Security Law");
+    expect(APOLITICAL_RULE.includes(APOLITICAL_BAND)).toBe(true);
+    expect(POLISH_BAND_GUARD.includes(APOLITICAL_BAND)).toBe(true);
+  });
+
+  it("APOLITICAL_RULE carries the 'polishing is producing' clause (incidental vs active-polish)", () => {
+    expect(APOLITICAL_RULE).toContain("POLISHING IS PRODUCING");
+    expect(APOLITICAL_RULE).toMatch(/proofread, correct, translate, rewrite/);
+    expect(APOLITICAL_RULE).toContain("INCIDENTAL");
+  });
+
+  it("POLISH_BAND_GUARD refuses to polish/translate a band-subject piece, not incidental mentions", () => {
+    expect(POLISH_BAND_GUARD).toMatch(/do NOT polish or translate band-subject writing/);
+    expect(POLISH_BAND_GUARD).toContain("INCIDENTAL band mention");
+  });
+
+  it("the Lite mechanical routes (proofread / structural / passage-translate) now carry the guard", () => {
+    expect(buildProofreadPrompt("t", "Essay", [], null, null, null)).toContain("do NOT polish or translate band-subject writing");
+    expect(buildStructuralPrompt("t", "Essay")).toContain("do NOT polish or translate band-subject writing");
+    expect(translatePrompt).toContain("do NOT polish or translate band-subject writing");
   });
 });

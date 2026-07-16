@@ -13,6 +13,8 @@ import {
   buildTrainingEvalPrompt,
   buildTrainingHintPrompt,
   buildTrainingChatPrompt,
+  buildProofreadPrompt,
+  translatePrompt,
 } from "../../src/prompts.js";
 import { REPORT_CARD_BRAIN } from "../../src/report-card-brain.js";
 import { getRouteConfig } from "../../src/ai-router.js";
@@ -82,6 +84,16 @@ const BUILDERS = {
     system: "",
     message: input.ocrPrompt ?? DEFAULTS.ocrPrompt,
     image: input.image ?? null, // {data, mediaType} — a base64 fixture; null => dry-run only
+  }),
+  // §124 (BRIEF-POL2): the Lite mechanical routes — the polish/translate residual. The student's
+  // DRAFT / passage is the attacker-controlled `message`; the POLISH_BAND_GUARD lives in the system.
+  proofread: (input) => ({
+    system: buildProofreadPrompt(input.topic ?? DEFAULTS.topic, input.type ?? DEFAULTS.type, [], null, input.examRules ?? null, input.sourceContext ?? null),
+    message: input.message ?? "",
+  }),
+  translate: (input) => ({
+    system: translatePrompt,
+    message: input.referenceText ?? input.message ?? "",
   }),
 };
 

@@ -1,5 +1,8 @@
 import { LYRA_BRAIN } from "./lyra-brain.js";
 import { PROOFREAD_JUDGMENT_RULES } from "./judgment-rules.js";
+// §124 (BRIEF-POL2): the distilled band-refusal for the Lite mechanical routes (proofread /
+// structural / passage-translate) — same band as the full brain rule, single-sourced.
+import { POLISH_BAND_GUARD } from "./apolitical-rule.js";
 
 // §43 — the OPENING GREETING. Generated (not templated) so it responds to THIS
 // student + THIS topic in Lyra's real voice. brain:true → LYRA_BRAIN prepended.
@@ -248,7 +251,9 @@ RULES WHEN A SKILL IS DEPLOYED:
 
   const sourceBlock = sourceContext ? `\nSOURCE TEXT: The student studied a reference text (${sourceContext.authorName}). Suggestions should align with the ${sourceContext.techniqueCount || 0} techniques they extracted.` : "";
 
-  return `You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).${skillBlock}${examBlock}${sourceBlock}
+  return POLISH_BAND_GUARD + `
+
+You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).${skillBlock}${examBlock}${sourceBlock}
 ${isSpoken ? `\nFORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address ("you", inclusive "we") are appropriate and should NOT be flagged. Flag slang or chat-style words (e.g. "gonna", "kinda", "super cool") that would undermine a school occasion, but do not push the student toward stiff academic diction — spoken rhythm matters more than formality here.` : isFormal ? `\nFORMALITY: This is a FORMAL piece of writing. Flag any informal, colloquial, or slang words (e.g. "weird", "stuff", "a lot", "things", "kid", "guy", "cool", "big deal") and replace them with formal academic equivalents that carry the SAME meaning the student intended. For example: "weird" → "unusual" or "peculiar", "stuff" → "factors" or "elements", "a lot" → "significantly" or "numerous".` : `\nFORMALITY: This is a creative/narrative piece. Casual or conversational language is acceptable if it fits the student's voice and intent.`}
 
 Analyse the student's latest paragraph. Return ONLY valid JSON (no markdown fences) with this structure:
@@ -318,7 +323,7 @@ RULES WHEN A SKILL IS DEPLOYED:
   // §58: prepend the distilled JUDGMENT block so the Lite proofread cards apply the
   // SAME standards as the chat critique (correction-vs-taste, no-fabrication,
   // no-rewrite, formality) — without flipping to brain:true or the full LYRA_BRAIN.
-  return PROOFREAD_JUDGMENT_RULES + `
+  return POLISH_BAND_GUARD + "\n\n" + PROOFREAD_JUDGMENT_RULES + `
 
 You are analysing a student's writing. Their topic is: "${topic}" (writing type: ${typeLabel}).
 ${isSpoken ? `FORMALITY: This is a SPEECH — semi-formal SPOKEN register. Contractions and direct audience address are correct for this genre — never flag them. In vocabulary upgrades, flag slang or chat-style words, but keep suggestions natural to say aloud rather than stiffly academic.` : isFormal ? `FORMALITY: This is FORMAL writing. In vocabulary upgrades, flag any informal, colloquial, or slang words and suggest formal academic equivalents that preserve the student's exact intended meaning.` : `FORMALITY: This is creative/narrative writing. Vocabulary suggestions should improve vividness and precision, but casual language is acceptable if it fits the student's voice.`}${appliedCtx}${skillCtx}${examBlock}${sourceBlock}${knownWeakBlock}${coachingBlock}
@@ -922,7 +927,9 @@ RULES:
 - Keep TOTAL response under 250 words`;
 }
 
-export const translatePrompt = `You are a translator helping Hong Kong English learners (around 14 years old) understand an English passage. Translate it SENTENCE BY SENTENCE so students can match each English sentence to its meaning.
+export const translatePrompt = POLISH_BAND_GUARD + `
+
+You are a translator helping Hong Kong English learners (around 14 years old) understand an English passage. Translate it SENTENCE BY SENTENCE so students can match each English sentence to its meaning.
 
 Output format — strictly follow this:
 - One English sentence on its own line, prefixed with "EN: "
