@@ -34,12 +34,20 @@ describe("teacher regen lib — teacherRegenCode", () => {
     expect(h.rpcCalls[0].params).toEqual({ p_student_id: "stud-1", p_new_hash: "b".repeat(64) });   // hash only — never plaintext
   });
 
-  it("NEVER writes any storage — in particular not the device's own recovery key (D-M5 cross-surface)", async () => {
-    const setSpy = vi.spyOn(localStorage, "setItem");
+  it("NEVER writes any storage — not the device's own recovery key, not the fork flag (D-M5 cross-surface)", async () => {
+    // The teacher flow must touch NO storage: not 'lyra-recovery-code' (=== RECOVERY_CODE_KEY in
+    // supabase-client.js — the DEVICE's own student-identity key), and not the session fork flag
+    // 'lyra-fork-pending'. Writing either from a teacher session would poison the next student session
+    // on a shared machine. Assert setItem is never called on EITHER storage (local AND session).
+    const localSpy = vi.spyOn(localStorage, "setItem");
+    const sessionSpy = vi.spyOn(sessionStorage, "setItem");
     await teacherRegenCode("stud-1");
+    expect(localSpy).not.toHaveBeenCalled();
+    expect(sessionSpy).not.toHaveBeenCalled();
     expect(localStorage.getItem("lyra-recovery-code")).toBeNull();
-    for (const call of setSpy.mock.calls) expect(call[0]).not.toBe("lyra-recovery-code");
-    setSpy.mockRestore();
+    expect(sessionStorage.getItem("lyra-fork-pending")).toBeNull();
+    localSpy.mockRestore();
+    sessionSpy.mockRestore();
   });
 
   it("no client (flag off) → not-configured, RPC never called", async () => {
@@ -60,10 +68,12 @@ describe("teacher regen lib — teacherRegenCode", () => {
     expect(await teacherRegenCode("stud-1")).toEqual({ status: "error" });
   });
 
-  it("never logs the minted code (§87/§88) — status only", async () => {
-    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+  it("never logs the minted code (§87/§88) — status only, across ALL console methods", async () => {
+    // Broadened past console.info: a future logT change to warn/error/debug must not leak the code either.
+    const methods = ["log", "info", "warn", "error", "debug"];
+    const spies = methods.map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
     await teacherRegenCode("stud-1");
-    for (const call of spy.mock.calls) expect(call.map(String).join(" ")).not.toContain("TCHR-CODE-1111-2222");
-    spy.mockRestore();
+    for (const spy of spies) for (const call of spy.mock.calls) expect(call.map(String).join(" ")).not.toContain("TCHR-CODE-1111-2222");
+    spies.forEach((s) => s.mockRestore());
   });
 });

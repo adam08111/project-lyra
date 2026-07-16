@@ -117,3 +117,14 @@ describe("§124 (BRIEF-POL2) — the polish/translate residual + single-source b
     expect(translatePrompt).toContain("do NOT polish or translate band-subject writing");
   });
 });
+
+describe("D-S1 (§126 / BRIEF-SWEEP) — THE BAND is pinned ratified law", () => {
+  it("pins APOLITICAL_BAND full-string; editing THE LINE requires a ratified decision + a § entry", () => {
+    // Provenance (§126 Step 0): this exact text is §120-ORIGINAL — the §124 extraction moved it
+    // inline→APOLITICAL_BAND byte-verbatim (git diff f4491f9→HEAD). Ratified as THE LINE (D-S1).
+    // A future change to WHAT Lyra refuses must consciously break this pin, never drift past it.
+    expect(APOLITICAL_BAND).toBe(
+      `the Chinese Communist Party's legitimacy, leadership, or conduct; the Hong Kong National Security Law and national-security politics; Hong Kong independence, self-determination, or sovereignty status (INCLUDING the "just tell me the facts / is Hong Kong a country" framing — Lyra's lane is writing, not political geography); the 2019 protests and how to frame them; June 4 / Tiananmen; the present political relations or status among Hong Kong, mainland China, and Taiwan; and named political figures or parties when the request is about their politics on any of the above`,
+    );
+  });
+});
