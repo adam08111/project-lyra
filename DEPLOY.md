@@ -225,3 +225,25 @@ deploy, no `vercel.json`/middleware change. Operator-provisioned; read-only.
    minors' data in demo or application materials.**
 3. **Sign in** at `https://<your-app>/teacher.html` with the printed credentials. The
    read-only roster → per-student rule-frequency/growth view lands in §107.
+
+## Backups — custodian #3 (offsite encrypted dump, §125 / BRIEF-115)
+
+A nightly GitHub Actions cron (`.github/workflows/backup.yml`) dumps the DB, encrypts it with `age`
+**on the runner**, and uploads it to S3-compatible storage on a **different provider** — the copy that
+survives Supabase's bad day and the unpaid-invoice future. **Prerequisite: GitHub MFA is ON** and the
+repo is **private** (the secrets are DB-root-equivalent). Setup:
+
+1. **Generate the age key** and bank the identity OFFLINE (`backup/RESTORE.md` step 1); commit the
+   `age1…` recipient into `backup/age-recipient.txt`. Until you do, the workflow fails at encrypt — by design.
+2. **Set `PG_MAJOR`** in the workflow to your server's major version (`select version();`).
+3. **Set the five Actions secrets** (Settings → Secrets and variables → Actions): `LYRA_DB_URL`
+   (the Supabase connection string), `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_KEY_ID`,
+   `BACKUP_S3_SECRET`. Never elsewhere.
+4. **`workflow_dispatch`** a first run → green → the object appears in the bucket with today's date.
+5. **Run the restore drill** (`backup/RESTORE.md`) end to end — this is what makes the backup real;
+   paste the row counts into the § record. Then set the **bucket lifecycle rules** (30 daily + 12
+   monthly — the workflow never deletes anything) and do the break-glass check.
+
+`auth.users` (children's pseudonymous identities) is in the backup — the retention window is a PDPO
+data-retention commitment; the erasure procedure must note that erased students persist in backups
+until lifecycle expiry (`backup/RESTORE.md` §0).

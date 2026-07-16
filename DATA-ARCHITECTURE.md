@@ -132,8 +132,10 @@ anchor** (school maps UUID→child), *not* a custodian — it holds no writing.
    vs add-on** (`OPERATOR`).
 3. **Offsite encrypted dump** — nightly `pg_dump` to object storage the maintainer
    controls, different provider, restorable anywhere Postgres runs. Survives
-   Supabase's bad day *and* the 2029 unpaid invoice. `RATIFIED-UNBUILT — BRIEF-115
-   (queued, on request).`
+   Supabase's bad day *and* the 2029 unpaid invoice. `BUILT §125 (BRIEF-115) — the
+   GitHub Actions workflow (.github/workflows/backup.yml) + the age-encrypted dump +
+   backup/RESTORE.md drill are landed; LIVE-VERIFIED only after the operator sets the
+   five secrets + the age recipient and the restore drill (D-N4) passes.`
 4. **Take-home export** — per-student bundle: essays as Markdown, reports as
    human-readable documents, history as JSON + summary (deliberately not CSV —
    sidesteps formula-injection). Issued at term end as ritual. `RATIFIED-UNBUILT —

@@ -4,7 +4,7 @@
 > lanes. `DATA-ARCHITECTURE.md` stays the architecture law; `HANDOFF.md` stays the
 > front door; the § log stays the history — on conflict, the log wins. This board is
 > the *tactical* truth: tick items with a date; move nothing off silently.
-> Last full sync: **16 July 2026 (§124) — migrations 0006–0009 applied + verified live; 0010+0011 authored (recovery + teacher-regen, operator-apply pending); the apolitical rule (incl. §124 proofread/translate residual closed), recovery surface, brief canonicals, and the first teacher WRITE landed; 673 green.**
+> Last full sync: **16 July 2026 (§125) — migrations 0006–0009 applied + verified live; 0010+0011 authored (recovery + teacher-regen, operator-apply pending); the apolitical rule (incl. §124 proofread/translate residual closed), recovery surface, brief canonicals, the first teacher WRITE, and custodian #3 offsite-backup artifacts (§125, restore-drill pending) landed; 673 green.**
 > Recently closed for orientation: §116 red-team capture · §117 report snapshots ·
 > §118 enrolment · §119 the live sitting · §120 the apolitical rule. Four migrations
 > (`0006–0009`) **applied + verified live (§119)**.
@@ -61,6 +61,11 @@
       (teacher-regen, §123), **in order**, in the SQL editor, then the BRIEF-112 + BRIEF-TR
       manual checks (DEPLOY §3; synthetic data only, never the real protected student).
       Gates the student-recovery + teacher-regen flows going live.
+- [ ] **A10 · Stand up custodian #3 (offsite backup, §125)** — GitHub MFA on + private repo;
+      generate the age key (bank the identity OFFLINE, commit the `age1…` recipient); set `PG_MAJOR`
+      + the five Actions secrets; `workflow_dispatch` a first run; **run the restore drill
+      (`backup/RESTORE.md`) — paste the row counts into the § record** (this is what makes C3 DONE);
+      set the bucket lifecycle rules (30 daily + 12 monthly); break-glass check. Full runbook: DEPLOY.md.
 
 ## LANE B — Operator, CIP critical path (deadline **3 Aug**; results ~Oct)
 
@@ -95,9 +100,13 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       non-oracle error, NO table grant) + `src/teacher/{regen.js,RegenControl.jsx}`; D-M1–M5
       ratified; the cross-surface/identity-interplay lens **institutionalized in CLAUDE.md #5**;
       3-lens review clean; 669 green. **Operator: apply `0011` (after `0010`).**
-- [ ] **C3 · BRIEF-115 — offsite encrypted dump** (no migration; GH Actions + object
-      storage). Ratify D-N1–N5. Prerequisite: GitHub MFA (A4's habit, applied here).
-      **Not done until the restore drill passes.**
+- [~] **C3 · BRIEF-115 — offsite encrypted dump** — **ARTIFACTS LANDED §125 (2026-07-16):** the
+      GitHub Actions workflow (`.github/workflows/backup.yml`), the `backup/` folder (RESTORE drill +
+      README + age-recipient placeholder), and the docs. D-N1–N5 ratified. **NOT done until the
+      operator's restore drill (D-N4) passes** — OPERATOR owes: GitHub MFA on + private repo; generate
+      the age key (bank the identity offline, commit the recipient); set `PG_MAJOR` + the five secrets;
+      first `workflow_dispatch` run; the restore drill (paste row counts into the § record); the
+      bucket lifecycle rules + the break-glass check. Tracked as **A10** in Lane A.
 - [ ] **C4 · BRIEF-116 — take-home export** (no migration; client-side). Ratify
       D-O1–O5. May land mid-term; completes custodian #4.
 - [ ] **C5 · Flag-ON via staging verification** (set `VITE_*` on a preview deploy →
