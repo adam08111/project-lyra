@@ -116,6 +116,14 @@ describe("§124 (BRIEF-POL2) — the polish/translate residual + single-source b
     expect(buildStructuralPrompt("t", "Essay")).toContain("do NOT polish or translate band-subject writing");
     expect(translatePrompt).toContain("do NOT polish or translate band-subject writing");
   });
+
+  it("§126 (D-S4): the structural builder instructs a VISIBLE band refusal — empty suggestions + a note field", () => {
+    const p = buildStructuralPrompt("t", "Essay");
+    expect(p).toContain("do NOT polish or translate band-subject writing"); // the shared guard is present
+    expect(p).toContain("BAND REFUSAL");                                     // the structural-specific supplement
+    expect(p).toContain('"note"');                                          // the visible refusal field the panel renders
+    expect(p).toMatch(/"suggestions":\s*\[\]/);                              // empty suggestions on refusal
+  });
 });
 
 describe("D-S1 (§126 / BRIEF-SWEEP) — THE BAND is pinned ratified law", () => {

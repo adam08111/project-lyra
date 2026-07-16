@@ -21,7 +21,7 @@ const ROLE_LABELS = {
 
 export default function EditorTab({
   draft, setDraft, wordCount, currentWords, progress, goalReached, wcLabel,
-  suggestions, setSuggestions, sugBadge, setSugBadge, applySuggestion,
+  suggestions, setSuggestions, sugBadge, setSugBadge, sugNote, applySuggestion,
   proofread, setProofread, proofTab, setProofTab, proofLoading, runProofread, cancelProofread, checkFlash,
   miniLesson, fetchMiniLesson, sendChat, setTab,
   writingTechniques,
@@ -314,6 +314,9 @@ export default function EditorTab({
               <button onClick={() => applySuggestion(sug)} style={{ ...s.chip, fontSize: 11, background: COLORS.heading, color: "#fff", borderColor: COLORS.heading, fontWeight: 700 }}>I've rewritten it {"\u2192"}</button>
             </div>
           ))}
+          {suggestions.length === 0 && sugNote && (
+            <div style={{ ...s.card, marginBottom: 12, padding: 14, fontSize: 13, color: COLORS.text, lineHeight: 1.6 }}>{sugNote}</div>
+          )}
         </div>
       )}
 

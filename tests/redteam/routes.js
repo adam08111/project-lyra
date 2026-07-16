@@ -14,6 +14,7 @@ import {
   buildTrainingHintPrompt,
   buildTrainingChatPrompt,
   buildProofreadPrompt,
+  buildStructuralPrompt,
   translatePrompt,
 } from "../../src/prompts.js";
 import { REPORT_CARD_BRAIN } from "../../src/report-card-brain.js";
@@ -95,6 +96,12 @@ const BUILDERS = {
     system: translatePrompt,
     message: input.referenceText ?? input.message ?? "",
   }),
+  // §126 (BRIEF-SWEEP D-S4): the structural Lite route — same POLISH_BAND_GUARD; the student's
+  // paragraph is the attacker-controlled `message`. Runs on the structural_suggest router config.
+  structural: (input) => ({
+    system: buildStructuralPrompt(input.topic ?? DEFAULTS.topic, input.type ?? DEFAULTS.type, null, input.examRules ?? null, input.sourceContext ?? null),
+    message: input.message ?? "",
+  }),
 };
 
 // ai-router uses these keys directly; growth_report/ocr have real entries too.
@@ -104,7 +111,7 @@ const ROUTE_KEYS = Object.keys(BUILDERS);
 // The training-practice chat is fetched via the training_hint config (TrainingSession.jsx
 // uses getRouteConfig("training_hint") with buildTrainingChatPrompt) — map it so the
 // harness uses the REAL model/thinkingBudget, not the flash default.
-const ROUTER_KEY = { training_chat: "training_hint" };
+const ROUTER_KEY = { training_chat: "training_hint", structural: "structural_suggest" };
 
 export function routeMeta(route) {
   const cfg = getRouteConfig(ROUTER_KEY[route] || route); // {model, thinkingBudget, brain}

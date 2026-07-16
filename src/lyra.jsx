@@ -64,6 +64,7 @@ export default function Lyra() {
   // Panels
   const [suggestions, setSuggestions] = useState(null);
   const [sugBadge, setSugBadge] = useState(false);
+  const [sugNote, setSugNote] = useState(null); // §126 D-S4: structural band-refusal warm line (renders on empty suggestions)
   const [proofread, setProofread] = useState(null);
   const [proofTab, setProofTab] = useState("grammar");
   const [proofLoading, setProofLoading] = useState(false);
@@ -570,8 +571,9 @@ Rules:
         trackCall();
         const result = await callAI(buildStructuralPrompt(topic, typeLabel, activeSkillCtx, examRules), lastPara, false, 1000, sugRoute.thinkingBudget, undefined, undefined, sugRoute.model);
         const parsed = JSON.parse(result.replace(/```json|```/g, "").trim());
-        if (parsed.suggestions?.length) {
-          setSuggestions(parsed.suggestions);
+        if (parsed.suggestions?.length || parsed.note) {
+          setSuggestions(parsed.suggestions?.length ? parsed.suggestions : []);
+          setSugNote(parsed.note || null); // §126 D-S4: band refusal → [] suggestions + a visible warm note
           setSugBadge(true);
           lastAnalysed.current = lastPara;
         }
@@ -1303,7 +1305,7 @@ Rules:
             wordCount={wordCount} currentWords={currentWords}
             progress={progress} goalReached={goalReached} wcLabel={wcLabel}
             suggestions={suggestions} setSuggestions={setSuggestions}
-            sugBadge={sugBadge} setSugBadge={setSugBadge}
+            sugBadge={sugBadge} setSugBadge={setSugBadge} sugNote={sugNote}
             applySuggestion={applySuggestion}
             proofread={proofread} setProofread={setProofread}
             proofTab={proofTab} setProofTab={setProofTab}

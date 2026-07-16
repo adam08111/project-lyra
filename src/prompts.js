@@ -260,6 +260,8 @@ Analyse the student's latest paragraph. Return ONLY valid JSON (no markdown fenc
 {"suggestions":[{"technique":"Name","description":"One line diagnosis of the issue","original":"Original sentence from text","vocabulary":["word1","word2","word3","word4"],"template":"Fill-in-the-blank structure using ____________ for blanks","explanation":"Why this technique helps and what effect it creates"}]}
 Provide exactly 3 suggestions. Use advanced techniques: Relative Clauses, Participial Phrases, Absolute Phrases, Appositives, Fronting/Inversion, Cleft Sentences, Compound-Complex expansion, Register/Formality correction. Pick the 3 most impactful.
 
+BAND REFUSAL (the apolitical guard at the very top applies here too): if that guard covers this paragraph — its SUBJECT is a band topic — do NOT analyse or restructure it. Return exactly {"suggestions": [], "note": "<the guard's warm neutral line>"} — an empty suggestions array plus the note as a single plain-text field the student reads. Use "note" ONLY for that refusal; omit it otherwise.
+
 CRITICAL — ANTI-COPY FORMAT:
 - NEVER provide a complete improved sentence. The student must write their own.
 - "vocabulary": list 3-5 strong words the student could use (loose ingredients, not assembled into a sentence)
