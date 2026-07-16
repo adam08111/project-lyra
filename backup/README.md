@@ -13,6 +13,10 @@ in `DATA-ARCHITECTURE.md` §4 — the copy that survives all of Supabase's own c
 verify the object exists and clears a size floor. **Any step failing fails the run loudly**, and GitHub
 emails the operator — that email is the (free) alert channel.
 
+> **Keep the cron alive.** GitHub auto-disables a *scheduled* workflow after ~60 days with no repo
+> activity — and a disabled cron sends no failure emails (it fails silent, the worst way). GitHub emails
+> a disable warning first; treat that email as an action item and re-enable the workflow in the **Actions** tab.
+
 ## The three things that live OUTSIDE git
 
 1. **The five Actions secrets** (DB-root-equivalent — `LYRA_DB_URL`, `BACKUP_S3_ENDPOINT`,

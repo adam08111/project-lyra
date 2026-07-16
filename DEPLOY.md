@@ -110,7 +110,7 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
        row (`current_student_id()`) with a client-supplied SHA-256 hex hash (validated 64-char hex,
        stored verbatim — the server never sees the new plaintext), returns void. Grants: execute to
        `authenticated` only, revoked from public/anon; teachers stay SELECT-only (teacher-mediated
-       regen is a separate future brief). Additive; safe to apply after 0009. Manual check (use the
+       regen landed as `0011`/§123). Additive; safe to apply after 0009. Manual check (use the
        tooling orphan or a throwaway profile, NEVER real data): open the sidebar → "Lost your phone?
        Recover your work" → **Your code** shows the device's code; **Regenerate** → confirm → a new
        code appears, and the OLD code then fails a claim while the NEW one succeeds and reloads to the
@@ -237,8 +237,9 @@ repo is **private** (the secrets are DB-root-equivalent). Setup:
    `age1…` recipient into `backup/age-recipient.txt`. Until you do, the workflow fails at encrypt — by design.
 2. **Set `PG_MAJOR`** in the workflow to your server's major version (`select version();`).
 3. **Set the five Actions secrets** (Settings → Secrets and variables → Actions): `LYRA_DB_URL`
-   (the Supabase connection string), `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_KEY_ID`,
-   `BACKUP_S3_SECRET`. Never elsewhere.
+   (the Supabase **session-pooler** connection URI — GitHub runners are IPv4-only while the direct DB
+   host is IPv6-only by default, and the *transaction* pooler can't `pg_dump`; verify the URI form at
+   setup), `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_KEY_ID`, `BACKUP_S3_SECRET`. Never elsewhere.
 4. **`workflow_dispatch`** a first run → green → the object appears in the bucket with today's date.
 5. **Run the restore drill** (`backup/RESTORE.md`) end to end — this is what makes the backup real;
    paste the row counts into the § record. Then set the **bucket lifecycle rules** (30 daily + 12

@@ -7,7 +7,9 @@ name: "Offsite encrypted backup (custodian #3)"
 # custodian — see backup/RESTORE.md; this is not "done" until that restore drill passes.
 #
 # Repo secrets (Settings → Secrets and variables → Actions) — DB-root-equivalent, NEVER echoed:
-#   LYRA_DB_URL          the Supabase Postgres connection string (treat exactly like service_role)
+#   LYRA_DB_URL          the Supabase Postgres connection string (treat exactly like service_role).
+#                        Use the SESSION-pooler URI — GitHub runners are IPv4-only, the direct DB host is
+#                        IPv6-only by default, and the transaction pooler can't pg_dump. Verify the URI form at setup.
 #   BACKUP_S3_ENDPOINT   e.g. https://<account>.r2.cloudflarestorage.com
 #   BACKUP_S3_BUCKET     the PRIVATE bucket name
 #   BACKUP_S3_KEY_ID     S3 access key id
@@ -40,7 +42,7 @@ jobs:
       PG_MAJOR: "15"
     steps:
       - name: Checkout (for the committed age recipient)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install pg_dump client + age
         run: |

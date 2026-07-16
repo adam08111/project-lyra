@@ -66,6 +66,9 @@ pg_restore --list authusers.dump | head
 createdb lyra_restore_test          # or point at your throwaway Supabase
 # auth.users first (public FKs reference it); the schema must exist in the scratch DB:
 psql -d lyra_restore_test -c 'create schema if not exists auth;'
+# policies restore as `CREATE POLICY … TO <role>`; --no-privileges skips grants, not policies — a plain
+# scratch Postgres needs the three roles or the drill fails its own "runs clean" criterion.
+psql -d lyra_restore_test -c "create role anon nologin; create role authenticated nologin; create role service_role nologin;"
 pg_restore --no-owner --no-privileges -d lyra_restore_test authusers.dump
 pg_restore --no-owner --no-privileges -d lyra_restore_test public.dump
 ```
@@ -79,7 +82,12 @@ select 'students'          as t, count(*) from students
 union all select 'learning_events',    count(*) from learning_events
 union all select 'writing_snapshots',  count(*) from writing_snapshots
 union all select 'report_snapshots',   count(*) from report_snapshots
+union all select 'growth_profiles',    count(*) from growth_profiles
+union all select 'blobs',              count(*) from blobs
 union all select 'enrolments',         count(*) from enrolments
+union all select 'classes',            count(*) from classes
+union all select 'teachers',           count(*) from teachers
+union all select 'schools',            count(*) from schools
 union all select 'auth.users',         count(*) from auth.users;
 ```
 

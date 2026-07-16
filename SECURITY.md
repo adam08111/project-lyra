@@ -151,8 +151,8 @@ public/anon); it updates **only the calling** student's row (`current_student_id
 **client-computed SHA-256 hash, never the plaintext** — the new code is minted and hashed on the
 device (the §95 WebCrypto path), so the server never sees it (a secret that routinely travels
 degrades; §87/§88 keeps it out of every log). Regeneration is **student self-service only** —
-teachers stay SELECT-only; teacher-mediated regeneration (the first teacher WRITE) is a separate
-future brief with its own review. Flag-off: no recovery trigger, no modal, no code path.
+teachers stay SELECT-only; teacher-mediated regeneration landed as Lyra's first teacher WRITE in
+**§123** — see the Teacher-mediated recovery section above. Flag-off: no recovery trigger, no modal, no code path.
 
 ## Reporting
 
