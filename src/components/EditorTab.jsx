@@ -278,7 +278,7 @@ export default function EditorTab({
       {/* Style suggestions badge */}
       {sugBadge && suggestions && (
         <div onClick={() => setSugBadge(false)} style={{ position: "absolute", bottom: 120, right: 18, background: COLORS.card, border: `1.5px solid ${COLORS.border}`, borderRadius: 20, padding: "8px 16px", fontSize: 12, color: COLORS.heading, cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", animation: "fadeUp 0.3s ease", zIndex: 10, display: "flex", alignItems: "center", gap: 6 }}>
-          <FeatherIcon size={14} /> Style suggestions available
+          <FeatherIcon size={14} /> {suggestions.length === 0 && sugNote ? "A note from Lyra" : "Style suggestions available"}
         </div>
       )}
 
@@ -286,7 +286,7 @@ export default function EditorTab({
       {suggestions && !sugBadge && (
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "60%", overflowY: "auto", background: COLORS.card, borderTop: `1.5px solid ${COLORS.border}`, borderRadius: "18px 18px 0 0", padding: "18px", boxShadow: "0 -8px 32px rgba(0,0,0,0.08)", animation: "slideUp 0.3s ease", zIndex: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: COLORS.heading, display: "flex", alignItems: "center", gap: 6 }}><FeatherIcon size={16} color={COLORS.heading} /> Style Suggestions</div>
+            <div style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: COLORS.heading, display: "flex", alignItems: "center", gap: 6 }}><FeatherIcon size={16} color={COLORS.heading} /> {suggestions.length === 0 && sugNote ? "A note" : "Style Suggestions"}</div>
             <button onClick={() => setSuggestions(null)} style={{ background: "none", border: "none", fontSize: 18, color: COLORS.muted, cursor: "pointer" }}>{"\u00d7"}</button>
           </div>
           {suggestions.map((sug, i) => (
