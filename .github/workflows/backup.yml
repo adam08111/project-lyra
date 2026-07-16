@@ -1,0 +1,98 @@
+name: "Offsite encrypted backup (custodian #3)"
+
+# BRIEF-115 / §125 — a nightly whole-database pg_dump, encrypted with `age` ON THE RUNNER, pushed to
+# S3-compatible object storage the maintainer controls on a DIFFERENT provider. This is custodian #3
+# (DATA-ARCHITECTURE §4): it survives Supabase's bad day AND the unpaid-invoice future, because it is
+# a different provider, a different account, a different invoice. An untested backup is a hope, not a
+# custodian — see backup/RESTORE.md; this is not "done" until that restore drill passes.
+#
+# Repo secrets (Settings → Secrets and variables → Actions) — DB-root-equivalent, NEVER echoed:
+#   LYRA_DB_URL          the Supabase Postgres connection string (treat exactly like service_role)
+#   BACKUP_S3_ENDPOINT   e.g. https://<account>.r2.cloudflarestorage.com
+#   BACKUP_S3_BUCKET     the PRIVATE bucket name
+#   BACKUP_S3_KEY_ID     S3 access key id
+#   BACKUP_S3_SECRET     S3 secret access key
+# The age RECIPIENT (public key) is committed at backup/age-recipient.txt; the age IDENTITY (private
+# key) exists OFFLINE ONLY — paper + password manager, the same discipline as a recovery code. Lose
+# the identity and every backup is unreadable (see backup/RESTORE.md, step 1).
+#
+# Retention is NOT done here — the workflow never deletes anything (D-N3). Set bucket lifecycle rules
+# in the storage console (keep 30 dailies + 12 monthly), documented in backup/README.md.
+
+on:
+  schedule:
+    - cron: "0 19 * * *"    # 19:00 UTC ≈ 03:00 HKT, daily
+  workflow_dispatch: {}      # manual runs (the first run + the drill are dispatched by hand)
+
+concurrency:
+  group: offsite-backup
+  cancel-in-progress: false  # never interrupt an in-flight dump/upload
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      # MUST be >= the server's major version. Run `select version();` on the DB and set this
+      # (Actions → Variables, or edit here). A client older than the server refuses to dump.
+      PG_MAJOR: "15"
+    steps:
+      - name: Checkout (for the committed age recipient)
+        uses: actions/checkout@v4
+
+      - name: Install pg_dump client + age
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-${PG_MAJOR}" age
+          pg_dump --version
+          age --version
+
+      - name: Dump → encrypt → upload → verify
+        env:
+          LYRA_DB_URL: ${{ secrets.LYRA_DB_URL }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          set -euo pipefail           # fail LOUDLY on ANY step — GitHub emails the operator (the alert channel)
+          # NO `set -x` anywhere in this step: the connection string + keys must never reach a log line.
+
+          STAMP="$(date -u +%Y-%m-%d)"
+          OBJECT="lyra-${STAMP}.tar.gz.age"
+
+          # Scope (pre-ratified amendment 1 — recorded in backup/RESTORE.md and validated by the drill):
+          # the app schema `public` + the `auth.users` identity table, dumped SEPARATELY so we neither
+          # touch Supabase's other managed schemas (storage/realtime/extensions — permission quirks) nor
+          # drag in auth's role-owned functions. --no-owner/--no-privileges so a plain scratch Postgres,
+          # with none of Supabase's managed roles, can restore it.
+          pg_dump "$LYRA_DB_URL" --format=custom --no-owner --no-privileges --schema=public   --file=public.dump
+          pg_dump "$LYRA_DB_URL" --format=custom --no-owner --no-privileges --table=auth.users --file=authusers.dump
+          tar -czf backup.tar.gz public.dump authusers.dump
+
+          # Encrypt ON THE RUNNER — the object store only ever sees ciphertext.
+          age --encrypt --recipients-file backup/age-recipient.txt --output "$OBJECT" backup.tar.gz
+          rm -f public.dump authusers.dump backup.tar.gz
+
+          # Upload to the operator's PRIVATE S3-compatible bucket.
+          aws s3 cp "$OBJECT" "s3://${BACKUP_S3_BUCKET}/backups/${OBJECT}" \
+            --endpoint-url "$BACKUP_S3_ENDPOINT" --only-show-errors
+
+          # Verify the object exists AND clears a sanity floor — a truncated/empty dump must fail the run.
+          SIZE="$(aws s3api head-object --bucket "$BACKUP_S3_BUCKET" --key "backups/${OBJECT}" \
+            --endpoint-url "$BACKUP_S3_ENDPOINT" --query ContentLength --output text)"
+          echo "uploaded backups/${OBJECT} (${SIZE} bytes)"
+          if [ "${SIZE}" -lt 4096 ]; then
+            echo "::error::backup object is only ${SIZE} bytes — below the 4096-byte sanity floor; failing loudly"
+            exit 1
+          fi

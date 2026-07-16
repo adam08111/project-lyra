@@ -1,0 +1,18 @@
+# Lyra offsite-backup age RECIPIENT (public key) — BRIEF-115 / §125.
+#
+# This file holds ONE line: the `age` recipient (public key, starts with `age1...`) that the backup
+# workflow encrypts to. It is safe to commit — it is a PUBLIC key; it can only ENCRYPT, never decrypt.
+#
+# The matching IDENTITY (private key, `AGE-SECRET-KEY-1...`) must exist OFFLINE ONLY — write it on
+# paper and put it in your password manager, exactly like a recovery code. If you lose the identity,
+# every backup is permanently unreadable. See backup/RESTORE.md, step 1.
+#
+# ── OPERATOR, before the first run (backup/RESTORE.md step 1): ─────────────────────────────────
+#   age-keygen -o age-identity.key            # prints "Public key: age1..." — bank the file OFFLINE
+#   # then replace the placeholder line below with that age1... public key and commit THIS file only.
+#   # NEVER commit age-identity.key.
+#
+# Until the real recipient is committed, the workflow fails loudly at the encrypt step (no recipient) —
+# which is correct: no backups ship until the key that can decrypt them is safely offline.
+#
+# REPLACE-ME-with-your-age1-recipient-public-key
