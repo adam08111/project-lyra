@@ -4,7 +4,7 @@
 > lanes. `DATA-ARCHITECTURE.md` stays the architecture law; `HANDOFF.md` stays the
 > front door; the § log stays the history — on conflict, the log wins. This board is
 > the *tactical* truth: tick items with a date; move nothing off silently.
-> Last full sync: **16 July 2026 (§125) — migrations 0006–0009 applied + verified live; 0010+0011 authored (recovery + teacher-regen, operator-apply pending); the apolitical rule (incl. §124 proofread/translate residual closed), recovery surface, brief canonicals, the first teacher WRITE, and custodian #3 offsite-backup artifacts (§125, restore-drill pending) landed; 673 green.**
+> Last full sync: **16 July 2026 (§126) — the §123–§125 doc+test debt sweep (BRIEF-SWEEP) landed: two zombie doc lines fixed, backup runbook hardened, the D-S2 final-tip + D-S3 failed-lens rules encoded (CLAUDE.md), hash-pipeline parity + the D-S1 band string pinned, and the structural Lite route's band refusal made *visible* (+P18, live class-P 19/19); 677 green. Prior state: migrations 0006–0009 applied + verified live; 0010+0011 authored (operator-apply pending, A9); the apolitical rule (incl. §124 residual) + recovery + first teacher WRITE landed; custodian #3 offsite-backup artifacts landed (restore-drill pending, A10).**
 > Recently closed for orientation: §116 red-team capture · §117 report snapshots ·
 > §118 enrolment · §119 the live sitting · §120 the apolitical rule. Four migrations
 > (`0006–0009`) **applied + verified live (§119)**.
@@ -112,6 +112,14 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
 - [ ] **C5 · Flag-ON via staging verification** (set `VITE_*` on a preview deploy →
       redeploy → one reload check) — before any deployed human data; pairs with
       Supabase **Pro** (+ verify PITR inclusion) and the **30/hr/IP anon cap raise**.
+- [x] **C6 · BRIEF-SWEEP — doc + test debt sweep** — **DONE 2026-07-16 (§126):** retired the
+      §123–§125 review-finding pile — two zombie doc lines, backup-runbook tripwires
+      (roles-before-restore, the row-count tables, the `checkout` SHA-pin, the session-pooler
+      note, the ~60-day auto-disable warning), the **D-S2 final-tip** + **D-S3 failed-lens**
+      rules (CLAUDE.md #2/#5), a hash-pipeline parity pin + F5 hardenings, the **D-S1** band-string
+      pin, and the **structural** Lite route's band refusal made *visible* (note field + render,
+      **+P18** → live class-P **19/19**). 677 green; no migration, no shared-constant change.
+      D-S4 scope A — proofread `strengths`/`nextFocus` visibility deferred (Lane D).
 
 ## LANE D — Pilot-term and parked (named so nothing vanishes)
 
@@ -132,6 +140,11 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
 - [ ] Post-pilot: rung-2 versioned sync · `lyra.jsx` decomposition (§104 order) ·
       graduation semantics (first cohort summer 2027) · `blob-mirror.js:53` hash
       convergence.
+- [ ] **Proofread refusal visibility (§126 D-S4 deferral):** the Lite proofread computes
+      `strengths`/`nextFocus`, but the proofread panel renders neither — so a band-refused
+      *proofread* shows three "✓ No issues" tabs (SAFE — no corrections produced — but the warm
+      redirect is invisible there). Structural was fixed in §126; proofread needs a small
+      EditorTab render of those fields. A micro-brief if the maintainer wants it visible too.
 
 ---
 *Rule of the board: an item leaves only by being ticked with a date + § pointer, or
