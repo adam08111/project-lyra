@@ -4,7 +4,7 @@
 > lanes. `DATA-ARCHITECTURE.md` stays the architecture law; `HANDOFF.md` stays the
 > front door; the § log stays the history — on conflict, the log wins. This board is
 > the *tactical* truth: tick items with a date; move nothing off silently.
-> Last full sync: **16 July 2026 (§123) — migrations 0006–0009 applied + verified live; 0010+0011 authored (recovery + teacher-regen, operator-apply pending); the apolitical rule, recovery surface, brief canonicals, and the first teacher WRITE landed; 669 green.**
+> Last full sync: **16 July 2026 (§124) — migrations 0006–0009 applied + verified live; 0010+0011 authored (recovery + teacher-regen, operator-apply pending); the apolitical rule (incl. §124 proofread/translate residual closed), recovery surface, brief canonicals, and the first teacher WRITE landed; 673 green.**
 > Recently closed for orientation: §116 red-team capture · §117 report snapshots ·
 > §118 enrolment · §119 the live sitting · §120 the apolitical rule. Four migrations
 > (`0006–0009`) **applied + verified live (§119)**.
