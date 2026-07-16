@@ -116,7 +116,20 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
        code appears, and the OLD code then fails a claim while the NEW one succeeds and reloads to the
        same work; **Use a code** with a code from another device claims it; flag-off build → no
        recovery trigger, no modal.
-   The live project currently needs **0006 → 0007 → 0008 → 0009 → 0010**, in order.
+   11. `0011_teacher_regen.sql` — teacher-mediated recovery-code regeneration (BRIEF-TR, Lyra's FIRST
+       teacher WRITE): the **`teacher_regen_code(p_student_id, p_new_hash)` RPC** — SECURITY DEFINER,
+       `search_path=public`, **enrolment-scoped** (updates the target row only if that student is in
+       one of the CALLING teacher's classes, via `current_teacher_id()`), stores a client-supplied
+       64-char hex hash verbatim (the teacher's browser mints the code; the server never sees the new
+       plaintext), one non-oracle error for every authz failure. Execute granted to `authenticated`
+       only, revoked public/anon; **no table grant/policy change** — teachers stay SELECT-only apart
+       from this single definer write. Additive; safe to apply after 0010. Manual check (synthetic
+       data ONLY): teacher sign-in → a **seed** student's detail → "Regenerate recovery code" →
+       confirm → the new code shows once; the request body carries only the 64-hex hash; the new code
+       claims that seed student via the §121 "Use a code" while her old code fails; a student NOT in
+       the teacher's class (or a student session) → the single non-oracle error; teacher localStorage
+       has no student code key afterward.
+   The live project currently needs **0006 → 0007 → 0008 → 0009 → 0010 → 0011**, in order.
 4. **Set the two env vars** in Vercel (Settings → Environment Variables, all
    environments) — copy from the project's API settings:
    | Name | Value |

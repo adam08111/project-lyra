@@ -4,7 +4,7 @@
 > lanes. `DATA-ARCHITECTURE.md` stays the architecture law; `HANDOFF.md` stays the
 > front door; the § log stays the history — on conflict, the log wins. This board is
 > the *tactical* truth: tick items with a date; move nothing off silently.
-> Last full sync: **15 July 2026 (§121) — migrations 0006–0009 applied + verified live; 0010 authored (recovery); the apolitical rule + recovery surface landed; 659 green.**
+> Last full sync: **16 July 2026 (§123) — migrations 0006–0009 applied + verified live; 0010+0011 authored (recovery + teacher-regen, operator-apply pending); the apolitical rule, recovery surface, brief canonicals, and the first teacher WRITE landed; 669 green.**
 > Recently closed for orientation: §116 red-team capture · §117 report snapshots ·
 > §118 enrolment · §119 the live sitting · §120 the apolitical rule. Four migrations
 > (`0006–0009`) **applied + verified live (§119)**.
@@ -57,6 +57,10 @@
       refreshed `PLANNER-HANDOFF.md` · this board. One commit, one §-line.
 - [ ] **A8 · HANDOFF §4/§8 rewrite** at next refresh (they're frozen at §115-state;
       rewrite, don't append).
+- [ ] **A9 · Apply the new migrations live** — `0010` (recovery, §121) then `0011`
+      (teacher-regen, §123), **in order**, in the SQL editor, then the BRIEF-112 + BRIEF-TR
+      manual checks (DEPLOY §3; synthetic data only, never the real protected student).
+      Gates the student-recovery + teacher-regen flows going live.
 
 ## LANE B — Operator, CIP critical path (deadline **3 Aug**; results ~Oct)
 
@@ -86,9 +90,11 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       (`regenerate_recovery_code`, hash-only) + `src/recovery/` lib + RecoveryModal (Your code /
       Use a code / D8 fork interstitial) + Sidebar trigger; D-G1–G5 ratified; 659 green. Teacher-
       mediated regen (D-G1 deferral) → **BRIEF-TR**, next in Lane C. Operator: apply `0010`.
-- [ ] **C2 · BRIEF-TR — teacher-mediated regen** (first teacher WRITE; migration
-      expected `0011`). Ratify D-M1–M5. Its review MUST include the cross-surface /
-      identity-interplay lens — this brief institutionalizes it.
+- [x] **C2 · BRIEF-TR — teacher-mediated regen** — **DONE 2026-07-16 (§123):** Lyra's first
+      teacher WRITE. Migration `0011` (`teacher_regen_code`, enrolment-scoped, hash-only, one
+      non-oracle error, NO table grant) + `src/teacher/{regen.js,RegenControl.jsx}`; D-M1–M5
+      ratified; the cross-surface/identity-interplay lens **institutionalized in CLAUDE.md #5**;
+      3-lens review clean; 669 green. **Operator: apply `0011` (after `0010`).**
 - [ ] **C3 · BRIEF-115 — offsite encrypted dump** (no migration; GH Actions + object
       storage). Ratify D-N1–N5. Prerequisite: GitHub MFA (A4's habit, applied here).
       **Not done until the restore drill passes.**

@@ -103,6 +103,26 @@ a provably-anonymous session (fail-safe: anything not `is_anonymous === true` is
 even a future non-anonymous identity cannot make the student boot attribute a device's data to
 the wrong uid (the §97.1 clobber class).
 
+**Teacher-mediated recovery (BRIEF-TR, §123) — Lyra's FIRST teacher WRITE.** The teacher posture is
+no longer SELECT-only: it is **SELECT-only PLUS exactly one definer-mediated write** — a
+recovery-code rotation, for the case a student can't self-serve recovery (§121: lost phone AND no
+usable code). Her teacher regenerates her code via `teacher_regen_code(p_student_id, p_new_hash)`
+(migration 0011): `SECURITY DEFINER`, `search_path=public`, **enrolment-scoped** (the target must be
+enrolled in one of the CALLING teacher's classes, via `current_teacher_id()`), execute granted to
+`authenticated` only, and **one non-oracle error** for every authorization failure (a caller can't
+enumerate student UUIDs by error shape). It is **hash-only** — the teacher's browser mints the code
+and sends only its SHA-256 hash, so the server never sees the new plaintext, which renders **once**
+on screen (reused `<CodeDisplay>`) and is **never persisted on the teacher side** (never logged,
+never in the teacher's localStorage — in particular never the device's own `lyra-recovery-code`
+key, whose owner is the student identity). **No table UPDATE/INSERT/DELETE grant or policy is added
+for teachers** — the single write lives inside the definer function; teachers still never read
+`blobs`/`writing_snapshots`/`report_snapshots`. **Residual (accepted, stated):** a teacher
+transiently holds a claim-capable code — inherent to teacher-mediated recovery under any design (the
+adult must see the plaintext to hand it over). It is minimized (server never sees it; the UI never
+persists it) and **revocable procedurally**: the student self-regenerates (§121 modal) once back in,
+which retires the teacher's copy — the same reversible mechanic as the accepted classmate-shoulder-
+surf residual, with an adult actor.
+
 **Writing snapshots (BRIEF-114).** The append-only `writing_snapshots` table (essay drafts) is
 **student-owned and student-read-only** (SELECT + INSERT under `current_student_id()`, no
 update/delete policy or grant — the history can't be rewritten) and **teachers are excluded
