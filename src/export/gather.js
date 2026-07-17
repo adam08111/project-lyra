@@ -58,21 +58,22 @@ function withTimeout(promise, ms) {
   ]);
 }
 
-// Own-RLS SELECT of an append-only ledger, paged past the 1000-row PostgREST bound (order by ts).
-// Selects ONLY the given columns — never student_id (D-O4). Throws on any DB error (caught upstream).
-// Returns { rows, truncated }: `truncated` is true when it filled every allowed page (more rows may
-// exist beyond MAX_SNAPSHOT_ROWS), so the caller can say so instead of silently capping (D-P5).
+// Own-RLS SELECT of an append-only ledger, ordered NEWEST-first and paged past the 1000-row PostgREST
+// bound. Selects ONLY the given columns — never student_id (D-O4). Throws on any DB error (caught
+// upstream). Returns { rows, truncated } (rows newest-first): on overflow it keeps her MOST-RECENT
+// MAX_SNAPSHOT_ROWS, and one extra PROBE page tells us truthfully whether more exist — so an exact
+// multiple of the cap is NOT falsely flagged and the "older ones not included" notice never lies (D-P5).
 async function readAllPaged(sb, table, cols, pageSize = PAGE_SIZE, maxPages = MAX_PAGES) {
   const rows = [];
   let truncated = false;
-  for (let page = 0; page < maxPages; page++) {
+  for (let page = 0; page <= maxPages; page++) {
     const from = page * pageSize;
-    const { data, error } = await sb.from(table).select(cols).order("ts", { ascending: true }).range(from, from + pageSize - 1);
+    const { data, error } = await sb.from(table).select(cols).order("ts", { ascending: false }).range(from, from + pageSize - 1);
     if (error) throw error;
-    if (!data || !data.length) break;
+    if (!data || !data.length) break;                     // no more rows → complete, not truncated
+    if (page === maxPages) { truncated = true; break; }   // the probe page found MORE → truncated; keep only the first maxPages
     rows.push(...data);
     if (data.length < pageSize) break;
-    if (page === maxPages - 1) truncated = true;   // filled the final allowed page → more may exist
   }
   return { rows, truncated };
 }
@@ -123,8 +124,9 @@ export async function gatherCorpus() {
     let ws = null, rs = null;
     try { ws = await withTimeout(readAllPaged(sb, "writing_snapshots", "writing_id, content, trigger, deleted, ts"), 8000); } catch (e) { ws = null; }
     try { rs = await withTimeout(readAllPaged(sb, "report_snapshots", "report, trigger, ts"), 8000); } catch (e) { rs = null; }
-    const draftHist = ws ? ws.rows.filter((r) => !r.deleted).map((r) => ({ writingId: r.writing_id, content: r.content, trigger: r.trigger, date: r.ts })) : null;
-    const reportHist = rs ? rs.rows.map((r) => ({ report: stripBand(r.report), trigger: r.trigger, date: r.ts })) : null;
+    // rows arrive newest-first; reverse to oldest-first for a chronological reading order in the file.
+    const draftHist = ws ? [...ws.rows].reverse().filter((r) => !r.deleted).map((r) => ({ writingId: r.writing_id, content: r.content, trigger: r.trigger, date: r.ts })) : null;
+    const reportHist = rs ? [...rs.rows].reverse().map((r) => ({ report: stripBand(r.report), trigger: r.trigger, date: r.ts })) : null;
     if (draftHist || reportHist) snapshots = { writings: draftHist || [], reports: reportHist || [] };
     const cap = MAX_SNAPSHOT_ROWS.toLocaleString("en-US");
     if (draftHist) included.push(ws.truncated ? `your most recent ${cap} saved draft versions (older ones not included)` : `${draftHist.length} saved draft version${draftHist.length === 1 ? "" : "s"}`); else omitted.push("your saved draft history (couldn't reach it)");

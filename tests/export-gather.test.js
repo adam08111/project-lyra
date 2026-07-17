@@ -118,4 +118,15 @@ describe("gatherCorpus", () => {
     const { included } = await gatherCorpus();
     expect(included.join(" | ")).toMatch(/most recent 25,000 saved draft versions/);
   });
+
+  it("D-P5 boundary — EXACTLY the cap (25,000) is NOT flagged truncated (the probe fixes the off-by-one)", async () => {
+    const fullPage = () => Array.from({ length: 1000 }, () => ({ writing_id: "w", content: "x", trigger: "t", deleted: false, ts: "2026-01-01T00:00:00Z" }));
+    const calls = {};
+    h.client = { from: (t) => ({ select: () => ({ order: () => ({ range: async () => { calls[t] = (calls[t] || 0) + 1; return { data: (t === "writing_snapshots" && calls[t] <= 25) ? fullPage() : [], error: null }; } }) }) }) };
+    seed({ projects: oneWriting });
+    const { included } = await gatherCorpus();
+    const line = included.join(" | ");
+    expect(line).toContain("25000 saved draft versions");    // all 25,000 present...
+    expect(line).not.toContain("older ones not included");   // ...and NOT falsely flagged truncated
+  });
 });
