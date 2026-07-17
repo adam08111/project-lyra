@@ -110,4 +110,12 @@ describe("gatherCorpus", () => {
     for (const cols of selects) expect(cols).not.toContain("student_id");            // D-O4
     expect(included.join(" ")).toMatch(/saved draft version/);
   });
+
+  it("D-P5 — when a snapshot ledger fills the page cap, the contents line says 'most recent 25,000' (no silent cap)", async () => {
+    const fullPage = () => Array.from({ length: 1000 }, () => ({ writing_id: "w", content: "x", trigger: "t", deleted: false, ts: "2026-01-01T00:00:00Z" }));
+    h.client = { from: (table) => ({ select: () => ({ order: () => ({ range: async () => ({ data: table === "writing_snapshots" ? fullPage() : [], error: null }) }) }) }) };
+    seed({ projects: oneWriting });
+    const { included } = await gatherCorpus();
+    expect(included.join(" | ")).toMatch(/most recent 25,000 saved draft versions/);
+  });
 });

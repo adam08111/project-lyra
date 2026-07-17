@@ -12,6 +12,12 @@ import { GROWTH_PROFILE_KEY } from "../growth-report.js";
 const PROJECTS_KEY = "lyra-projects";   // writings, authoritative local store
 const GRAMMAR_LOG_KEY = "grammar-log";  // learning history (window.storage → localStorage)
 
+// Snapshot paging: read up to MAX_SNAPSHOT_ROWS per ledger; if that ceiling is HIT the export says so
+// (D-P5 — no silent cap) instead of quietly dropping older rows. (A real student never approaches it.)
+const PAGE_SIZE = 1000;                          // PostgREST default row bound
+const MAX_PAGES = 25;
+const MAX_SNAPSHOT_ROWS = PAGE_SIZE * MAX_PAGES; // 25,000
+
 function readLocal(key) {
   try {
     const raw = typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
@@ -54,8 +60,11 @@ function withTimeout(promise, ms) {
 
 // Own-RLS SELECT of an append-only ledger, paged past the 1000-row PostgREST bound (order by ts).
 // Selects ONLY the given columns — never student_id (D-O4). Throws on any DB error (caught upstream).
-async function readAllPaged(sb, table, cols, pageSize = 1000, maxPages = 25) {
+// Returns { rows, truncated }: `truncated` is true when it filled every allowed page (more rows may
+// exist beyond MAX_SNAPSHOT_ROWS), so the caller can say so instead of silently capping (D-P5).
+async function readAllPaged(sb, table, cols, pageSize = PAGE_SIZE, maxPages = MAX_PAGES) {
   const rows = [];
+  let truncated = false;
   for (let page = 0; page < maxPages; page++) {
     const from = page * pageSize;
     const { data, error } = await sb.from(table).select(cols).order("ts", { ascending: true }).range(from, from + pageSize - 1);
@@ -63,8 +72,9 @@ async function readAllPaged(sb, table, cols, pageSize = 1000, maxPages = 25) {
     if (!data || !data.length) break;
     rows.push(...data);
     if (data.length < pageSize) break;
+    if (page === maxPages - 1) truncated = true;   // filled the final allowed page → more may exist
   }
-  return rows;
+  return { rows, truncated };
 }
 
 // Returns { corpus, included, omitted } — `included`/`omitted` drive the composer's honest
@@ -113,11 +123,12 @@ export async function gatherCorpus() {
     let ws = null, rs = null;
     try { ws = await withTimeout(readAllPaged(sb, "writing_snapshots", "writing_id, content, trigger, deleted, ts"), 8000); } catch (e) { ws = null; }
     try { rs = await withTimeout(readAllPaged(sb, "report_snapshots", "report, trigger, ts"), 8000); } catch (e) { rs = null; }
-    const draftHist = ws ? ws.filter((r) => !r.deleted).map((r) => ({ writingId: r.writing_id, content: r.content, trigger: r.trigger, date: r.ts })) : null;
-    const reportHist = rs ? rs.map((r) => ({ report: stripBand(r.report), trigger: r.trigger, date: r.ts })) : null;
+    const draftHist = ws ? ws.rows.filter((r) => !r.deleted).map((r) => ({ writingId: r.writing_id, content: r.content, trigger: r.trigger, date: r.ts })) : null;
+    const reportHist = rs ? rs.rows.map((r) => ({ report: stripBand(r.report), trigger: r.trigger, date: r.ts })) : null;
     if (draftHist || reportHist) snapshots = { writings: draftHist || [], reports: reportHist || [] };
-    if (draftHist) included.push(`${draftHist.length} saved draft version${draftHist.length === 1 ? "" : "s"}`); else omitted.push("your saved draft history (couldn't reach it)");
-    if (reportHist) included.push(`${reportHist.length} saved report${reportHist.length === 1 ? "" : "s"}`); else omitted.push("your saved report history (couldn't reach it)");
+    const cap = MAX_SNAPSHOT_ROWS.toLocaleString("en-US");
+    if (draftHist) included.push(ws.truncated ? `your most recent ${cap} saved draft versions (older ones not included)` : `${draftHist.length} saved draft version${draftHist.length === 1 ? "" : "s"}`); else omitted.push("your saved draft history (couldn't reach it)");
+    if (reportHist) included.push(rs.truncated ? `your most recent ${cap} saved reports (older ones not included)` : `${reportHist.length} saved report${reportHist.length === 1 ? "" : "s"}`); else omitted.push("your saved report history (couldn't reach it)");
   }
 
   return { corpus: { studentName, writings, learning, growth, snapshots }, included, omitted };
