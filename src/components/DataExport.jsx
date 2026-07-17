@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { COLORS } from "../constants.js";
+import { downloadBlob } from "../export/download.js";
 
 export default function DataExport({ projects, grammarLog }) {
   const exportData = useCallback(() => {
@@ -9,15 +10,8 @@ export default function DataExport({ projects, grammarLog }) {
       projects,
       grammarLog,
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `lyra-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // §127: the ONE Blob+anchor download path (SSoT with the take-home export).
+    downloadBlob(`lyra-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2), "application/json");
   }, [projects, grammarLog]);
 
   const importData = useCallback(() => {
@@ -48,7 +42,7 @@ export default function DataExport({ projects, grammarLog }) {
   return (
     <div style={{ display: "flex", gap: 6 }}>
       <button onClick={exportData} style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 10, cursor: "pointer", color: COLORS.muted }}>
-        Export
+        Backup (.json)
       </button>
       <button onClick={importData} style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.card, fontFamily: "'Courier Prime', monospace", fontSize: 10, cursor: "pointer", color: COLORS.muted }}>
         Import

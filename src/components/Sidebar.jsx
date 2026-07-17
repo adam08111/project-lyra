@@ -2,6 +2,7 @@ import { useState } from "react";
 import { COLORS, writingTypes } from "../constants.js";
 import { FeatherIcon } from "./Icons.jsx";
 import DataExport from "./DataExport.jsx";
+import TakeHomeExport from "./TakeHomeExport.jsx";
 import { getSupabase } from "../supabase-client.js";
 
 export default function Sidebar({
@@ -113,6 +114,7 @@ export default function Sidebar({
             <div style={{ fontSize: 10, color: COLORS.accent2 }}>{projects.reduce((sum, p) => sum + p.writings.length, 0)} writings across {projects.length} project{projects.length !== 1 ? "s" : ""}</div>
             <DataExport projects={projects} grammarLog={grammarLog} />
           </div>
+          <TakeHomeExport />
           {recoverable && (
             <button
               onClick={() => { try { window.dispatchEvent(new CustomEvent("lyra:open-recovery")); } catch (e) { /* silent */ } setSidebarOpen(false); }}
