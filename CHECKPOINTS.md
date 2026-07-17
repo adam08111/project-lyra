@@ -107,8 +107,14 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       the age key (bank the identity offline, commit the recipient); set `PG_MAJOR` + the five secrets;
       first `workflow_dispatch` run; the restore drill (paste row counts into the § record); the
       bucket lifecycle rules + the break-glass check. Tracked as **A10** in Lane A.
-- [ ] **C4 · BRIEF-116 — take-home export** (no migration; client-side). Ratify
-      D-O1–O5. May land mid-term; completes custodian #4.
+- [x] **C4 · BRIEF-116 — take-home export** — **DONE 2026-07-17 (§127):** one self-contained
+      `.html` (custodian #4) — writing + learning history + growth report (`bandEstimate` stripped)
+      + a `</script>`-safe JSON island; own-RLS snapshot enrichment when sync is on (first client
+      SELECT, paged to 1000 rows); D-O3 render-surface escaping + the D-O4 exclusion list, both
+      test-asserted; Sidebar action, flag-off, never-stuck; DataExport's "Export" relabeled
+      "Backup (.json)". 692 green; no prompt/migration contact. Operator: the phone download
+      check (the brief §5 — iOS-Safari). **Next in Lane C: PRV** (the §126 proofread-visibility
+      micro-brief, tracked in Lane D).
 - [ ] **C5 · Flag-ON via staging verification** (set `VITE_*` on a preview deploy →
       redeploy → one reload check) — before any deployed human data; pairs with
       Supabase **Pro** (+ verify PITR inclusion) and the **30/hr/IP anon cap raise**.

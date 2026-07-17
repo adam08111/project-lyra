@@ -154,6 +154,18 @@ degrades; §87/§88 keeps it out of every log). Regeneration is **student self-s
 teachers stay SELECT-only; teacher-mediated regeneration landed as Lyra's first teacher WRITE in
 **§123** — see the Teacher-mediated recovery section above. Flag-off: no recovery trigger, no modal, no code path.
 
+**Take-home export (BRIEF-116, §127).** One Sidebar button composes the student's OWN corpus — her
+writing, learning history, and growth report — into a single self-contained `.html` she keeps forever
+(custodian #4). It is hardened on two axes. As a **render surface**: every student-typed string (essay
+text, titles, rule labels, display name) is HTML-escaped at composition, and the embedded JSON island
+escapes every `<` so a `</script>` sequence can't break out — a student's own `<script>` in an essay comes out as inert text (self-XSS
+is still XSS). As a **leak surface**: the output carries her content and nothing else — no recovery code
+or its hash, no `RECOVERY_CODE_KEY`, no auth/student UUID (no snapshot query selects `student_id`), no
+class code, no Supabase URL/key, and the teacher-only `bandEstimate` is stripped from every profile and
+report. Both are asserted by test. Own-data-only via existing RLS; runs under the device's own session,
+never the teacher client; available flag-off; never-stuck. **No CSV/XLSX** — spreadsheet
+formula-injection (Class D item 2) stays off this surface, parked with the future teacher export.
+
 ## Reporting
 
 This is a pre-pilot educational project. Security concerns → the maintainer (see the repo

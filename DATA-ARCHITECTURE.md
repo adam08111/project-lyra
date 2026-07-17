@@ -136,10 +136,13 @@ anchor** (school maps UUID→child), *not* a custodian — it holds no writing.
    GitHub Actions workflow (.github/workflows/backup.yml) + the age-encrypted dump +
    backup/RESTORE.md drill are landed; LIVE-VERIFIED only after the operator sets the
    five secrets + the age recipient and the restore drill (D-N4) passes.`
-4. **Take-home export** — per-student bundle: essays as Markdown, reports as
-   human-readable documents, history as JSON + summary (deliberately not CSV —
-   sidesteps formula-injection). Issued at term end as ritual. `RATIFIED-UNBUILT —
-   BRIEF-116 (queued).`
+4. **Take-home export** — one self-contained `.html` the student downloads: her
+   writing, learning history, and growth report (teacher-only `bandEstimate`
+   excluded — mirrors the in-app boundary), plus a machine-readable JSON island;
+   own-RLS `writing_snapshots`/`report_snapshots` history folded in when sync is on.
+   Deliberately not CSV/XLSX (sidesteps formula-injection). `BUILT §127 (BRIEF-116)
+   — client-side, no migration; the operator's phone download check (the brief §5)
+   remains for iOS-Safari behaviour.`
 5. **School term-dump under the continuity clause** — wind-down obligations in the
    school agreement: exports out and dumps delivered before anything switches off.
    `OPERATOR-legal — Pin B, unwritten.`
