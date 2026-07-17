@@ -3,6 +3,7 @@ import { COLORS } from "../constants.js";
 import { sharedStyles as s } from "../styles.js";
 import { FeatherIcon, CopyIcon } from "./Icons.jsx";
 import MiniLessonCard from "./MiniLessonCard.jsx";
+import ProofreadPedagogy from "./ProofreadPedagogy.jsx";
 import { SavedSkills } from "./StyleLab.jsx";
 import { parseStructureContent } from "./XRayView.jsx";
 import { groupGrammarByRule } from "../utils.js";
@@ -348,6 +349,9 @@ export default function EditorTab({
               </div>
             ) : (
             <>
+              {/* §128 (D-P1/D-P2): the pedagogy the model generates on every proofread, rendered
+                  above the tabs so a band refusal's warm line leads and the empty tabs read as context. */}
+              <ProofreadPedagogy strengths={proofread.strengths} nextFocus={proofread.nextFocus} />
               {/* Tabs */}
               <div style={{ display: "flex", gap: 4, marginBottom: 16, background: COLORS.bg2, borderRadius: 10, padding: 3 }}>
                 {[
