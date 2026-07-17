@@ -19,13 +19,28 @@ function readLocal(key) {
   } catch (e) { return null; }
 }
 
+// A date-safe ISO conversion: a corrupt updatedAt must NEVER throw and fail the whole export (#7).
+function toISO(v) {
+  if (!v) return "";
+  try { const d = new Date(v); return isNaN(d.getTime()) ? "" : d.toISOString(); } catch (e) { return ""; }
+}
+
 // Strip the teacher-only bandEstimate from a profile/report (D-O1/D-O4) without mutating the input.
+// It rides in TWO places: level.bandEstimate AND every per-regen history[] entry
+// (growth-report.js pushHistorySnapshot) — and, because report_snapshots store the whole profile,
+// in each snapshot's report.history too. Scrub both (this covers the snapshot path, which reuses it).
 function stripBand(profile) {
   if (!profile || typeof profile !== "object") return profile;
   const out = { ...profile };
   if (out.level && typeof out.level === "object") {
     out.level = { ...out.level };
     delete out.level.bandEstimate;
+  }
+  if (Array.isArray(out.history)) {
+    out.history = out.history.map((h) => {
+      if (h && typeof h === "object" && "bandEstimate" in h) { const c = { ...h }; delete c.bandEstimate; return c; }
+      return h;
+    });
   }
   return out;
 }
@@ -63,7 +78,7 @@ export async function gatherCorpus() {
   for (const proj of Array.isArray(projects) ? projects : []) {
     for (const w of (proj && Array.isArray(proj.writings) ? proj.writings : [])) {
       if ((w.draft || "").trim() || (w.title || "").trim()) {
-        writings.push({ title: w.title || "", topic: w.topic || "", draft: w.draft || "", date: w.updatedAt ? new Date(w.updatedAt).toISOString() : "" });
+        writings.push({ title: w.title || "", topic: w.topic || "", draft: w.draft || "", date: toISO(w.updatedAt) });
       }
     }
   }

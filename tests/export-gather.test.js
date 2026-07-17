@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({ client: null }));
 vi.mock("../src/supabase-client.js", async (importOriginal) => ({ ...(await importOriginal()), getSupabase: () => h.client }));
 
 import { gatherCorpus } from "../src/export/gather.js";
+import { composeExport } from "../src/export/compose.js";
 import { GROWTH_PROFILE_KEY } from "../src/growth-report.js";
 
 function seed({ projects, grammarLog, growth } = {}) {
@@ -33,12 +34,39 @@ describe("gatherCorpus", () => {
     expect(omitted.join(" ")).toMatch(/device/);
   });
 
-  it("D-O1 — strips the teacher-only bandEstimate from the growth profile", async () => {
-    seed({ growth: { studentName: "Ming", level: { name: "Developing", bandEstimate: "Band 4", summary: "ok" } } });
+  it("D-O1 — strips bandEstimate from the profile AND the per-regen history[] trajectory (§127 review)", async () => {
+    seed({ growth: {
+      studentName: "Ming",
+      level: { name: "Developing", bandEstimate: "Band 4", summary: "ok" },
+      history: [
+        { date: "2026-06-01T00:00:00Z", levelName: "Emerging", bandEstimate: "Band 3", activeWeaknessCount: 5 },
+        { date: "2026-07-01T00:00:00Z", levelName: "Developing", bandEstimate: "Band 4", activeWeaknessCount: 3 },
+      ],
+    } });
     const { corpus } = await gatherCorpus();
     expect(corpus.growth.level.bandEstimate).toBeUndefined();
     expect(corpus.growth.level.name).toBe("Developing");
+    expect(corpus.growth.history[0].bandEstimate).toBeUndefined();  // the leak the review caught
+    expect(corpus.growth.history[1].bandEstimate).toBeUndefined();
+    expect(corpus.growth.history[0].levelName).toBe("Emerging");    // non-band fields survive
+    expect(JSON.stringify(corpus)).not.toContain("Band 3");
     expect(JSON.stringify(corpus)).not.toContain("Band 4");
+  });
+
+  it("end-to-end — a history-bearing profile yields a .html with NO band estimate anywhere (leak closed)", async () => {
+    seed({ growth: { studentName: "Ming", level: { name: "Developing", bandEstimate: "Band 4" }, history: [{ levelName: "Emerging", bandEstimate: "Band 3" }] } });
+    const { corpus, included, omitted } = await gatherCorpus();
+    const html = composeExport(corpus, { included, omitted, date: "2026-07-17T00:00:00Z", dateLabel: "17 July 2026" });
+    expect(html).not.toContain("Band 3");
+    expect(html).not.toContain("Band 4");
+    expect(html).not.toContain("bandEstimate");
+  });
+
+  it("never-stuck — a malformed writing updatedAt doesn't throw; the export still succeeds", async () => {
+    seed({ projects: [{ id: "d", name: "n", writings: [{ id: "w", title: "T", draft: "hi", updatedAt: "not-a-real-date" }] }] });
+    const { corpus } = await gatherCorpus();
+    expect(corpus.writings).toHaveLength(1);
+    expect(corpus.writings[0].date).toBe("");   // bad date → empty string, never a throw
   });
 
   it("D-O4 — never reads or embeds the recovery code, the device student-id key, or class codes", async () => {
@@ -65,7 +93,7 @@ describe("gatherCorpus", () => {
   it("flag-on — enriches with own-RLS snapshots, strips report bandEstimate, NEVER selects student_id", async () => {
     const selects = [];
     const wsRows = [{ writing_id: "w1", content: "draft v1", trigger: "proofread", deleted: false, ts: "2026-07-01T00:00:00Z" }];
-    const rsRows = [{ report: { level: { name: "Dev", bandEstimate: "Band 4" } }, trigger: "regen", ts: "2026-07-02T00:00:00Z" }];
+    const rsRows = [{ report: { level: { name: "Dev", bandEstimate: "Band 4" }, history: [{ levelName: "Dev", bandEstimate: "Band 4" }] }, trigger: "regen", ts: "2026-07-02T00:00:00Z" }];
     h.client = {
       from: (table) => ({
         select: (cols) => { selects.push(cols); return { order: () => ({ range: async (from) => ({ data: from === 0 ? (table === "writing_snapshots" ? wsRows : rsRows) : [], error: null }) }) }; },
@@ -76,7 +104,8 @@ describe("gatherCorpus", () => {
     expect(corpus.snapshots.writings).toHaveLength(1);
     expect(corpus.snapshots.writings[0].writingId).toBe("w1");
     expect(corpus.snapshots.reports).toHaveLength(1);
-    expect(corpus.snapshots.reports[0].report.level.bandEstimate).toBeUndefined();  // stripped
+    expect(corpus.snapshots.reports[0].report.level.bandEstimate).toBeUndefined();       // stripped
+    expect(corpus.snapshots.reports[0].report.history[0].bandEstimate).toBeUndefined();  // history too (§127 review)
     expect(JSON.stringify(corpus)).not.toContain("Band 4");
     for (const cols of selects) expect(cols).not.toContain("student_id");            // D-O4
     expect(included.join(" ")).toMatch(/saved draft version/);
