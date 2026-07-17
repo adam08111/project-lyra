@@ -4,7 +4,7 @@
 > lanes. `DATA-ARCHITECTURE.md` stays the architecture law; `HANDOFF.md` stays the
 > front door; the § log stays the history — on conflict, the log wins. This board is
 > the *tactical* truth: tick items with a date; move nothing off silently.
-> Last full sync: **16 July 2026 (§126) — the §123–§125 doc+test debt sweep (BRIEF-SWEEP) landed: two zombie doc lines fixed, backup runbook hardened, the D-S2 final-tip + D-S3 failed-lens rules encoded (CLAUDE.md), hash-pipeline parity + the D-S1 band string pinned, and the structural Lite route's band refusal made *visible* (+P18, live class-P 19/19); 677 green. Prior state: migrations 0006–0009 applied + verified live; 0010+0011 authored (operator-apply pending, A9); the apolitical rule (incl. §124 residual) + recovery + first teacher WRITE landed; custodian #3 offsite-backup artifacts landed (restore-drill pending, A10).**
+> Last full sync: **17 July 2026 (§128) — BRIEF-PRV: the §126 proofread-visibility deferral closed (`strengths`/`nextFocus` now render, a band refusal's warm line visible + leading), a 25k truncation notice added to the take-home export, and the backup-credential audit verified SAFE (the recovery code was never in the "Backup (.json)" file); 701 green. Prior: §127 take-home export (custodian #4) landed; §126 doc+test sweep; migrations 0006–0009 live + 0010/0011 authored (operator-apply pending, A9); custodian #3 offsite-backup artifacts landed (restore-drill pending, A10).**
 > Recently closed for orientation: §116 red-team capture · §117 report snapshots ·
 > §118 enrolment · §119 the live sitting · §120 the apolitical rule. Four migrations
 > (`0006–0009`) **applied + verified live (§119)**.
@@ -112,7 +112,7 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       + a `</script>`-safe JSON island; own-RLS snapshot enrichment when sync is on (first client
       SELECT, paged to 1000 rows); D-O3 render-surface escaping + the D-O4 exclusion list, both
       test-asserted; Sidebar action, flag-off, never-stuck; DataExport's "Export" relabeled
-      "Backup (.json)". 692 green; no prompt/migration contact. Operator: the phone download
+      "Backup (.json)". 694 green; no prompt/migration contact. Operator: the phone download
       check (the brief §5 — iOS-Safari). **Next in Lane C: PRV** (the §126 proofread-visibility
       micro-brief, tracked in Lane D).
 - [ ] **C5 · Flag-ON via staging verification** (set `VITE_*` on a preview deploy →
@@ -126,6 +126,14 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       pin, and the **structural** Lite route's band refusal made *visible* (note field + render,
       **+P18** → live class-P **19/19**). 677 green; no migration, no shared-constant change.
       D-S4 scope A — proofread `strengths`/`nextFocus` visibility deferred (Lane D).
+- [x] **C7 · BRIEF-PRV — proofread visibility + backup-credential audit** — **DONE 2026-07-17 (§128):**
+      the §126 D-S4 deferral closed — the Lite proofread's `strengths`/`nextFocus` now render ("What's
+      working" / "Next focus", `ProofreadPedagogy.jsx`), so a band-refused proofread's warm line is
+      visible and leads and every proofread's discarded encouragement is recovered (D-P1/D-P2). Plus a
+      25k truncation notice on the take-home export (D-P5) and a regression pin that the "Backup (.json)"
+      file never carries the recovery code (**D-P4: verified it never did** — DataExport serialises
+      `{projects, grammarLog}` from props only). 701 green; no prompt/brain/migration contact (class P
+      clean by construction). Lane C is drained until the maintainer commissions more.
 
 ## LANE D — Pilot-term and parked (named so nothing vanishes)
 
@@ -146,11 +154,10 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
 - [ ] Post-pilot: rung-2 versioned sync · `lyra.jsx` decomposition (§104 order) ·
       graduation semantics (first cohort summer 2027) · `blob-mirror.js:53` hash
       convergence.
-- [ ] **Proofread refusal visibility (§126 D-S4 deferral):** the Lite proofread computes
-      `strengths`/`nextFocus`, but the proofread panel renders neither — so a band-refused
-      *proofread* shows three "✓ No issues" tabs (SAFE — no corrections produced — but the warm
-      redirect is invisible there). Structural was fixed in §126; proofread needs a small
-      EditorTab render of those fields. A micro-brief if the maintainer wants it visible too.
+- [x] **Proofread refusal visibility (§126 D-S4 deferral)** — **DONE 2026-07-17 (§128 / BRIEF-PRV):**
+      the Lite proofread's `strengths`/`nextFocus` now render ("What's working" / "Next focus"), so a
+      band-refused *proofread*'s warm line is visible and leads (no more false "✓ No issues" clean
+      bill), and the encouragement generated on every proofread is no longer discarded. See C7.
 
 ---
 *Rule of the board: an item leaves only by being ticked with a date + § pointer, or
