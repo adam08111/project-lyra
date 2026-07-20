@@ -4,7 +4,7 @@
 > lanes. `DATA-ARCHITECTURE.md` stays the architecture law; `HANDOFF.md` stays the
 > front door; the § log stays the history — on conflict, the log wins. This board is
 > the *tactical* truth: tick items with a date; move nothing off silently.
-> Last full sync: **17 July 2026 (§128) — BRIEF-PRV: the §126 proofread-visibility deferral closed (`strengths`/`nextFocus` now render, a band refusal's warm line visible + leading), a 25k truncation notice added to the take-home export, and the backup-credential audit verified SAFE (the recovery code was never in the "Backup (.json)" file); 701 green. Prior: §127 take-home export (custodian #4) landed; §126 doc+test sweep; migrations 0006–0009 live + 0010/0011 authored (operator-apply pending, A9); custodian #3 offsite-backup artifacts landed (restore-drill pending, A10).**
+> Last full sync: **20 July 2026 (§130) — BRIEF-OPS-papers: three ops papers landed (`docs/ERASURE.md` · `docs/DATA-MAP.md` · `docs/INCIDENT-RUNBOOK.md`), the D-K4 doc-freshness pass (DEPLOY ghosts → VERIFY-at-A4 tags, CLAUDE.md persistence/deeper-docs), and D-K5 record hygiene; docs-only, zero `src/`, 701 green. §129 (A8): HANDOFF §4/§8 rewritten to §128-state. Prior — §128 (BRIEF-PRV): the §126 proofread-visibility deferral closed (`strengths`/`nextFocus` now render, a band refusal's warm line visible + leading), a 25k truncation notice added to the take-home export, and the backup-credential audit verified SAFE (the recovery code was never in the "Backup (.json)" file); 701 green. Prior: §127 take-home export (custodian #4) landed; §126 doc+test sweep; migrations 0006–0009 live + 0010/0011 authored (operator-apply pending, A9); custodian #3 offsite-backup artifacts landed (restore-drill pending, A10).**
 > Recently closed for orientation: §116 red-team capture · §117 report snapshots ·
 > §118 enrolment · §119 the live sitting · §120 the apolitical rule. Four migrations
 > (`0006–0009`) **applied + verified live (§119)**.
@@ -55,6 +55,9 @@
 - [ ] **A7 · Successor-package commit:** the identity-conversation transcript into
       `docs/decisions/` · confirm every brief canonical is in `briefs/` ·
       refreshed `PLANNER-HANDOFF.md` · this board. One commit, one §-line.
+      **§130 prepared the drop-slot** (`docs/decisions/README.md` names the two materials to drop) and
+      confirmed `briefs/` complete (OPS canonical landed §130) — so A7 is now literally *drop the two
+      files (transcript + refreshed PLANNER-HANDOFF, which the planner writes) + one commit + one §-line*.
 - [x] **A8 · HANDOFF §4/§8 rewrite** — **DONE 2026-07-20 (§129):** §4 (current state) +
       §8 (not-proven) rewritten to §128-state, not appended; the stale cross-refs folded in
       for coherence (§3 "through §110" → §128 + `CHECKPOINTS.md` added to the reading list,
@@ -140,6 +143,13 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       file never carries the recovery code (**D-P4: verified it never did** — DataExport serialises
       `{projects, grammarLog}` from props only). 701 green; no prompt/brain/migration contact (class P
       clean by construction). Lane C is drained until the maintainer commissions more.
+- [x] **C8 · BRIEF-OPS-papers — ops papers + doc debts + record hygiene** — **DONE 2026-07-20 (§130):**
+      the executor's share of the board — three ops papers (`docs/ERASURE.md` D-K1 · `docs/DATA-MAP.md`
+      D-K2 · `docs/INCIDENT-RUNBOOK.md` D-K3), the D-K4 freshness pass (DEPLOY ghosts → `VERIFY at A4`
+      tags + CLAUDE.md persistence/deeper-docs; A8/HANDOFF half already rode §129), and D-K5 hygiene
+      (§127 25k correction, C4/Phase-B fixes, the A7 `docs/decisions/` drop-slot, the §128 D-K5(2)
+      posed/pending line). Docs-only, zero `src/`; D-S3 review **privacy-CLEAN** + 4 citation
+      line-offsets fixed; 701 green, build clean. Every claim traced or `VERIFY`-tagged.
 
 ## LANE D — Pilot-term and parked (named so nothing vanishes)
 
@@ -147,13 +157,15 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       OR the permanent owner of THIS student row) — behind B4.
 - [ ] Concurrent-load run (the biggest unproven thing) · outside human review of the
       data layer · localStorage loss root-cause — pre-pilot crash-tests, operator.
-- [ ] Ops papers: DATA-MAP.md · **erasure procedure** (mechanism exists per §115;
-      document it) · incident runbook (incl. "restore student blobs" paragraph) ·
-      verify current Safari localStorage-eviction rules + the home-screen-install
-      nudge (DATA-ARCHITECTURE §7.2).
-- [ ] Doc debts: CLAUDE.md stale persistence line + deeper-docs list · DEPLOY
-      freshness ghosts ("flag-OFF until §99", "current production default",
-      Hobby 60s-vs-10s cap — verify at deploy).
+- [x] Ops papers — **DONE 2026-07-20 (§130 / C8):** `docs/DATA-MAP.md` · `docs/ERASURE.md` (the
+      erasure procedure — mechanism per §115, now a documented process) · `docs/INCIDENT-RUNBOOK.md`
+      (incl. the "restore student blobs" paragraph).
+- [ ] Verify current Safari localStorage-eviction rules + the home-screen-install nudge
+      (DATA-ARCHITECTURE §7.2) — was bundled with the ops-papers bullet; still open (needs a live browser).
+- [x] Doc debts — **DONE 2026-07-20 (§130 / D-K4):** CLAUDE.md persistence line + deeper-docs list
+      refreshed; DEPLOY freshness ghosts ("flag-OFF until §99" → C5-gated, "current production default",
+      Hobby 60s cap) converted to `VERIFY at A4` tags. **Noticed, still open:** `DATA-ARCHITECTURE.md §8`'s
+      build-order queue ("apply 0006+0007+0008") is frozen at §114-state — a future doc-refresh, outside D-K4 scope.
 - [ ] Phase B: dashboard progression view (may deliberately open `report_snapshots`
       to teachers) · exports/charts · `deriveRule` map expansion · 25,000-row cap ·
       teacher rename · un-enrolment · code-rotation UI ·
