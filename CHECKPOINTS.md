@@ -55,8 +55,13 @@
 - [ ] **A7 · Successor-package commit:** the identity-conversation transcript into
       `docs/decisions/` · confirm every brief canonical is in `briefs/` ·
       refreshed `PLANNER-HANDOFF.md` · this board. One commit, one §-line.
-- [ ] **A8 · HANDOFF §4/§8 rewrite** at next refresh (they're frozen at §115-state;
-      rewrite, don't append).
+- [x] **A8 · HANDOFF §4/§8 rewrite** — **DONE 2026-07-20 (§129):** §4 (current state) +
+      §8 (not-proven) rewritten to §128-state, not appended; the stale cross-refs folded in
+      for coherence (§3 "through §110" → §128 + `CHECKPOINTS.md` added to the reading list,
+      §5 "apply 0006+0007 next" → the §119-lived board pointer, §6 reserve stack → Lane-C-drained,
+      §7's mocked-count anchor 589 → 701, the footer's §119–§128 refresh line); §1/§2 untouched.
+      Independent fact-check: **22/22 claims CONFIRMED, 0 contradictions**; 701 green; doc-only.
+      (Original spec:) at next refresh (they were frozen at §115-state; rewrite, don't append).
 - [ ] **A9 · Apply the new migrations live** — `0010` (recovery, §121) then `0011`
       (teacher-regen, §123), **in order**, in the SQL editor, then the BRIEF-112 + BRIEF-TR
       manual checks (DEPLOY §3; synthetic data only, never the real protected student).
