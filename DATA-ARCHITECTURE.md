@@ -2,7 +2,7 @@
 
 > **Purpose.** The single source of truth for Lyra's identity model, sync semantics,
 > and data-permanence strategy. It supersedes every conversation summary. Source
-> dialogue: `docs/decisions/identity-conversation-2026-07.txt`. Direction ratified by
+> dialogue: `docs/decisions/identity-conversation.md`. Direction ratified by
 > the maintainer **8 July 2026** (Tiers 1–4 + Identity v2 as scoped); each executor
 > brief still ratifies its D-numbers at hand-off, per house convention.
 >
@@ -191,44 +191,58 @@ unbuilt; the PDPO / de-identification guardrails are not yet in force.)*
 
 ## 7. Time-critical verifications — this week. `OPERATOR.`
 
-1. **P0 — the summer-purge data-loss chain. FK: FIXED (§115); retention posture: still an
-   operator check.** The code-confirmed defect — BOTH `students.auth_user_id` (`0001:20`) and
+1. **P0 — the summer-purge data-loss chain. FK: FIXED (§115), applied + live-verified (§119);
+   retention posture: resolved (§119 R6).** The code-confirmed defect — BOTH `students.auth_user_id` (`0001:20`) and
    `teachers.auth_user_id` (`0005:31`) were `ON DELETE CASCADE`, so a single `auth.users`
    deletion (an anonymous-user auto-purge, or an operator slip) cascade-deleted the entire
    subtree (events, profile, essays, snapshots, enrolments; for a teacher, their classes +
    enrolments) — is **fixed** by migration `0007` (`CASCADE → RESTRICT` on both edges;
-   `BUILT-UNVERIFIED` until the operator applies it — DEPLOY.md, §115). With 0007 applied, an
+   **applied + verified against the live database at §119** — the `23503` refusal witnessed by hand,
+   DEPLOY.md, §115). With 0007 applied, an
    auth-user deletion that would destroy a subtree **fails loudly** (the correct failure mode);
    legitimate deletion handles the child (`students`/`teachers`) row first, then the auth user.
-   The operator retention check remains belt-and-braces: confirm the anonymous-user auto-cleanup
-   posture (Hong Kong's summer exceeds 30 days; permanent accounts are exempt from anon cleanup —
-   one more reason v2 is the right destination).
+   §119 R6 resolved the retention posture: **no anonymous auto-cleanup setting exists** in this
+   project, so the summer-purge auto-deletion §115 feared is **not active** — the RESTRICT edge is
+   defense-in-depth (an operator slip, a future cleanup cron, any `auth.users` deletion), not the
+   mitigation of a live purge. The one live residual is **F-R6**: raise the default anon sign-in cap
+   (30 requests/hour/IP) before a pilot — a class of ~40 behind one school NAT trips it (permanent
+   accounts are exempt from anon cleanup — one more reason v2 is the right destination).
 2. **Safari eviction rule** current behavior + the install nudge.
 3. **Vercel registration** (DEPLOY.md runbook): Hobby = synthetic-data demo only;
    **Pro before any real human types a word** — per Vercel's terms (as understood June 2026,
    `OPERATOR`-verify at registration), Hobby permits model-training on submitted content and
    Pro has it off by default. MFA at signup.
 
-## 8. Build order — the canonical queue
+## 8. Build order — the canonical queue. `Refreshed 20 Jul 2026, through §130; live board: CHECKPOINTS.md.`
 
-**Operator, parallel:** apply migrations **0006** (snapshots) + **0007** (auth-FK → RESTRICT)
-+ **0008** (report snapshots) · the anon-retention posture check · Vercel registration + first flag-OFF deploy ·
-successor-package commit (the source transcript into `docs/decisions/`; this document is now
-committed, §114) · CIP skeleton, LOIs, incorporation.
-**Claude Code — DONE this run:** identity-semantics tripwires (§111) · writing snapshots
-(§112) · auth-cascade sever (§113 draft → RESTRICT final §115) · this document + review corrections (§114).
-**Claude Code — still pending, in order:** ~~red-team full-output capture (§110.1 finding
-#1 — the `last-run.json` truncation)~~ **DONE (§116)** — the harness now stores full,
-untruncated reply transcripts (`tests/redteam/record.js`); a live re-run to regenerate
-`last-run.json` + the maintainer's **class-E read (OPERATOR)** are what remain of this item →
-BRIEF-112 recovery surface (**migration `0010`** — 0006/0007/0008/0009 are taken by snapshots / FK
-/ report-snapshots / enrolment; renumbers at its Step 0 if the tree moved) → ~~enrolment~~ **DONE
-(§118 — BRIEF-ENROL, migration 0009: class codes + the enrol_student RPC + the one-minute phone
-onboarding)** → teacher-mediated regen (own brief, own review) →
-BRIEF-115 offsite dump → flag-ON via staging verification → BRIEF-116 take-home export →
-~~report-card snapshot (the D-I5 follow-up)~~ **DONE (§117 — BRIEF-RS, migration 0008)**.
-**Pilot-term, behind the consent framework:** Identity v2 attach flow + the §109 guard
-evolution.
+**Role.** This section is the ordered dependency spine — *why this order* — for the data
+layer. The living tick-state of everything not-yet-done now lives in **`CHECKPOINTS.md`** (the
+board), the exact SQL apply-order in **`DEPLOY.md`**, the history in the `§` log; on conflict the
+board and the log win. (When this section was authored at §114 the board did not exist; the flat
+pending queue it once carried moved there — re-listing it here would be a divergent second copy,
+which the single-source rule forbids.)
+
+**Migration ledger, in order.** `0006` writing-snapshots · `0007` auth-FK → RESTRICT · `0008`
+report-snapshots · `0009` enrolment are **applied + verified against the live database at §119**
+(the live sitting — the `23503` crash-test witnessed by hand). `0010` recovery (§121) and `0011`
+teacher-mediated regen (§123) are **authored, operator-apply pending (CHECKPOINTS A9)** — applied
+in order after `0009`. `DEPLOY.md` is authoritative for the apply-order (`0006 → … → 0011`).
+
+**Sequencing rule (load-bearing).** Data-layer migrations → identity productization → flag-ON →
+pilot: engine → crash-test against single-user reality (done, §119) → crash-test against pilot
+reality (40 concurrent students — **not yet run; the biggest open risk**) → passengers, who are
+children. Identity v2 (the attach flow + the §109 guard evolution) stays behind the PDPO consent
+framework (CHECKPOINTS Lane D / B4).
+
+**Status pointer (all tracked on the board).** The Claude-Code queue is **drained through §130**;
+the only code item left is flag-ON-via-staging (C5, operator-gated on Vercel A4), with the `D-Q5`
+pre-classifier a class-P-FAIL-triggered fast-follow. Operator lane: Vercel (A4) · apply
+`0010`/`0011` (A9) · custodian-#3 restore drill (A10) · the successor-package commit (A7 — the §130
+drop-slot `docs/decisions/README.md` names its two materials) · CIP incorporation/LOIs/skeleton
+(Lane B, deadline 3 Aug). The anon-retention posture check is **resolved (§119 R6)** — no anon
+auto-cleanup exists; the residual **F-R6** is raising the 30/hr/IP cap before a pilot. *(The
+per-migration `BUILT-UNVERIFIED` labels still in §0/§1/§3 predate §119 and await a whole-document
+currency pass — logged, CHECKPOINTS Lane D.)*
 *(Brief IDs are names; the § number is always tip+1 at landing — Step 0 renumbers.)*
 
 ## 9. Supersession rule
@@ -236,7 +250,7 @@ evolution.
 This document is **committed to the repo as of §114** and supersedes every summary of the
 identity/permanence conversation. (Before that commit it was a PROPOSED/OPERATOR artifact —
 authority was conditional on landing.) The successor package is not yet complete: the source
-dialogue `docs/decisions/identity-conversation-2026-07.txt` is still to be added (an OPERATOR
+dialogue `docs/decisions/identity-conversation.md` is still to be added (an OPERATOR
 step in the §8 queue). No pointer, no claim; strip internal pointers from anything external.
 Update this file when a listed item changes status — the § log remains the history.
 

@@ -164,8 +164,12 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       (DATA-ARCHITECTURE §7.2) — was bundled with the ops-papers bullet; still open (needs a live browser).
 - [x] Doc debts — **DONE 2026-07-20 (§130 / D-K4):** CLAUDE.md persistence line + deeper-docs list
       refreshed; DEPLOY freshness ghosts ("flag-OFF until §99" → C5-gated, "current production default",
-      Hobby 60s cap) converted to `VERIFY at A4` tags. **Noticed, still open:** `DATA-ARCHITECTURE.md §8`'s
-      build-order queue ("apply 0006+0007+0008") is frozen at §114-state — a future doc-refresh, outside D-K4 scope.
+      Hobby 60s cap) converted to `VERIFY at A4` tags. `DATA-ARCHITECTURE.md §8` build-order queue
+      ("apply 0006+0007+0008", frozen at §114-state) **refreshed — DONE 2026-07-20 (§131):** redirected to
+      this board + `DEPLOY.md` + the live §119 migration ledger (0006–0009 applied+verified, 0010/0011
+      authored-pending A9); the §7 item-1 coherence fix (0007 status; retention posture → §119 R6) rode along.
+      **Noticed, still open:** `DATA-ARCHITECTURE.md` §0/§1/§3 still carry pre-§119 `BUILT-UNVERIFIED` labels on
+      0006–0008 (and §0's "last LIVE sitting §110" anchor) — a whole-document currency pass, its own future doc-refresh.
 - [ ] Phase B: dashboard progression view (may deliberately open `report_snapshots`
       to teachers) · exports/charts · `deriveRule` map expansion · 25,000-row cap ·
       teacher rename · un-enrolment · code-rotation UI ·
