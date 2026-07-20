@@ -143,10 +143,13 @@ them unset the app is byte-identical to the localStorage-only build. To turn it 
 5. **Free tier pauses on inactivity.** A paused project makes sync silently no-op (the
    app is unharmed — local-first). **Move the project to Pro before any school pilot.**
 
-**Production stays flag-OFF until §99 is verified.** Leave `VITE_SUPABASE_*` **unset in
-Vercel** for now — production runs the localStorage-only build (byte-identical to today).
-Only set the two vars once Phase 2 (hydration + recovery, §99) has been verified against a
-staging deploy. Note these are **build-time** vars (Vite inlines `VITE_*` at build): adding
+**Production stays flag-OFF until the C5 staging verification passes.** Leave `VITE_SUPABASE_*`
+**unset in Vercel** for now — production runs the localStorage-only build (byte-identical to today).
+The Phase-2 machinery this once waited on (the old "§99") has since landed — hydration + recovery
+(§121), enrolment (§118) — so the remaining gate is **C5: flag-ON via a staging/preview deploy**
+(`CHECKPOINTS.md` C5), paired with Supabase **Pro** + the anonymous 30/hr-cap raise, before any
+deployed human data. *(`VERIFY at A4` — no production deploy exists yet, `DATA-ARCHITECTURE.md:20-21`,
+so the live flag state cannot be confirmed from the repo.)* Note these are **build-time** vars (Vite inlines `VITE_*` at build): adding
 or changing them in Vercel has **no effect until you redeploy** — trigger a fresh
 deployment (or push) after setting them, or the running build stays flag-off.
 
@@ -160,7 +163,9 @@ vercel --prod
 ```
 
 ## Known limitation — long calls
-Vercel's free (Hobby) functions cap at **60 seconds**. Almost all coaching/chat
+Vercel's free (Hobby) functions cap serverless execution at a vendor-set time limit
+(**`VERIFY at A4`** — this doc once assumed **60 seconds**; Vercel's current Hobby cap is vendor-set
+and may be lower, so confirm the real limit at registration rather than trusting this number). Almost all coaching/chat
 calls finish well under that, but a very heavy X-Ray (full analysis + thinking) or
 a grounded web search can occasionally run longer and get cut off (streaming still
 shows partial output first). If that becomes a problem, run the always-on Node
@@ -180,7 +185,8 @@ See `SECURITY.md` for the full posture; the operational notes:
   per identity** (keyed by the Supabase `student_id` the client forwards, else IP) before
   any billed call. It is **in-memory per warm serverless instance — NOT durable** across
   cold starts or scale-out (a floor against a runaway client, not a fortress). **Caveat:**
-  with the Supabase sync flag OFF (the current production default), every user keys by IP,
+  with the Supabase sync flag OFF (**`VERIFY at A4`** — the *intended* default; no production deploy
+exists yet, `DATA-ARCHITECTURE.md:20-21`, so it is not a confirmed live state), every user keys by IP,
   so a **class behind one NAT shares the 40/min budget**. For a multi-student pilot, turn
   the sync flag ON (per-student keying) or move to a durable KV/Supabase-backed limiter.
 - **Model safety thresholds (§102 F4).** All four *settable* Gemini harm categories

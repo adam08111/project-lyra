@@ -1,6 +1,6 @@
 # CLAUDE.md — Lyra working discipline
 
-Lyra is a mobile-first **React 18 + Vite** AI writing coach for **14-year-old Hong Kong English learners**. AI calls go `callAI()` → `/api/gemini` → `server/proxy.js` (hides the key) → **Google Gemini**, three-tier (see `ai-router.js`). Persistence is `localStorage`. Tests: `npx vitest run`.
+Lyra is a mobile-first **React 18 + Vite** AI writing coach for **14-year-old Hong Kong English learners**. AI calls go `callAI()` → `/api/gemini` → `server/proxy.js` (hides the key) → **Google Gemini**, three-tier (see `ai-router.js`). Persistence is **local-first**: `localStorage` is authoritative, with an optional flag-gated Supabase mirror for durability + teacher-read (see `DATA-ARCHITECTURE.md`). Tests: `npx vitest run`.
 
 This file is auto-loaded every session — **read it before every task.** It is terse on purpose; deeper detail lives in the pointed-to docs. The recurring failures across §22–§63 were not blind-start — they were **drift** over long sessions (work left local-only, rules duplicated until they diverged, prompt scaffolding leaked to students, AI calls froze). The non-negotiables and checklist below target exactly those.
 
@@ -50,5 +50,9 @@ This file is auto-loaded every session — **read it before every task.** It is 
 - **`LYRA-PROJECT-BRIEF.md`** — architecture, prompt rationale, design decisions. *(Its API/stack section predates the Gemini migration — defer to `ai-router.js` + the code there.)*
 - **`PROGRESS-REPORT.md`** — the linear `§` development log; append one section per unit of work.
 - **`.cursorrules`** — Cursor's auto-loaded rules; overlaps this file but some architecture lines are stale (single-file / `api.anthropic.com`) — defer to the code.
+- **`DATA-ARCHITECTURE.md`** — the identity / sync / permanence architecture law (status-labeled); the single source of truth for how data lives, forks, and persists.
+- **`DATA-MAP.md`** — every store indexed (localStorage keys, Supabase tables + RLS, the backup bucket, transit) — who reads each and how long it lives.
+- **`INCIDENT-RUNBOOK.md`** — the operator playbook for the five pilot incidents (Supabase outage · data loss · credential leak · wrong-identity · a political/press question).
+- **`ERASURE.md`** — the PDPO student-data erasure procedure (the §115 mechanism + the ratified process).
 
 *Future (not built here): a pre-push git hook enforcing the session-end push would harden the #1 failure — add it later, don't build it now.*
