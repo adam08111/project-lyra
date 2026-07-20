@@ -115,7 +115,8 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
 - [x] **C4 · BRIEF-116 — take-home export** — **DONE 2026-07-17 (§127):** one self-contained
       `.html` (custodian #4) — writing + learning history + growth report (`bandEstimate` stripped)
       + a `</script>`-safe JSON island; own-RLS snapshot enrichment when sync is on (first client
-      SELECT, paged to 1000 rows); D-O3 render-surface escaping + the D-O4 exclusion list, both
+      SELECT, paged to 25,000 rows — §127's "1000" was a planning-era figure, corrected §130 D-K5);
+      D-O3 render-surface escaping + the D-O4 exclusion list, both
       test-asserted; Sidebar action, flag-off, never-stuck; DataExport's "Export" relabeled
       "Backup (.json)". 694 green; no prompt/migration contact. Operator: the phone download
       check (the brief §5 — iOS-Safari). **Next in Lane C: PRV** (the §126 proofread-visibility
@@ -154,8 +155,9 @@ assigned at Step 0; every kickoff = "Execute `briefs/<file>`. Ratified <D-number
       freshness ghosts ("flag-OFF until §99", "current production default",
       Hobby 60s-vs-10s cap — verify at deploy).
 - [ ] Phase B: dashboard progression view (may deliberately open `report_snapshots`
-      to teachers) · exports/charts · `deriveRule` map expansion · 1000-row cap ·
-      teacher rename · un-enrolment · code-rotation UI.
+      to teachers) · exports/charts · `deriveRule` map expansion · 25,000-row cap ·
+      teacher rename · un-enrolment · code-rotation UI ·
+      **export composer → allowlist-projection before any new teacher-only field lands** (D-K5).
 - [ ] Post-pilot: rung-2 versioned sync · `lyra.jsx` decomposition (§104 order) ·
       graduation semantics (first cohort summer 2027) · `blob-mirror.js:53` hash
       convergence.
