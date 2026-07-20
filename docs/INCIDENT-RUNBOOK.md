@@ -20,7 +20,7 @@ optional — "a paused project makes sync silently no-op (the app is unharmed �
 - [ ] Confirm the app still loads and students can read/write — it should, entirely from the device.
 - [ ] If the project is **paused**, un-pause it in the Supabase dashboard (free tier pauses on
       inactivity — the pilot-gate reason to be on **Pro** before real use, `DEPLOY.md:143-144`).
-- [ ] Do **not** hot-swap `VITE_SUPABASE_*` — they are build-time (`DEPLOY.md:149-151`); a change needs
+- [ ] Do **not** hot-swap `VITE_SUPABASE_*` — they are build-time (`DEPLOY.md:152-153`); a change needs
       a redeploy and does not fix an outage.
 - [ ] When Supabase returns, the sync outbox drains on its own (`src/sync-outbox.js`); no manual replay.
 
@@ -67,7 +67,7 @@ recoverable. Most 'missing work' turns out to be a device or sign-in mix-up, whi
       (`backup/README.md:22-24`). **DB-root-equivalent** — confirm **GitHub MFA is on**
       (`backup/README.md:24`).
 - [ ] **`LYRA_DB_URL`** (the Supabase session-pooler connection string) — **treat exactly like
-      `service_role`** (`DEPLOY.md:239-242`): rotate the database password in Supabase, update the
+      `service_role`** (`DEPLOY.md:240,246`): rotate the database password in Supabase, update the
       GitHub secret. This is the most dangerous single string; rotating it invalidates the leaked one.
 - [ ] **The Supabase `anon` key is NOT a secret** — "public by design; its authority is Row Level
       Security, not secrecy" (`DEPLOY.md:140-142`, `SECURITY.md:24-26`). A leaked anon key is **not** a

@@ -98,7 +98,7 @@ student-owned table: the `students`-row cascade in `ERASURE.md §3`.
 
 A nightly GitHub Actions job dumps `public` + `auth.users`, `tar`s them, **`age`-encrypts on the
 runner** (the store only ever holds ciphertext), and uploads to a private S3-compatible bucket on a
-**different provider** (`.github/workflows/backup.yml:73-100`, `backup/README.md:8-14`). Contents of
+**different provider** (`.github/workflows/backup.yml:73-100`, `backup/README.md:4-6`). Contents of
 a decrypted object: `public.dump` (all `public` tables above, incl. `blobs`) + `authusers.dump`
 (`auth.users` only) — `backup/RESTORE.md:11-24`. **Retention: 30 daily + 12 monthly** by bucket
 lifecycle rule (`backup/README.md:28-30`) — so an **erased student persists here until expiry**

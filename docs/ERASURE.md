@@ -95,7 +95,7 @@ SQL steps; both are required for the data to be gone from both custodians the st
 commitment, not an oversight:
 
 - **Custodian #3** (the offsite `age`-encrypted `pg_dump`, §125) keeps **30 daily + 12 monthly**
-  copies by bucket lifecycle rule (`backup/README.md:28-30`, `DEPLOY.md:245-250`). `auth.users` and
+  copies by bucket lifecycle rule (`backup/README.md:29`, `DEPLOY.md:251-252`). `auth.users` and
   the `public` tables both ride in those dumps (`backup/RESTORE.md:11-24`), so an erased student
   remains inside existing encrypted backups until each rolls off (≤ ~13 months for the last monthly).
 - **Custodian #2** (Supabase PITR, once on Pro) similarly retains within its window.
