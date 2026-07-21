@@ -39,11 +39,17 @@
 - [x] **A3 · The class-E read** — **DONE 2026-07-14 (§119):** four full transcripts read;
       Adam's verdict verbatim "E1-4 ACCEPTED"; §110.1 closed, CIP integrity gate cleared
       (a model verdict never substitutes).
-- [ ] **A4 · Vercel** — register (GitHub sign-in, **MFA at signup**), import repo,
-      `GEMINI_API_KEY` + `GATE_PASS` only (flag-OFF), deploy, phone test, the two
-      §102 spot-checks (headers present; fresh browser challenged). `/teacher.html`
-      showing not-configured is CORRECT. Hobby while synthetic; **Pro before any real
-      human types** (model-training ToS).
+- [~] **A4 · Vercel** — **DEPLOY LANDED 2026-07-21 (§132), operator-reported:** registered +
+      repo imported + **Hobby, flag-OFF** deploy live (`GEMINI_API_KEY` + `GATE_PASS` only; no
+      `VITE_*` → mirror off; `/teacher.html` not-configured, correct). **CARRIED (not yet run):**
+      the two §102 spot-checks (headers present; fresh browser challenged). **UNCONFIRMED this
+      exchange:** the phone test + MFA-at-signup. Stays Hobby while synthetic; **Pro before any
+      real human types** (model-training ToS) and before flag-ON (C5). *A4 closes when the §102
+      spot-checks pass + MFA is confirmed on.* (Original spec:) register (GitHub sign-in,
+      **MFA at signup**), import repo, `GEMINI_API_KEY` + `GATE_PASS` only (flag-OFF), deploy,
+      phone test, the two §102 spot-checks (headers present; fresh browser challenged).
+      `/teacher.html` showing not-configured is CORRECT. Hobby while synthetic; **Pro before any
+      real human types** (model-training ToS).
 - [x] **A5 · Two zombie line-edits** — **DONE 2026-07-14 (§119):** both applied — HANDOFF
       line 62 → "The harness now saves them in full (§116) — regenerate with a live run,
       then read." · DEPLOY "only need 0003 then 0004" → "the live project currently needs
