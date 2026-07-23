@@ -16,10 +16,18 @@
  *   the output format is rigid and no coaching philosophy is needed.
  *   Proofread, exercise generation, grammar lessons.
  *
- * Cost estimates (per 1M tokens, input/output):
- *   Pro:        ~$1.25 / $10.00
- *   Flash:      ~$0.50 / $3.00
- *   Flash Lite: ~$0.25 / $1.50
+ * Cost per 1M tokens (input/output; standard tier; verified vs Google's official
+ * pricing page, July 2026):
+ *   Pro   (gemini-3-flash-preview): $0.50 / $3.00   (cache $0.05) — a Flash-PRICED model
+ *                                   despite the "pro" label, NOT a Gemini Pro tier.
+ *   Flash (gemini-flash-latest):    ROLLING ALIAS -> the latest stable Flash (Gemini
+ *                                   3.5/3.6 Flash), ~$1.50 / $7.50-9.00 — so the FLASH
+ *                                   tier now costs MORE than Pro above. Verify the alias
+ *                                   resolution; consider pinning a concrete model id.
+ *   Lite  (gemini-3.1-flash-lite):  $0.25 / $1.50   (cache $0.025)
+ * (Stale before this fix: "Pro ~$1.25/$10 . Flash $0.50/$3" — Pro moved to a Flash-priced
+ *  model and the Flash alias rolled to a pricier stable Flash. The "welcome = cheap flash"
+ *  rationale below predates that roll and should be re-checked.)
  *
  * Search grounding (useSearch=true) bills PER REQUEST on top of tokens:
  *   Gemini 3.x models: 5,000 grounded prompts/month free, then $14 / 1,000
